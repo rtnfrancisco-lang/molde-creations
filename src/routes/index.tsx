@@ -24,7 +24,26 @@ import {
   PenTool,
   ZoomIn,
   Maximize,
+  FileUp,
+  Layers as LayersIcon,
+  ArrowUpToLine,
+  ArrowDownToLine,
+  Image as ImageIcon,
+  FileText,
+  Eye,
+  EyeOff,
 } from "lucide-react";
+import {
+  buildPath,
+  importSvg,
+  pdfToImage,
+  readDataUrl,
+  imageRatio,
+  vectorDataUrl,
+  layerMarkup,
+  layerPathD,
+  type Layer,
+} from "@/lib/importers";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -58,8 +77,10 @@ type Grading = Record<Size, Measurements>;
 type View = "frente" | "costas" | "mangaEsq" | "mangaDir";
 type Node = { x: number; y: number; smooth: boolean; hIn?: { x: number; y: number }; hOut?: { x: number; y: number } };
 type Shapes = Record<View, Node[]>;
-type Artwork = { src: string; cx: number; cy: number; w: number; ratio: number; clipped?: boolean };
+type Artwork = { src: string; cx: number; cy: number; w: number; ratio: number; clipped?: boolean; rot?: number };
 type Artworks = Record<View, Artwork | null>;
+type Layers = Record<View, Layer[]>;
+const NO_LAYERS: Layers = { frente: [], costas: [], mangaEsq: [], mangaDir: [] };
 type ColorTarget = "contorno" | "preenchimento";
 type PartStyle = { stroke: string | null; fill: string | null };
 type Styles = Record<View, PartStyle>;
@@ -148,6 +169,14 @@ const LS_MOTHER = "moldecore.moldeMae";
 const LS_ART = "moldecore.estampas";
 const LS_STYLES = "moldecore.cores";
 const LS_SHAPES = "moldecore.formas";
+const LS_LAYERS = "moldecore.camadas";
+const saveLS = (k: string, v: unknown) => {
+  try {
+    localStorage.setItem(k, JSON.stringify(v));
+  } catch {
+    /* grande demais para o armazenamento local */
+  }
+};
 
 const LIBRARY = [
   { name: "Camiseta Clássica — Sublimação", size: "M", active: true },
@@ -165,6 +194,11 @@ function Index() {
   const [table, setTable] = useState<Grading>(DEFAULT_TABLE);
   const [mother, setMother] = useState<Size>("M");
   const [artworks, setArtworks] = useState<Artworks>(NO_ART);
+  const [layers, setLayers] = useState<Layers>(NO_LAYERS);
+  const [selLayer, setSelLayer] = useState<string | null>(null);
+  const [layersOpen, setLayersOpen] = useState(true);
+  const [importMsg, setImportMsg] = useState("");
+  const importRef = useRef<HTMLInputElement>(null);
   const [styles, setStyles] = useState<Styles>(DEFAULT_STYLES);
   const [colorTarget, setColorTarget] = useState<ColorTarget>("preenchimento");
   const [pcEdit, setPcEdit] = useState(false);
@@ -203,15 +237,17 @@ function Index() {
       if (st) setStyles({ ...DEFAULT_STYLES, ...JSON.parse(st) });
       const s = localStorage.getItem(LS_SHAPES);
       if (s) setShapes({ ...DEFAULT_SHAPES, ...JSON.parse(s) });
+      const ly = localStorage.getItem(LS_LAYERS);
+      if (ly) setLayers({ ...NO_LAYERS, ...JSON.parse(ly) });
     } catch {
       /* ignora dados corrompidos */
     }
   }, []);
 
   /* ---------- Histórico (Desfazer / Refazer) ---------- */
-  type Snap = { table: Grading; shapes: Shapes; artworks: Artworks; styles: Styles };
-  const snapRef = useRef<Snap>({ table, shapes, artworks, styles });
-  snapRef.current = { table, shapes, artworks, styles };
+  type Snap = { table: Grading; shapes: Shapes; artworks: Artworks; styles: Styles; layers: Layers };
+  const snapRef = useRef<Snap>({ table, shapes, artworks, styles, layers });
+  snapRef.current = { table, shapes, artworks, styles, layers };
   const [past, setPast] = useState<Snap[]>([]);
   const [future, setFuture] = useState<Snap[]>([]);
   const lastCp = useRef({ key: "", t: 0 });
@@ -233,14 +269,12 @@ function Index() {
     setShapes(sn.shapes);
     setArtworks(sn.artworks);
     setStyles(sn.styles);
+    setLayers(sn.layers);
     localStorage.setItem(LS_GRADING, JSON.stringify(sn.table));
     localStorage.setItem(LS_SHAPES, JSON.stringify(sn.shapes));
     localStorage.setItem(LS_STYLES, JSON.stringify(sn.styles));
-    try {
-      localStorage.setItem(LS_ART, JSON.stringify(sn.artworks));
-    } catch {
-      /* ignora */
-    }
+    saveLS(LS_ART, sn.artworks);
+    saveLS(LS_LAYERS, sn.layers);
     lastCp.current = { key: "", t: 0 };
   };
 
@@ -320,7 +354,138 @@ function Index() {
   const artView: View = view;
   const art = artworks[view];
 
-  useEffect(() => setPcEdit(false), [view]);
+  useEffect(() => {
+    setPcEdit(false);
+    setSelLayer(null);
+  }, [view]);
+
+  /* ---------- Camadas / Objetos importados ---------- */
+  const curLayers = layers[view];
+  const updateLayers = (next: Layers, key = "layers") => {
+    checkpoint(key);
+    setLayers(next);
+    saveLS(LS_LAYERS, next);
+  };
+  const setViewLayers = (arr: Layer[], key?: string) => updateLayers({ ...snapRef.current.layers, [view]: arr }, key);
+  const selObj = curLayers.find((l) => l.id === selLayer) ?? null;
+
+  const flash = (m: string) => {
+    setImportMsg(m);
+    setTimeout(() => setImportMsg(""), 3500);
+  };
+
+  const onImport = async (file: File) => {
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+    const id = crypto.randomUUID();
+    const base = { id, name: file.name, cx: 0.5, cy: 0.4, w: 0.4, rot: 0 };
+    const add = (l: Layer) => {
+      setViewLayers([...snapRef.current.layers[view], l], "import:" + id);
+      setSelLayer(id);
+      setSize(mother);
+      setTool("selecao");
+      flash(`${file.name} importado`);
+    };
+    try {
+      setImportMsg("Importando " + file.name + "…");
+      if (ext === "svg") {
+        const r = importSvg(await file.text());
+        if (r) add({ ...base, kind: "vetor", paths: r.paths, ratio: r.ratio });
+        else {
+          const src = await readDataUrl(file);
+          add({ ...base, kind: "imagem", src, ratio: await imageRatio(src) });
+        }
+      } else if (ext === "pdf") {
+        const r = await pdfToImage(file);
+        add({ ...base, kind: "pdf", src: r.src, ratio: r.ratio });
+      } else if (["png", "jpg", "jpeg"].includes(ext)) {
+        const src = await readDataUrl(file);
+        add({ ...base, kind: "imagem", src, ratio: await imageRatio(src) });
+      } else flash("Formato não suportado — use PDF, SVG, PNG ou JPEG");
+    } catch {
+      flash("Não foi possível ler " + file.name);
+    }
+  };
+
+  const reorder = (id: string, dir: "front" | "back" | "up" | "down") => {
+    const arr = [...curLayers];
+    const i = arr.findIndex((l) => l.id === id);
+    if (i < 0) return;
+    const [l] = arr.splice(i, 1);
+    const j = dir === "front" ? arr.length : dir === "back" ? 0 : dir === "up" ? Math.min(arr.length, i + 1) : Math.max(0, i - 1);
+    arr.splice(j, 0, l!);
+    setViewLayers(arr, "order:" + Date.now());
+  };
+  const deleteLayer = (id: string) => {
+    setViewLayers(curLayers.filter((l) => l.id !== id), "del:" + Date.now());
+    if (selLayer === id) setSelLayer(null);
+  };
+  const toggleHidden = (id: string) =>
+    setViewLayers(curLayers.map((l) => (l.id === id ? { ...l, hidden: !l.hidden } : l)), "hide:" + Date.now());
+
+  const layerToPowerClip = (id: string) => {
+    const l = curLayers.find((x) => x.id === id);
+    if (!l) return;
+    const src = l.kind === "vetor" ? vectorDataUrl(l) : l.src!;
+    const rest = curLayers.filter((x) => x.id !== id);
+    if (art)
+      rest.unshift({ id: crypto.randomUUID(), name: "Estampa anterior", kind: "imagem", src: art.src, cx: art.cx, cy: art.cy, w: art.w, ratio: art.ratio, rot: art.rot ?? 0 });
+    checkpoint("pc-layer:" + Date.now());
+    const nl = { ...layers, [view]: rest };
+    const na = { ...artworks, [view]: { src, cx: l.cx, cy: l.cy, w: l.w, ratio: l.ratio, rot: l.rot, clipped: true } };
+    setLayers(nl);
+    setArtworks(na);
+    saveLS(LS_LAYERS, nl);
+    saveLS(LS_ART, na);
+    setSelLayer(null);
+    setSize(mother);
+    setPcEdit(false);
+  };
+
+  const layerToOutline = (id: string) => {
+    const l = curLayers.find((x) => x.id === id);
+    if (!l?.paths) return;
+    const subs = l.paths.flatMap((p) => p.subs);
+    const sub = [...subs].sort((a, b) => Number(b.closed) - Number(a.closed) || b.nodes.length - a.nodes.length)[0];
+    if (!sub || sub.nodes.length < 3) return;
+    const m = table[mother];
+    const isBody = view === "frente" || view === "costas";
+    const W = isBody ? m.bodyWidth : m.sleeveWidth;
+    const H = isBody ? m.bodyHeight : m.sleeveHeight;
+    const aw = l.w * W;
+    const ah = aw * l.ratio;
+    const r = (l.rot * Math.PI) / 180;
+    const cX = (l.cx - 0.5) * W;
+    const cY = l.cy * H;
+    const toPiece = (u: number, v: number) => {
+      const lx = (u - 0.5) * aw;
+      const ly = (v - 0.5) * ah;
+      const X = cX + lx * Math.cos(r) - ly * Math.sin(r);
+      const Y = cY + lx * Math.sin(r) + ly * Math.cos(r);
+      return { x: X / W + 0.5, y: Y / H };
+    };
+    const nodes: Node[] = sub.nodes.map((q) => {
+      const p = toPiece(q.x, q.y);
+      const n: Node = { x: p.x, y: p.y, smooth: false };
+      if (q.hIn) {
+        const h = toPiece(q.x + q.hIn.x, q.y + q.hIn.y);
+        n.hIn = { x: h.x - p.x, y: h.y - p.y };
+      }
+      if (q.hOut) {
+        const h = toPiece(q.x + q.hOut.x, q.y + q.hOut.y);
+        n.hOut = { x: h.x - p.x, y: h.y - p.y };
+      }
+      return n;
+    });
+    checkpoint("outline:" + Date.now());
+    const ns = { ...shapes, [view]: nodes };
+    const nl = { ...layers, [view]: curLayers.filter((x) => x.id !== id) };
+    setShapes(ns);
+    setLayers(nl);
+    localStorage.setItem(LS_SHAPES, JSON.stringify(ns));
+    saveLS(LS_LAYERS, nl);
+    setSelLayer(null);
+    setTool("forma");
+  };
   useEffect(() => {
     if (!menu) return;
     const close = () => setMenu(null);
@@ -384,9 +549,11 @@ function Index() {
         const ah = aw * art.ratio;
         const x = (art.cx - 0.5) * W - aw / 2;
         const y = art.cy * H - ah / 2;
-        img = `<clipPath id="c"><path d="${path}"/></clipPath><image href="${art.src}" x="${x}" y="${y}" width="${aw}" height="${ah}" ${art.clipped === false ? "" : 'clip-path="url(#c)"'} preserveAspectRatio="none"/>`;
+        const im = `<image href="${art.src}" x="${x}" y="${y}" width="${aw}" height="${ah}" transform="rotate(${art.rot ?? 0} ${x + aw / 2} ${y + ah / 2})" preserveAspectRatio="none"/>`;
+        img = `<clipPath id="c"><path d="${path}"/></clipPath>${art.clipped === false ? im : `<g clip-path="url(#c)">${im}</g>`}`;
       }
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W + 2}cm" height="${H + 2}cm" viewBox="${-W / 2 - 1} -1 ${W + 2} ${H + 2}"><path d="${path}" fill="${st.fill ?? "none"}"/>${img}<path d="${path}" fill="none" stroke="${st.stroke ?? "#000"}" stroke-width="0.05"/></svg>`;
+      const objs = curLayers.map((l) => layerMarkup(l, W, H)).join("");
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W + 2}cm" height="${H + 2}cm" viewBox="${-W / 2 - 1} -1 ${W + 2} ${H + 2}"><path d="${path}" fill="${st.fill ?? "none"}"/>${img}${objs}<path d="${path}" fill="none" stroke="${st.stroke ?? "#000"}" stroke-width="0.05"/></svg>`;
       const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
       setTimeout(() => {
         const el = document.createElement("a");
@@ -556,6 +723,24 @@ function Index() {
                 ))}
               </div>
               <div className="flex items-center gap-3">
+              {importMsg && <span className="text-[10px] font-mono text-amber whitespace-nowrap">{importMsg}</span>}
+              <input
+                ref={importRef}
+                type="file"
+                accept=".pdf,.svg,.png,.jpg,.jpeg,application/pdf,image/svg+xml,image/png,image/jpeg"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void onImport(f);
+                  e.target.value = "";
+                }}
+              />
+              <button
+                onClick={() => importRef.current?.click()}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap bg-cyan text-ink hover:bg-cyan/90"
+              >
+                <FileUp className="size-3.5" /> Importar
+              </button>
               <input
                 ref={fileRef}
                 type="file"
@@ -660,7 +845,85 @@ function Index() {
                   pcEdit={pcEdit}
                   partStyle={styles[view]}
                   onMenu={(x, y) => setMenu({ x, y })}
+                  layers={curLayers}
+                  selLayer={selLayer}
+                  onSelLayer={setSelLayer}
+                  onLayersChange={(arr) => setViewLayers(arr)}
                 />
+                {/* Painel de camadas */}
+                <div className="absolute top-3 right-3 w-60 rounded-md border border-line bg-panel/95 shadow-xl text-xs z-10">
+                  <button
+                    onClick={() => setLayersOpen((o) => !o)}
+                    className="w-full flex items-center justify-between px-3 py-2 text-white"
+                  >
+                    <span className="flex items-center gap-2 font-medium">
+                      <LayersIcon className="size-3.5 text-cyan" /> Camadas / Objetos
+                    </span>
+                    <span className="font-mono text-faint">{curLayers.length + (art ? 1 : 0)}</span>
+                  </button>
+                  {layersOpen && (
+                    <div className="border-t border-line max-h-64 overflow-y-auto py-1">
+                      {curLayers.length === 0 && !art && (
+                        <div className="px-3 py-2 text-[11px] text-faint">Nenhum objeto. Use "Importar" para trazer PDF, SVG, PNG ou JPEG.</div>
+                      )}
+                      {[...curLayers].reverse().map((l) => {
+                        const Icon = l.kind === "vetor" ? Spline : l.kind === "pdf" ? FileText : ImageIcon;
+                        const sel = l.id === selLayer;
+                        return (
+                          <div
+                            key={l.id}
+                            onClick={() => {
+                              setSelLayer(l.id);
+                              if (tool !== "forma") setTool("selecao");
+                            }}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setSelLayer(l.id);
+                              setMenu({ x: e.clientX, y: e.clientY });
+                            }}
+                            className={
+                              "group flex items-center gap-1.5 px-2 py-1.5 cursor-pointer " +
+                              (sel ? "bg-cyan/15 text-cyan" : "text-muted-foreground hover:bg-panel2 hover:text-white")
+                            }
+                          >
+                            <Icon className="size-3.5 shrink-0" />
+                            <span className={"flex-1 truncate " + (l.hidden ? "opacity-40" : "")} title={l.name}>
+                              {l.name}
+                            </span>
+                            {(
+                              [
+                                [l.hidden ? EyeOff : Eye, l.hidden ? "Mostrar" : "Ocultar", () => toggleHidden(l.id)],
+                                [ArrowUpToLine, "Trazer para Frente", () => reorder(l.id, "front")],
+                                [ArrowDownToLine, "Enviar para Trás", () => reorder(l.id, "back")],
+                                [Trash2, "Excluir", () => deleteLayer(l.id)],
+                              ] as const
+                            ).map(([I, label, run]) => (
+                              <button
+                                key={label}
+                                aria-label={label}
+                                title={label}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  run();
+                                }}
+                                className="p-0.5 rounded hover:text-white"
+                              >
+                                <I className="size-3" />
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })}
+                      {art && (
+                        <div className="flex items-center gap-1.5 px-2 py-1.5 text-muted-foreground border-t border-line/60">
+                          <Crop className="size-3.5 shrink-0 text-cyan" />
+                          <span className="flex-1 truncate">Estampa{art.clipped !== false ? " · PowerClip" : ""}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
                 <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between gap-4 text-[10px] font-mono text-faint pointer-events-none">
                   <span>{pcState === "editing" ? "Editando conteúdo do PowerClip · arraste a estampa e a alça do canto · clique em Concluir Edição para travar" : TOOL_HINTS[tool]}</span>
                   <button
@@ -682,6 +945,34 @@ function Index() {
               style={{ left: menu.x, top: menu.y }}
               onClick={(e) => e.stopPropagation()}
             >
+              {selObj && (
+                <>
+                  <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-faint truncate">Objeto · {selObj.name}</div>
+                  {[
+                    { label: `Colocar no PowerClip do Molde Mãe (${mother})`, show: true, run: () => layerToPowerClip(selObj.id) },
+                    { label: "Converter em contorno da peça", show: selObj.kind === "vetor", run: () => layerToOutline(selObj.id) },
+                    { label: "Trazer para Frente", show: true, run: () => reorder(selObj.id, "front") },
+                    { label: "Avançar uma posição", show: true, run: () => reorder(selObj.id, "up") },
+                    { label: "Recuar uma posição", show: true, run: () => reorder(selObj.id, "down") },
+                    { label: "Enviar para Trás", show: true, run: () => reorder(selObj.id, "back") },
+                    { label: "Excluir objeto", show: true, run: () => deleteLayer(selObj.id) },
+                  ]
+                    .filter((i) => i.show)
+                    .map((i) => (
+                      <button
+                        key={i.label}
+                        onClick={() => {
+                          i.run();
+                          setMenu(null);
+                        }}
+                        className="w-full text-left px-3 py-1.5 text-white hover:bg-cyan/15 hover:text-cyan"
+                      >
+                        {i.label}
+                      </button>
+                    ))}
+                  <div className="my-1 border-t border-line" />
+                </>
+              )}
               <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-faint">PowerClip</div>
               {[
                 { label: `Aplicar PowerClip em ${VIEWS.find((v) => v.key === view)?.label}`, show: pcState === "free", run: pcApply },
@@ -689,6 +980,7 @@ function Index() {
                 { label: "Concluir Edição", show: pcState === "editing", run: pcApply },
                 { label: "Extrair Conteúdo", show: pcState === "locked" || pcState === "editing", run: pcExtract },
                 { label: "Carregar Estampa…", show: pcState === "none", run: () => fileRef.current?.click() },
+                { label: "Importar Arquivo…", show: true, run: () => importRef.current?.click() },
                 { label: "Remover Estampa", show: pcState !== "none", run: () => setArt(null) },
               ]
                 .filter((i) => i.show)
@@ -870,36 +1162,11 @@ type Drag =
   | { k: "artScale"; orig: Artwork }
   | { k: "move"; start: Pt; orig: Node[] }
   | { k: "scale"; start: Pt; orig: Node[]; box: { x0: number; y0: number } }
-  | { k: "pan"; sx: number; sy: number; orig: Pt; alt: boolean; at: Pt };
-
-function buildPath(nodes: Node[], w: number, h: number, closed = true) {
-  const n = nodes.length;
-  if (!n) return "";
-  const P = (q: Pt) => ({ x: (q.x - 0.5) * w, y: q.y * h });
-  const at = (i: number) => nodes[((i % n) + n) % n]!;
-  const s = P(at(0));
-  let d = `M ${s.x} ${s.y}`;
-  const segs = closed ? n : n - 1;
-  for (let i = 0; i < segs; i++) {
-    const a = at(i);
-    const b = at(i + 1);
-    const a0 = at(i - 1);
-    const b1 = at(i + 2);
-    let c1: Pt | null = null;
-    let c2: Pt | null = null;
-    if (a.hOut) c1 = { x: a.x + a.hOut.x, y: a.y + a.hOut.y };
-    else if (a.smooth) c1 = { x: a.x + (b.x - a0.x) / 6, y: a.y + (b.y - a0.y) / 6 };
-    if (b.hIn) c2 = { x: b.x + b.hIn.x, y: b.y + b.hIn.y };
-    else if (b.smooth) c2 = { x: b.x - (b1.x - a.x) / 6, y: b.y - (b1.y - a.y) / 6 };
-    const pb = P(b);
-    if (c1 || c2) {
-      const q1 = P(c1 ?? a);
-      const q2 = P(c2 ?? b);
-      d += ` C ${q1.x} ${q1.y} ${q2.x} ${q2.y} ${pb.x} ${pb.y}`;
-    } else d += ` L ${pb.x} ${pb.y}`;
-  }
-  return closed ? d + " Z" : d;
-}
+  | { k: "pan"; sx: number; sy: number; orig: Pt; alt: boolean; at: Pt }
+  | { k: "lmove"; start: Pt; orig: Layer }
+  | { k: "lscale"; orig: Layer }
+  | { k: "lrot"; orig: Layer }
+  | { k: "lnode"; id: string; pi: number; si: number; i: number; which: "n" | "hIn" | "hOut" };
 
 function PatternCanvas({
   view,
@@ -916,6 +1183,10 @@ function PatternCanvas({
   pcEdit,
   partStyle,
   onMenu,
+  layers,
+  selLayer,
+  onSelLayer,
+  onLayersChange,
 }: {
   view: View;
   size: Size;
@@ -931,6 +1202,10 @@ function PatternCanvas({
   pcEdit: boolean;
   partStyle: PartStyle;
   onMenu: (x: number, y: number) => void;
+  layers: Layer[];
+  selLayer: string | null;
+  onSelLayer: (id: string | null) => void;
+  onLayersChange: (l: Layer[]) => void;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
