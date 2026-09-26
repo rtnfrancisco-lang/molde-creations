@@ -470,12 +470,12 @@ function Index() {
 function buildPath(pts: { x: number; y: number; smooth: boolean }[]) {
   const n = pts.length;
   if (n < 2) return "";
-  let path = `M ${pts[0].x} ${pts[0].y}`;
+  let path = `M ${pts[0]!.x} ${pts[0]!.y}`;
   for (let i = 0; i < n; i++) {
-    const p0 = pts[(i - 1 + n) % n];
-    const p1 = pts[i];
-    const p2 = pts[(i + 1) % n];
-    const p3 = pts[(i + 2) % n];
+    const p0 = pts[(i - 1 + n) % n]!;
+    const p1 = pts[i]!;
+    const p2 = pts[(i + 1) % n]!;
+    const p3 = pts[(i + 2) % n]!;
     if (p1.smooth || p2.smooth) {
       const c1 = p1.smooth ? { x: p1.x + (p2.x - p0.x) / 6, y: p1.y + (p2.y - p0.y) / 6 } : p1;
       const c2 = p2.smooth ? { x: p2.x - (p3.x - p1.x) / 6, y: p2.y - (p3.y - p1.y) / 6 } : p2;
@@ -542,7 +542,7 @@ function PatternCanvas({
     let best = 0;
     let bestD = Infinity;
     nodes.forEach((a, i) => {
-      const b = nodes[(i + 1) % nodes.length];
+      const b = nodes[(i + 1) % nodes.length]!;
       const mx = (a.x + b.x) / 2;
       const my = (a.y + b.y) / 2;
       const dd = (mx - p.x) ** 2 + (my - p.y) ** 2;
