@@ -401,7 +401,7 @@ function Index() {
                     key={v.key}
                     onClick={() => setView(v.key)}
                     className={
-                      "px-3 py-1.5 rounded-md text-xs font-medium transition-colors border " +
+                      "px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors border " +
                       (view === v.key
                         ? "bg-cyan/10 border-cyan/40 text-cyan"
                         : "border-transparent text-muted-foreground hover:text-white")
@@ -425,7 +425,7 @@ function Index() {
               />
               <button
                 onClick={() => fileRef.current?.click()}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border border-cyan/40 text-cyan hover:bg-cyan/10"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap border border-cyan/40 text-cyan hover:bg-cyan/10"
               >
                 <ImagePlus className="size-3.5" /> Carregar Estampa
               </button>
@@ -440,7 +440,7 @@ function Index() {
               )}
               <button
                 onClick={exportAll}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border border-line text-muted-foreground hover:text-white"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap border border-line text-muted-foreground hover:text-white"
               >
                 <Download className="size-3.5" /> Exportar Tamanhos
               </button>
