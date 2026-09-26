@@ -13,6 +13,8 @@ import {
   Download,
   Crown,
   Trash2,
+  Undo2,
+  Redo2,
   Palette,
   PanelRightClose,
   X,
@@ -206,7 +208,76 @@ function Index() {
     }
   }, []);
 
+  /* ---------- Histórico (Desfazer / Refazer) ---------- */
+  type Snap = { table: Grading; shapes: Shapes; artworks: Artworks; styles: Styles };
+  const snapRef = useRef<Snap>({ table, shapes, artworks, styles });
+  snapRef.current = { table, shapes, artworks, styles };
+  const [past, setPast] = useState<Snap[]>([]);
+  const [future, setFuture] = useState<Snap[]>([]);
+  const lastCp = useRef({ key: "", t: 0 });
+
+  const checkpoint = (key: string) => {
+    const now = Date.now();
+    if (lastCp.current.key === key && now - lastCp.current.t < 700) {
+      lastCp.current.t = now;
+      return;
+    }
+    lastCp.current = { key, t: now };
+    const snap = snapRef.current;
+    setPast((p) => [...p.slice(-99), snap]);
+    setFuture([]);
+  };
+
+  const restore = (sn: Snap) => {
+    setTable(sn.table);
+    setShapes(sn.shapes);
+    setArtworks(sn.artworks);
+    setStyles(sn.styles);
+    localStorage.setItem(LS_GRADING, JSON.stringify(sn.table));
+    localStorage.setItem(LS_SHAPES, JSON.stringify(sn.shapes));
+    localStorage.setItem(LS_STYLES, JSON.stringify(sn.styles));
+    try {
+      localStorage.setItem(LS_ART, JSON.stringify(sn.artworks));
+    } catch {
+      /* ignora */
+    }
+    lastCp.current = { key: "", t: 0 };
+  };
+
+  const undo = () => {
+    if (!past.length) return;
+    const prev = past[past.length - 1]!;
+    setPast(past.slice(0, -1));
+    setFuture((f) => [snapRef.current, ...f]);
+    restore(prev);
+  };
+
+  const redo = () => {
+    if (!future.length) return;
+    const next = future[0]!;
+    setFuture(future.slice(1));
+    setPast((p) => [...p, snapRef.current]);
+    restore(next);
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      if (k === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if (k === "y" || (k === "z" && e.shiftKey)) {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
   const updateShapes = (next: Shapes) => {
+    checkpoint("shapes");
     setShapes(next);
     localStorage.setItem(LS_SHAPES, JSON.stringify(next));
   };
@@ -214,6 +285,7 @@ function Index() {
   const graded = table;
 
   const updateTable = (sz: Size, key: Field, v: number) => {
+    checkpoint(`table:${sz}:${key}`);
     setTable((t) => {
       const next = { ...t, [sz]: { ...t[sz], [key]: v } };
       localStorage.setItem(LS_GRADING, JSON.stringify(next));
@@ -228,6 +300,7 @@ function Index() {
   };
 
   const updateArtworks = (next: Artworks) => {
+    checkpoint("art");
     setArtworks(next);
     try {
       localStorage.setItem(LS_ART, JSON.stringify(next));
@@ -254,6 +327,7 @@ function Index() {
   }, [menu]);
 
   const applyColor = (t: ColorTarget, hex: string | null) => {
+    checkpoint("color:" + Date.now());
     const next = { ...styles, [view]: { ...styles[view], [t === "contorno" ? "stroke" : "fill"]: hex } };
     setStyles(next);
     localStorage.setItem(LS_STYLES, JSON.stringify(next));
@@ -420,6 +494,26 @@ function Index() {
             <span className="text-faint">/</span>
             <span className="text-sm font-medium text-white truncate">{clothingType} — Sublimação</span>
           </div>
+          <div className="flex items-center gap-3">
+          <div className="flex items-center bg-panel2 border border-line rounded-md p-1">
+            {(
+              [
+                ["Desfazer", Undo2, undo, past.length === 0, "Ctrl+Z"],
+                ["Refazer", Redo2, redo, future.length === 0, "Ctrl+Y"],
+              ] as const
+            ).map(([label, Icon, run, disabled, kbd]) => (
+              <button
+                key={label}
+                onClick={run}
+                disabled={disabled}
+                title={`${label} (${kbd})`}
+                aria-label={label}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium text-muted-foreground hover:text-cyan hover:bg-cyan/10 disabled:opacity-30 disabled:pointer-events-none"
+              >
+                <Icon className="size-3.5" /> <span className="hidden lg:inline">{label}</span>
+              </button>
+            ))}
+          </div>
           <div className="flex items-center gap-1 bg-panel2 border border-line rounded-md p-1">
             <span className="text-[10px] font-mono uppercase tracking-wider text-faint px-2">Tamanho</span>
             {SIZES.map((s) => (
@@ -435,6 +529,7 @@ function Index() {
                 {s === mother && <Crown className="inline size-2.5 ml-0.5 -mt-0.5" />}
               </button>
             ))}
+          </div>
           </div>
         </header>
 
@@ -742,6 +837,7 @@ function Index() {
                   </button>
                   <button
                     onClick={() => {
+                      checkpoint("table-reset:" + Date.now());
                       setTable(DEFAULT_TABLE);
                       localStorage.setItem(LS_GRADING, JSON.stringify(DEFAULT_TABLE));
                     }}
