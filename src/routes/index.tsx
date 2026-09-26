@@ -441,7 +441,7 @@ function Index() {
         <div className="flex-1 min-h-0 flex">
           <section className="flex-1 min-w-0 flex flex-col">
             {/* Abas de vista */}
-            <div className="h-12 shrink-0 border-b border-line bg-panel/40 flex items-center justify-between px-4">
+            <div className="h-12 shrink-0 border-b border-line bg-panel/40 flex items-center justify-between gap-3 px-4 overflow-x-auto">
               <div className="flex items-center gap-1">
                 {VIEWS.map((v) => (
                   <button
