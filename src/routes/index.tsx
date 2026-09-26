@@ -246,7 +246,7 @@ function Index() {
 
   const undo = () => {
     if (!past.length) return;
-    const prev = past[past.length - 1]!;
+    const prev = past[past.length - 1]!;console.log("UNDO", past.map(p=>p.table.M.bodyHeight+":"+p.styles.frente.fill), future.length);
     setPast(past.slice(0, -1));
     setFuture((f) => [snapRef.current, ...f]);
     restore(prev);
