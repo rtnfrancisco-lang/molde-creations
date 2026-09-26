@@ -246,17 +246,19 @@ function Index() {
 
   const undo = () => {
     if (!past.length) return;
-    const prev = past[past.length - 1]!;console.log("UNDO", past.map(p=>p.table.M.bodyHeight+":"+p.styles.frente.fill), future.length);
+    const prev = past[past.length - 1]!;
+    const cur = snapRef.current;
     setPast(past.slice(0, -1));
-    setFuture((f) => [snapRef.current, ...f]);
+    setFuture((f) => [cur, ...f]);
     restore(prev);
   };
 
   const redo = () => {
     if (!future.length) return;
-    const next = future[0]!;console.log("REDO", future.map(p=>p.table.M.bodyHeight+":"+p.styles.frente.fill));
+    const next = future[0]!;
+    const cur = snapRef.current;
     setFuture(future.slice(1));
-    setPast((p) => [...p, snapRef.current]);
+    setPast((p) => [...p, cur]);
     restore(next);
   };
 
