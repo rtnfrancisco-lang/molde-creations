@@ -9,7 +9,6 @@ import {
   Table2,
   Save,
   RotateCcw,
-  Layers,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -667,13 +666,9 @@ function PatternCanvas({
             </g>
           );
         })}
-      {!isBody && nodes.length === 0 && null}
       {!isBody && (
         <g>
           <text x={0} y={H * 0.6} textAnchor="middle" fontSize={unit * 1.4} className="fill-faint font-mono">
-            <tspan>
-              <Layers />
-            </tspan>
             CAVA DA MANGA
           </text>
         </g>
