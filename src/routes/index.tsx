@@ -13,6 +13,10 @@ import {
   Download,
   Crown,
   Trash2,
+  Palette,
+  PanelRightClose,
+  X,
+  Crop,
   MousePointer2,
   Spline,
   PenTool,
@@ -52,9 +56,14 @@ type Grading = Record<Size, Measurements>;
 type View = "frente" | "costas" | "mangaEsq" | "mangaDir";
 type Node = { x: number; y: number; smooth: boolean; hIn?: { x: number; y: number }; hOut?: { x: number; y: number } };
 type Shapes = Record<View, Node[]>;
-type Artwork = { src: string; cx: number; cy: number; w: number; ratio: number };
-type ArtView = "frente" | "costas";
-type Artworks = Record<ArtView, Artwork | null>;
+type Artwork = { src: string; cx: number; cy: number; w: number; ratio: number; clipped?: boolean };
+type Artworks = Record<View, Artwork | null>;
+type ColorTarget = "contorno" | "preenchimento";
+type PartStyle = { stroke: string | null; fill: string | null };
+type Styles = Record<View, PartStyle>;
+const NO_ART: Artworks = { frente: null, costas: null, mangaEsq: null, mangaDir: null };
+const NO_STYLE: PartStyle = { stroke: null, fill: null };
+const DEFAULT_STYLES: Styles = { frente: NO_STYLE, costas: NO_STYLE, mangaEsq: NO_STYLE, mangaDir: NO_STYLE };
 type Tool = "selecao" | "forma" | "caneta" | "zoom" | "fita";
 type ClothingType = "Camiseta" | "Moletom" | "Regata" | "Manga Longa";
 
@@ -135,6 +144,7 @@ const TOOL_HINTS: Record<Tool, string> = {
 const LS_GRADING = "moldecore.tabelaMedidas";
 const LS_MOTHER = "moldecore.moldeMae";
 const LS_ART = "moldecore.estampas";
+const LS_STYLES = "moldecore.cores";
 const LS_SHAPES = "moldecore.formas";
 
 const LIBRARY = [
@@ -152,7 +162,11 @@ function Index() {
   const [clothingType, setClothingType] = useState<ClothingType>("Camiseta");
   const [table, setTable] = useState<Grading>(DEFAULT_TABLE);
   const [mother, setMother] = useState<Size>("M");
-  const [artworks, setArtworks] = useState<Artworks>({ frente: null, costas: null });
+  const [artworks, setArtworks] = useState<Artworks>(NO_ART);
+  const [styles, setStyles] = useState<Styles>(DEFAULT_STYLES);
+  const [colorTarget, setColorTarget] = useState<ColorTarget>("preenchimento");
+  const [pcEdit, setPcEdit] = useState(false);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [shapes, setShapes] = useState<Shapes>(DEFAULT_SHAPES);
   const [size, setSize] = useState<Size>("M");
@@ -182,7 +196,9 @@ function Index() {
       const mm = localStorage.getItem(LS_MOTHER) as Size | null;
       if (mm && SIZES.includes(mm)) setMother(mm);
       const a = localStorage.getItem(LS_ART);
-      if (a) setArtworks(JSON.parse(a));
+      if (a) setArtworks({ ...NO_ART, ...JSON.parse(a) });
+      const st = localStorage.getItem(LS_STYLES);
+      if (st) setStyles({ ...DEFAULT_STYLES, ...JSON.parse(st) });
       const s = localStorage.getItem(LS_SHAPES);
       if (s) setShapes({ ...DEFAULT_SHAPES, ...JSON.parse(s) });
     } catch {
@@ -226,7 +242,38 @@ function Index() {
     setTimeout(() => setSavedMsg(""), 2500);
   };
 
-  const artView: ArtView = view === "costas" ? "costas" : "frente";
+  const artView: View = view;
+  const art = artworks[view];
+
+  useEffect(() => setPcEdit(false), [view]);
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, [menu]);
+
+  const applyColor = (t: ColorTarget, hex: string | null) => {
+    const next = { ...styles, [view]: { ...styles[view], [t === "contorno" ? "stroke" : "fill"]: hex } };
+    setStyles(next);
+    localStorage.setItem(LS_STYLES, JSON.stringify(next));
+  };
+
+  const setArt = (a: Artwork | null) => updateArtworks({ ...artworks, [view]: a });
+  const pcApply = () => {
+    if (art) setArt({ ...art, clipped: true });
+    setPcEdit(false);
+  };
+  const pcEditStart = () => {
+    setSize(mother);
+    setTool("selecao");
+    setPcEdit(true);
+  };
+  const pcExtract = () => {
+    if (art) setArt({ ...art, clipped: false });
+    setPcEdit(false);
+  };
+  const pcState = !art ? "none" : art.clipped === false ? "free" : pcEdit ? "editing" : "locked";
 
   const onUpload = (file: File) => {
     const reader = new FileReader();
@@ -236,9 +283,9 @@ function Index() {
       img.onload = () => {
         updateArtworks({
           ...artworks,
-          [artView]: { src, cx: 0.5, cy: 0.35, w: 0.3, ratio: img.naturalHeight / img.naturalWidth },
+          [artView]: { src, cx: 0.5, cy: 0.35, w: 0.3, ratio: img.naturalHeight / img.naturalWidth, clipped: false },
         });
-        setView(artView);
+        setPcEdit(false);
         setSize(mother);
         setTool("selecao");
       };
@@ -249,7 +296,7 @@ function Index() {
 
   const exportAll = () => {
     const isBody = view === "frente" || view === "costas";
-    const art = isBody ? artworks[view as ArtView] : null;
+    const st = styles[view];
     SIZES.forEach((sz, idx) => {
       const m = table[sz];
       const W = isBody ? m.bodyWidth : m.sleeveWidth;
@@ -261,9 +308,9 @@ function Index() {
         const ah = aw * art.ratio;
         const x = (art.cx - 0.5) * W - aw / 2;
         const y = art.cy * H - ah / 2;
-        img = `<clipPath id="c"><path d="${path}"/></clipPath><image href="${art.src}" x="${x}" y="${y}" width="${aw}" height="${ah}" clip-path="url(#c)" preserveAspectRatio="none"/>`;
+        img = `<clipPath id="c"><path d="${path}"/></clipPath><image href="${art.src}" x="${x}" y="${y}" width="${aw}" height="${ah}" ${art.clipped === false ? "" : 'clip-path="url(#c)"'} preserveAspectRatio="none"/>`;
       }
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W + 2}cm" height="${H + 2}cm" viewBox="${-W / 2 - 1} -1 ${W + 2} ${H + 2}">${img}<path d="${path}" fill="none" stroke="#000" stroke-width="0.05"/></svg>`;
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W + 2}cm" height="${H + 2}cm" viewBox="${-W / 2 - 1} -1 ${W + 2} ${H + 2}"><path d="${path}" fill="${st.fill ?? "none"}"/>${img}<path d="${path}" fill="none" stroke="${st.stroke ?? "#000"}" stroke-width="0.05"/></svg>`;
       const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
       setTimeout(() => {
         const el = document.createElement("a");
@@ -429,14 +476,26 @@ function Index() {
               >
                 <ImagePlus className="size-3.5" /> Carregar Estampa
               </button>
-              {artworks[artView] && (view === "frente" || view === "costas") && (
-                <button
-                  onClick={() => updateArtworks({ ...artworks, [artView]: null })}
-                  aria-label="Remover estampa"
-                  className="p-1.5 rounded-md text-muted-foreground hover:text-destructive"
-                >
-                  <Trash2 className="size-3.5" />
-                </button>
+              {art && (
+                <>
+                  <button
+                    onClick={pcState === "free" ? pcApply : pcState === "locked" ? pcEditStart : pcApply}
+                    className={
+                      "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap border " +
+                      (pcState === "editing" ? "border-amber/60 text-amber bg-amber/10" : "border-line text-muted-foreground hover:text-white")
+                    }
+                  >
+                    <Crop className="size-3.5" />
+                    {pcState === "free" ? "Aplicar PowerClip" : pcState === "locked" ? "Editar Conteúdo do PowerClip" : "Concluir Edição"}
+                  </button>
+                  <button
+                    onClick={() => setArt(null)}
+                    aria-label="Remover estampa"
+                    className="p-1.5 rounded-md text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                </>
               )}
               <button
                 onClick={exportAll}
@@ -498,12 +557,15 @@ function Index() {
                   onShapesChange={updateShapes}
                   tool={tool}
                   fitSignal={fitSignal}
-                  artwork={view === "frente" || view === "costas" ? artworks[view] : null}
-                  onArtworkChange={(a) => updateArtworks({ ...artworks, [artView]: a })}
+                  artwork={art}
+                  onArtworkChange={setArt}
                   mother={mother}
+                  pcEdit={pcEdit}
+                  partStyle={styles[view]}
+                  onMenu={(x, y) => setMenu({ x, y })}
                 />
                 <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between gap-4 text-[10px] font-mono text-faint pointer-events-none">
-                  <span>{TOOL_HINTS[tool]}</span>
+                  <span>{pcState === "editing" ? "Editando conteúdo do PowerClip · arraste a estampa e a alça do canto · clique em Concluir Edição para travar" : TOOL_HINTS[tool]}</span>
                   <button
                     onClick={() => updateShapes({ ...shapes, [view]: DEFAULT_SHAPES[view] })}
                     className="pointer-events-auto flex items-center gap-1 text-muted-foreground hover:text-cyan whitespace-nowrap"
@@ -515,8 +577,41 @@ function Index() {
             </div>
           </section>
 
+          <PaletteDock target={colorTarget} onTarget={setColorTarget} onApply={applyColor} current={styles[view]} />
+
+          {menu && (
+            <div
+              className="fixed z-50 min-w-56 rounded-md border border-line bg-panel2 py-1 shadow-xl text-xs"
+              style={{ left: menu.x, top: menu.y }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-faint">PowerClip</div>
+              {[
+                { label: `Aplicar PowerClip em ${VIEWS.find((v) => v.key === view)?.label}`, show: pcState === "free", run: pcApply },
+                { label: "Editar Conteúdo do PowerClip", show: pcState === "locked", run: pcEditStart },
+                { label: "Concluir Edição", show: pcState === "editing", run: pcApply },
+                { label: "Extrair Conteúdo", show: pcState === "locked" || pcState === "editing", run: pcExtract },
+                { label: "Carregar Estampa…", show: pcState === "none", run: () => fileRef.current?.click() },
+                { label: "Remover Estampa", show: pcState !== "none", run: () => setArt(null) },
+              ]
+                .filter((i) => i.show)
+                .map((i) => (
+                  <button
+                    key={i.label}
+                    onClick={() => {
+                      i.run();
+                      setMenu(null);
+                    }}
+                    className="w-full text-left px-3 py-1.5 text-white hover:bg-cyan/15 hover:text-cyan"
+                  >
+                    {i.label}
+                  </button>
+                ))}
+            </div>
+          )}
+
           {/* ============ PAINEL DIREITO ============ */}
-          <aside className="w-96 shrink-0 bg-panel border-l border-line flex flex-col">
+          <aside className="w-80 shrink-0 bg-panel border-l border-line flex flex-col">
             <div className="grid grid-cols-2 border-b border-line">
               {(
                 [
@@ -720,6 +815,9 @@ function PatternCanvas({
   artwork,
   onArtworkChange,
   mother,
+  pcEdit,
+  partStyle,
+  onMenu,
 }: {
   view: View;
   size: Size;
@@ -732,6 +830,9 @@ function PatternCanvas({
   artwork: Artwork | null;
   onArtworkChange: (a: Artwork | null) => void;
   mother: Size;
+  pcEdit: boolean;
+  partStyle: PartStyle;
+  onMenu: (x: number, y: number) => void;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -986,6 +1087,10 @@ function PatternCanvas({
       onPointerLeave={() => setHover(null)}
       onWheel={onWheel}
       onDoubleClick={onDoubleClick}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onMenu(e.clientX, e.clientY);
+      }}
     >
       <text x={-maxW / 2 - pad * 0.7} y={-pad * 0.5} fontSize={(Math.max(maxW, maxH) / 60) * 1.6} className="fill-faint font-mono">
         {title} · TAMANHO {size}
@@ -1010,7 +1115,11 @@ function PatternCanvas({
         className={"fill-cyan/5 stroke-cyan " + (tool === "selecao" ? "cursor-move" : "")}
         strokeWidth={1.75}
         vectorEffect="non-scaling-stroke"
-        style={{ pointerEvents: tool === "selecao" ? "all" : "none" }}
+        style={{
+          pointerEvents: tool === "selecao" ? "all" : "none",
+          ...(partStyle.fill ? { fill: partStyle.fill } : {}),
+          ...(partStyle.stroke ? { stroke: partStyle.stroke } : {}),
+        }}
         onPointerDown={(e) => {
           if (tool !== "selecao") return;
           e.stopPropagation();
@@ -1019,33 +1128,42 @@ function PatternCanvas({
         }}
       />
 
-      {artwork && isBody && (() => {
+      {artwork && (() => {
         const aw = artwork.w * W;
         const ah = aw * artwork.ratio;
         const c = toSvg({ x: artwork.cx, y: artwork.cy });
-        const editable = size === mother && tool === "selecao";
+        const clipped = artwork.clipped !== false;
+        const editingNow = clipped && pcEdit && size === mother;
+        const movable = size === mother && tool === "selecao" && (!clipped || editingNow);
+        const imgProps = {
+          href: artwork.src,
+          x: c.x - aw / 2,
+          y: c.y - ah / 2,
+          width: aw,
+          height: ah,
+          preserveAspectRatio: "none",
+        };
+        const down = (e: React.PointerEvent) => {
+          e.stopPropagation();
+          capture(e);
+          setDrag({ k: "art", start: toNorm(svgPoint(e)), orig: artwork });
+        };
         return (
           <g>
             <clipPath id="outline-clip">
               <path d={buildPath(nodes, W, H)} />
             </clipPath>
-            <image
-              href={artwork.src}
-              x={c.x - aw / 2}
-              y={c.y - ah / 2}
-              width={aw}
-              height={ah}
-              preserveAspectRatio="none"
-              clipPath="url(#outline-clip)"
-              className={editable ? "cursor-move" : ""}
-              style={{ pointerEvents: editable ? "all" : "none" }}
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                capture(e);
-                setDrag({ k: "art", start: toNorm(svgPoint(e)), orig: artwork });
-              }}
-            />
-            {editable && (
+            {(!clipped || editingNow) && (
+              <image
+                {...imgProps}
+                opacity={editingNow ? 0.3 : 1}
+                className={movable ? "cursor-move" : ""}
+                style={{ pointerEvents: movable ? "all" : "none" }}
+                onPointerDown={movable ? down : undefined}
+              />
+            )}
+            {clipped && <image {...imgProps} clipPath="url(#outline-clip)" style={{ pointerEvents: "none" }} />}
+            {movable && (
               <>
                 <rect x={c.x - aw / 2} y={c.y - ah / 2} width={aw} height={ah} className="fill-none stroke-amber pointer-events-none" strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
                 {square({ x: c.x + aw / 2, y: c.y + ah / 2 }, "artScale", "fill-amber stroke-amber cursor-nwse-resize", (e) => {
@@ -1055,12 +1173,28 @@ function PatternCanvas({
                 })}
               </>
             )}
-            <text x={c.x} y={c.y - ah / 2 - unit} textAnchor="middle" fontSize={unit * 1.2} className="fill-amber font-mono pointer-events-none">
-              {fmt(aw)} × {fmt(ah)} cm · {Math.round(artwork.w * 100)}% da largura{size !== mother ? ` · auto de ${mother}` : ""}
-            </text>
+            {(movable || !clipped) && (
+              <text x={c.x} y={c.y - ah / 2 - unit} textAnchor="middle" fontSize={unit * 1.2} className="fill-amber font-mono pointer-events-none">
+                {fmt(aw)} × {fmt(ah)} cm · {Math.round(artwork.w * 100)}% da largura{size !== mother ? ` · auto de ${mother}` : ""}
+              </text>
+            )}
           </g>
         );
       })()}
+
+      {/* Contorno sobre a estampa */}
+      <path
+        d={buildPath(nodes, W, H)}
+        className="fill-none stroke-cyan pointer-events-none"
+        strokeWidth={1.75}
+        vectorEffect="non-scaling-stroke"
+        style={partStyle.stroke ? { stroke: partStyle.stroke } : undefined}
+      />
+      {artwork && artwork.clipped !== false && !pcEdit && (
+        <text x={-W / 2} y={-unit * 1.5} fontSize={unit * 1.2} className="fill-cyan font-mono pointer-events-none">
+          POWERCLIP · {size === mother ? "MOLDE MÃE" : `AUTO DE ${mother}`}
+        </text>
+      )}
 
       {/* Cotas */}
       <g className="pointer-events-none">
@@ -1174,6 +1308,168 @@ function PatternCanvas({
         </g>
       )}
     </svg>
+  );
+}
+
+/* ================= Paleta de cores ================= */
+
+const cmykToHex = (c: number, m: number, y: number, k: number) => {
+  const ch = (v: number) =>
+    Math.round(255 * (1 - v / 100) * (1 - k / 100))
+      .toString(16)
+      .padStart(2, "0");
+  return ("#" + ch(c) + ch(m) + ch(y)).toUpperCase();
+};
+
+const RGB_PALETTE = [
+  "#FFFFFF", "#E6E6E6", "#BFBFBF", "#808080", "#404040", "#000000",
+  "#FF0000", "#FF5A00", "#FF9900", "#FFCC00", "#FFFF00", "#99FF00",
+  "#00CC00", "#00FF99", "#00FFFF", "#0099FF", "#0033FF", "#6600FF",
+  "#9900CC", "#FF00FF", "#FF3399", "#990033", "#663300", "#996633",
+  "#003366", "#006666", "#336600", "#CC9966", "#FFCCCC", "#CCE5FF",
+];
+
+const CMYK_PALETTE: [number, number, number, number][] = [
+  [0, 0, 0, 0], [0, 0, 0, 20], [0, 0, 0, 40], [0, 0, 0, 60], [0, 0, 0, 80], [0, 0, 0, 100],
+  [0, 100, 100, 0], [0, 60, 100, 0], [0, 40, 100, 0], [0, 20, 100, 0], [0, 0, 100, 0], [40, 0, 100, 0],
+  [100, 0, 100, 0], [100, 0, 60, 0], [100, 0, 0, 0], [100, 40, 0, 0], [100, 80, 0, 0], [100, 100, 0, 0],
+  [60, 100, 0, 0], [0, 100, 0, 0], [0, 80, 20, 0], [0, 100, 60, 40], [0, 60, 100, 60], [100, 60, 0, 40],
+  [100, 0, 40, 40], [60, 0, 100, 40], [0, 20, 40, 20], [0, 30, 10, 0], [20, 0, 0, 0], [0, 0, 20, 0],
+];
+
+type Swatch = { hex: string; label: string };
+
+function PaletteDock({
+  target,
+  onTarget,
+  onApply,
+  current,
+}: {
+  target: ColorTarget;
+  onTarget: (t: ColorTarget) => void;
+  onApply: (t: ColorTarget, hex: string | null) => void;
+  current: PartStyle;
+}) {
+  const [open, setOpen] = useState(true);
+  const [mode, setMode] = useState<"rgb" | "cmyk">("cmyk");
+  const [info, setInfo] = useState<Swatch | null>(null);
+  const swatches: Swatch[] =
+    mode === "rgb"
+      ? RGB_PALETTE.map((hex) => ({ hex, label: hex }))
+      : CMYK_PALETTE.map(([c, m, y, k]) => ({ hex: cmykToHex(c, m, y, k), label: `C:${c} M:${m} Y:${y} K:${k}` }));
+
+  if (!open)
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        aria-label="Abrir paleta de cores"
+        className="w-8 shrink-0 bg-panel border-l border-line flex flex-col items-center gap-2 pt-3 text-muted-foreground hover:text-cyan"
+      >
+        <Palette className="size-4" />
+        <span className="[writing-mode:vertical-rl] text-[10px] font-mono uppercase tracking-[0.2em]">Paleta</span>
+      </button>
+    );
+
+  return (
+    <div className="w-44 shrink-0 bg-panel border-l border-line flex flex-col">
+      <div className="h-12 shrink-0 border-b border-line flex items-center justify-between px-3">
+        <span className="flex items-center gap-1.5 text-xs font-semibold text-white">
+          <Palette className="size-3.5 text-cyan" /> Paleta
+        </span>
+        <button onClick={() => setOpen(false)} aria-label="Recolher paleta" className="text-muted-foreground hover:text-cyan">
+          <PanelRightClose className="size-3.5" />
+        </button>
+      </div>
+      <div className="p-3 space-y-3 overflow-y-auto">
+        <div className="grid grid-cols-2 bg-panel2 border border-line rounded-md p-0.5 text-[10px] font-mono">
+          {(["rgb", "cmyk"] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              className={"py-1 rounded " + (mode === m ? "bg-cyan text-ink font-semibold" : "text-muted-foreground")}
+            >
+              Paleta {m.toUpperCase()}
+            </button>
+          ))}
+        </div>
+
+        <div className="space-y-1">
+          {(
+            [
+              ["contorno", "Contorno"],
+              ["preenchimento", "Preenchimento do Molde"],
+            ] as const
+          ).map(([k, label]) => (
+            <button
+              key={k}
+              onClick={() => onTarget(k)}
+              className={
+                "w-full flex items-center gap-2 px-2 py-1.5 rounded border text-[11px] text-left " +
+                (target === k ? "border-cyan/50 bg-cyan/10 text-white" : "border-line text-muted-foreground hover:text-white")
+              }
+            >
+              <span
+                className={"size-4 shrink-0 rounded-sm border border-line " + (k === "contorno" ? "border-2" : "")}
+                style={
+                  k === "contorno"
+                    ? { borderColor: current.stroke ?? "var(--color-cyan)" }
+                    : { background: current.fill ?? "transparent" }
+                }
+              />
+              <span className="leading-tight">{label}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-5 gap-1" onMouseLeave={() => setInfo(null)}>
+          <button
+            onClick={() => onApply(target, null)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              onApply("contorno", null);
+            }}
+            onMouseEnter={() => setInfo({ hex: "", label: "Sem cor" })}
+            aria-label="Sem cor"
+            className="aspect-square rounded-sm border border-line grid place-items-center text-destructive hover:ring-1 hover:ring-cyan"
+          >
+            <X className="size-3" />
+          </button>
+          {swatches.map((s) => (
+            <button
+              key={s.label}
+              onClick={() => onApply(target, s.hex)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                onApply("contorno", s.hex);
+              }}
+              onMouseEnter={() => setInfo(s)}
+              aria-label={s.label}
+              className="aspect-square rounded-sm border border-line hover:ring-1 hover:ring-cyan hover:scale-110 transition-transform"
+              style={{ background: s.hex }}
+            />
+          ))}
+        </div>
+
+        <div className="rounded-md border border-line bg-panel2 p-2 min-h-[64px]">
+          {info ? (
+            <div className="flex items-start gap-2">
+              <span className="size-8 shrink-0 rounded border border-line" style={{ background: info.hex || "transparent" }} />
+              <div className="text-[10px] font-mono leading-snug min-w-0">
+                <div className="text-white break-words">{info.label}</div>
+                {mode === "cmyk" && info.hex && <div className="text-faint">{info.hex}</div>}
+              </div>
+            </div>
+          ) : (
+            <p className="text-[10px] font-mono text-faint leading-snug">
+              Clique: aplica em {target === "contorno" ? "Contorno" : "Preenchimento"} · botão direito: Contorno
+            </p>
+          )}
+        </div>
+        {mode === "cmyk" && (
+          <p className="text-[9px] font-mono text-faint leading-snug">Prévia de tela convertida de CMYK · confira a prova de impressão</p>
+        )}
+      </div>
+    </div>
   );
 }
 
