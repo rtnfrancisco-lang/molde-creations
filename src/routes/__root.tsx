@@ -77,20 +77,21 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "MoldeCore — Pattern Engine" },
+      { title: "MoldeCore — Motor de Moldes" },
       {
         name: "description",
         content:
-          "MoldeCore is a clothing pattern automation system for sublimation printing. Draft, dimension, and generate base blueprints.",
+          "MoldeCore é um sistema de automação de moldes de roupa para sublimação. Crie, dimensione e gere moldes base.",
       },
       { name: "author", content: "MoldeCore" },
-      { property: "og:title", content: "MoldeCore — Pattern Engine" },
+      { property: "og:title", content: "MoldeCore — Motor de Moldes" },
       {
         property: "og:description",
         content:
-          "Clothing pattern automation for sublimation printing — draft and generate base blueprints.",
+          "Automação de moldes de roupa para sublimação — crie e gere moldes base.",
       },
       { property: "og:type", content: "website" },
+      { property: "og:locale", content: "pt_BR" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [
