@@ -9,6 +9,10 @@ import {
   Table2,
   Save,
   RotateCcw,
+  ImagePlus,
+  Download,
+  Crown,
+  Trash2,
   MousePointer2,
   Spline,
   PenTool,
@@ -48,6 +52,9 @@ type Grading = Record<Size, Measurements>;
 type View = "frente" | "costas" | "mangaEsq" | "mangaDir";
 type Node = { x: number; y: number; smooth: boolean; hIn?: { x: number; y: number }; hOut?: { x: number; y: number } };
 type Shapes = Record<View, Node[]>;
+type Artwork = { src: string; cx: number; cy: number; w: number; ratio: number };
+type ArtView = "frente" | "costas";
+type Artworks = Record<ArtView, Artwork | null>;
 type Tool = "selecao" | "forma" | "caneta" | "zoom" | "fita";
 type ClothingType = "Camiseta" | "Moletom" | "Regata" | "Manga Longa";
 
@@ -65,13 +72,13 @@ const d = (a: number, b: number, c: number, e: number): Measurements => ({
   sleeveWidth: e,
 });
 
-const DEFAULT_GRADING: Grading = {
-  PP: d(-4, -4, -2, -2),
-  P: d(-2, -2, -1, -1),
-  M: d(0, 0, 0, 0),
-  G: d(2, 2, 1, 1),
-  GG: d(4, 4, 2, 2),
-  XG: d(6, 6, 3, 3),
+const DEFAULT_TABLE: Grading = {
+  PP: d(68, 48, 20, 18),
+  P: d(70, 50, 21, 19),
+  M: d(72, 52, 22, 20),
+  G: d(74, 54, 23, 21),
+  GG: d(76, 56, 24, 22),
+  XG: d(78, 58, 25, 23),
 };
 
 const bodyShape = (neckDepth: number): Node[] => [
@@ -118,14 +125,16 @@ const TOOLS: { k: Tool; label: string; icon: typeof Ruler; key: string }[] = [
 ];
 
 const TOOL_HINTS: Record<Tool, string> = {
-  selecao: "Arraste o contorno para mover · arraste a alça do canto para escalar",
+  selecao: "Arraste o contorno ou a estampa para mover · arraste a alça do canto para escalar",
   forma: "Arraste nós e alças · duplo clique adiciona nó · Alt+clique remove · Shift+clique alterna reta/curva",
   caneta: "Clique para criar nós · clique e arraste para curvas · clique no 1º nó ou Enter fecha · Esc cancela",
   zoom: "Clique para aproximar · Alt+clique afasta · arraste para mover a vista · roda do mouse também dá zoom",
   fita: "Clique em dois pontos para medir a distância real em cm",
 };
 
-const LS_GRADING = "moldecore.tabelaTamanhos";
+const LS_GRADING = "moldecore.tabelaMedidas";
+const LS_MOTHER = "moldecore.moldeMae";
+const LS_ART = "moldecore.estampas";
 const LS_SHAPES = "moldecore.formas";
 
 const LIBRARY = [
@@ -141,9 +150,10 @@ const fmt = (n: number) => n.toFixed(1).replace(".", ",");
 
 function Index() {
   const [clothingType, setClothingType] = useState<ClothingType>("Camiseta");
-  const [base, setBase] = useState<Measurements>(d(72, 52, 22, 20));
-  const [grading, setGrading] = useState<Grading>(DEFAULT_GRADING);
-  const [draftGrading, setDraftGrading] = useState<Grading>(DEFAULT_GRADING);
+  const [table, setTable] = useState<Grading>(DEFAULT_TABLE);
+  const [mother, setMother] = useState<Size>("M");
+  const [artworks, setArtworks] = useState<Artworks>({ frente: null, costas: null });
+  const fileRef = useRef<HTMLInputElement>(null);
   const [shapes, setShapes] = useState<Shapes>(DEFAULT_SHAPES);
   const [size, setSize] = useState<Size>("M");
   const [view, setView] = useState<View>("frente");
@@ -168,11 +178,11 @@ function Index() {
   useEffect(() => {
     try {
       const g = localStorage.getItem(LS_GRADING);
-      if (g) {
-        const parsed = JSON.parse(g) as Grading;
-        setGrading(parsed);
-        setDraftGrading(parsed);
-      }
+      if (g) setTable(JSON.parse(g) as Grading);
+      const mm = localStorage.getItem(LS_MOTHER) as Size | null;
+      if (mm && SIZES.includes(mm)) setMother(mm);
+      const a = localStorage.getItem(LS_ART);
+      if (a) setArtworks(JSON.parse(a));
       const s = localStorage.getItem(LS_SHAPES);
       if (s) setShapes({ ...DEFAULT_SHAPES, ...JSON.parse(s) });
     } catch {
@@ -185,24 +195,84 @@ function Index() {
     localStorage.setItem(LS_SHAPES, JSON.stringify(next));
   };
 
-  const graded = useMemo(() => {
-    const out = {} as Record<Size, Measurements>;
-    for (const s of SIZES) {
-      out[s] = {
-        bodyHeight: base.bodyHeight + grading[s].bodyHeight,
-        bodyWidth: base.bodyWidth + grading[s].bodyWidth,
-        sleeveHeight: base.sleeveHeight + grading[s].sleeveHeight,
-        sleeveWidth: base.sleeveWidth + grading[s].sleeveWidth,
-      };
+  const graded = table;
+
+  const updateTable = (sz: Size, key: Field, v: number) => {
+    setTable((t) => {
+      const next = { ...t, [sz]: { ...t[sz], [key]: v } };
+      localStorage.setItem(LS_GRADING, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const changeMother = (m: Size) => {
+    setMother(m);
+    setSize(m);
+    localStorage.setItem(LS_MOTHER, m);
+  };
+
+  const updateArtworks = (next: Artworks) => {
+    setArtworks(next);
+    try {
+      localStorage.setItem(LS_ART, JSON.stringify(next));
+    } catch {
+      /* imagem grande demais para o armazenamento local */
     }
-    return out;
-  }, [base, grading]);
+  };
 
   const saveGrading = () => {
-    setGrading(draftGrading);
-    localStorage.setItem(LS_GRADING, JSON.stringify(draftGrading));
-    setSavedMsg("Padrão salvo neste navegador");
+    localStorage.setItem(LS_GRADING, JSON.stringify(table));
+    setSavedMsg("Tabela salva neste navegador");
     setTimeout(() => setSavedMsg(""), 2500);
+  };
+
+  const artView: ArtView = view === "costas" ? "costas" : "frente";
+
+  const onUpload = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const src = reader.result as string;
+      const img = new Image();
+      img.onload = () => {
+        updateArtworks({
+          ...artworks,
+          [artView]: { src, cx: 0.5, cy: 0.35, w: 0.3, ratio: img.naturalHeight / img.naturalWidth },
+        });
+        setView(artView);
+        setSize(mother);
+        setTool("selecao");
+      };
+      img.src = src;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const exportAll = () => {
+    const isBody = view === "frente" || view === "costas";
+    const art = isBody ? artworks[view as ArtView] : null;
+    SIZES.forEach((sz, idx) => {
+      const m = table[sz];
+      const W = isBody ? m.bodyWidth : m.sleeveWidth;
+      const H = isBody ? m.bodyHeight : m.sleeveHeight;
+      const path = buildPath(shapes[view], W, H);
+      let img = "";
+      if (art) {
+        const aw = art.w * W;
+        const ah = aw * art.ratio;
+        const x = (art.cx - 0.5) * W - aw / 2;
+        const y = art.cy * H - ah / 2;
+        img = `<clipPath id="c"><path d="${path}"/></clipPath><image href="${art.src}" x="${x}" y="${y}" width="${aw}" height="${ah}" clip-path="url(#c)" preserveAspectRatio="none"/>`;
+      }
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W + 2}cm" height="${H + 2}cm" viewBox="${-W / 2 - 1} -1 ${W + 2} ${H + 2}">${img}<path d="${path}" fill="none" stroke="#000" stroke-width="0.05"/></svg>`;
+      const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+      setTimeout(() => {
+        const el = document.createElement("a");
+        el.href = url;
+        el.download = `moldecore-${view}-${sz}.svg`;
+        el.click();
+        URL.revokeObjectURL(url);
+      }, idx * 250);
+    });
   };
 
   const VIEWS: { key: View; label: string }[] = [
@@ -315,6 +385,7 @@ function Index() {
                 }
               >
                 {s}
+                {s === mother && <Crown className="inline size-2.5 ml-0.5 -mt-0.5" />}
               </button>
             ))}
           </div>
@@ -340,6 +411,39 @@ function Index() {
                   </button>
                 ))}
               </div>
+              <div className="flex items-center gap-3">
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) onUpload(f);
+                  e.target.value = "";
+                }}
+              />
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border border-cyan/40 text-cyan hover:bg-cyan/10"
+              >
+                <ImagePlus className="size-3.5" /> Carregar Estampa
+              </button>
+              {artworks[artView] && (view === "frente" || view === "costas") && (
+                <button
+                  onClick={() => updateArtworks({ ...artworks, [artView]: null })}
+                  aria-label="Remover estampa"
+                  className="p-1.5 rounded-md text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              )}
+              <button
+                onClick={exportAll}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border border-line text-muted-foreground hover:text-white"
+              >
+                <Download className="size-3.5" /> Exportar Tamanhos
+              </button>
               <label className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground cursor-pointer">
                 <input
                   type="checkbox"
@@ -347,8 +451,9 @@ function Index() {
                   onChange={(e) => setOverlay(e.target.checked)}
                   className="accent-[var(--color-cyan)]"
                 />
-                Sobrepor todos os tamanhos
+                Sobrepor
               </label>
+              </div>
             </div>
 
             <div className="flex-1 min-h-0 flex">
@@ -393,6 +498,9 @@ function Index() {
                   onShapesChange={updateShapes}
                   tool={tool}
                   fitSignal={fitSignal}
+                  artwork={view === "frente" || view === "costas" ? artworks[view] : null}
+                  onArtworkChange={(a) => updateArtworks({ ...artworks, [artView]: a })}
+                  mother={mother}
                 />
                 <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between gap-4 text-[10px] font-mono text-faint pointer-events-none">
                   <span>{TOOL_HINTS[tool]}</span>
@@ -408,7 +516,7 @@ function Index() {
           </section>
 
           {/* ============ PAINEL DIREITO ============ */}
-          <aside className="w-80 shrink-0 bg-panel border-l border-line flex flex-col">
+          <aside className="w-96 shrink-0 bg-panel border-l border-line flex flex-col">
             <div className="grid grid-cols-2 border-b border-line">
               {(
                 [
@@ -434,11 +542,20 @@ function Index() {
                 <div className="px-5 py-4 border-b border-line">
                   <div className="flex items-center justify-between">
                     <h2 className="text-sm font-semibold text-white">Dimensões do Molde Base</h2>
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-cyan bg-cyan/10 border border-cyan/25 rounded px-1.5 py-0.5">
-                      Tamanho M
-                    </span>
+                    <label className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-cyan bg-cyan/10 border border-cyan/25 rounded px-1.5 py-0.5">
+                      <Crown className="size-3" /> Molde Mãe
+                      <select
+                        value={mother}
+                        onChange={(e) => changeMother(e.target.value as Size)}
+                        className="bg-transparent text-cyan font-semibold focus:outline-none cursor-pointer"
+                      >
+                        {SIZES.map((s) => (
+                          <option key={s} value={s} className="bg-panel">{s}</option>
+                        ))}
+                      </select>
+                    </label>
                   </div>
-                  <p className="text-[11px] text-faint mt-1 font-mono">Os demais tamanhos são calculados · cm</p>
+                  <p className="text-[11px] text-faint mt-1 font-mono">Medidas do Tamanho {mother} · estampas são ancoradas aqui</p>
                 </div>
                 <div className="px-5 py-5 space-y-5 overflow-y-auto">
                   {["Corpo", "Manga"].map((group) => (
@@ -448,15 +565,15 @@ function Index() {
                         <DimensionInput
                           key={f.key}
                           label={`${f.label} (cm)`}
-                          value={base[f.key]}
-                          onChange={(v) => setBase((b) => ({ ...b, [f.key]: v }))}
+                          value={table[mother][f.key]}
+                          onChange={(v) => updateTable(mother, f.key, v)}
                         />
                       ))}
                     </div>
                   ))}
                   <div className="pt-3 border-t border-line">
                     <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-muted-foreground mb-2">
-                      Tamanho {size} calculado
+                      Tamanho {size} em exibição
                     </div>
                     {FIELDS.map((f) => (
                       <div key={f.key} className="flex justify-between text-[11px] font-mono py-0.5">
@@ -468,14 +585,14 @@ function Index() {
                 </div>
                 <div className="px-5 py-4 border-t border-line mt-auto">
                   <button
-                    onClick={() => setSize("M")}
+                    onClick={() => setSize(mother)}
                     className="w-full flex items-center justify-center gap-2 bg-cyan text-ink font-semibold text-sm rounded-md py-3 hover:bg-cyan/90 transition-colors"
                   >
                     <Wand2 className="size-4" strokeWidth={2.5} />
                     Gerar Molde Base
                   </button>
                   <p className="text-[10px] font-mono text-faint text-center mt-2.5">
-                    Graduação automática em {SIZES.length} tamanhos
+                    Graduação pela Tabela de Tamanhos · {SIZES.length} tamanhos
                   </p>
                 </div>
               </>
@@ -484,37 +601,34 @@ function Index() {
                 <div className="px-5 py-4 border-b border-line">
                   <h2 className="text-sm font-semibold text-white">Configurar Tabela de Tamanhos</h2>
                   <p className="text-[11px] text-faint mt-1 font-mono">
-                    cm a somar ou subtrair em relação ao M
+                    Medidas finais de cada tamanho em cm · aplicadas na hora
                   </p>
                 </div>
                 <div className="px-3 py-4 overflow-y-auto">
                   <table className="w-full text-[11px] font-mono">
                     <thead>
                       <tr className="text-faint">
-                        <th className="text-left font-normal pb-2 pl-2">Tam.</th>
-                        <th className="font-normal pb-2">Alt. corpo</th>
-                        <th className="font-normal pb-2">Larg. corpo</th>
-                        <th className="font-normal pb-2">Alt. manga</th>
-                        <th className="font-normal pb-2">Larg. manga</th>
+                        <th className="text-left font-normal pb-2 pl-2 align-bottom">Tamanho</th>
+                        <th className="font-normal pb-2 leading-tight">Altura do Corpo (cm)</th>
+                        <th className="font-normal pb-2 leading-tight">Largura do Corpo (cm)</th>
+                        <th className="font-normal pb-2 leading-tight">Altura da Manga (cm)</th>
+                        <th className="font-normal pb-2 leading-tight">Largura da Manga (cm)</th>
                       </tr>
                     </thead>
                     <tbody>
                       {SIZES.map((s) => (
                         <tr key={s}>
-                          <td className={"pl-2 font-semibold " + (s === "M" ? "text-cyan" : "text-white")}>{s}</td>
+                          <td className={"pl-2 font-semibold whitespace-nowrap " + (s === mother ? "text-cyan" : "text-white")}>
+                            {s}
+                            {s === mother && <Crown className="inline size-3 ml-1 -mt-0.5" />}
+                          </td>
                           {FIELDS.map((f) => (
                             <td key={f.key} className="p-0.5">
                               <input
                                 type="number"
                                 step="0.5"
-                                disabled={s === "M"}
-                                value={draftGrading[s][f.key]}
-                                onChange={(e) =>
-                                  setDraftGrading((g) => ({
-                                    ...g,
-                                    [s]: { ...g[s], [f.key]: parseFloat(e.target.value) || 0 },
-                                  }))
-                                }
+                                value={table[s][f.key]}
+                                onChange={(e) => updateTable(s, f.key, parseFloat(e.target.value) || 0)}
                                 className="w-full bg-panel2 border border-line rounded px-1.5 py-1.5 text-center text-white disabled:opacity-40 focus:outline-none focus:border-cyan/60"
                               />
                             </td>
@@ -532,7 +646,10 @@ function Index() {
                     <Save className="size-4" /> Salvar Padrão
                   </button>
                   <button
-                    onClick={() => setDraftGrading(DEFAULT_GRADING)}
+                    onClick={() => {
+                      setTable(DEFAULT_TABLE);
+                      localStorage.setItem(LS_GRADING, JSON.stringify(DEFAULT_TABLE));
+                    }}
                     className="w-full text-[11px] font-mono text-muted-foreground hover:text-cyan"
                   >
                     Restaurar valores sugeridos
@@ -556,6 +673,8 @@ type Drag =
   | { k: "hOut"; i: number }
   | { k: "hIn"; i: number }
   | { k: "pen"; i: number }
+  | { k: "art"; start: Pt; orig: Artwork }
+  | { k: "artScale"; orig: Artwork }
   | { k: "move"; start: Pt; orig: Node[] }
   | { k: "scale"; start: Pt; orig: Node[]; box: { x0: number; y0: number } }
   | { k: "pan"; sx: number; sy: number; orig: Pt; alt: boolean; at: Pt };
@@ -598,6 +717,9 @@ function PatternCanvas({
   onShapesChange,
   tool,
   fitSignal,
+  artwork,
+  onArtworkChange,
+  mother,
 }: {
   view: View;
   size: Size;
@@ -607,6 +729,9 @@ function PatternCanvas({
   onShapesChange: (s: Shapes) => void;
   tool: Tool;
   fitSignal: number;
+  artwork: Artwork | null;
+  onArtworkChange: (a: Artwork | null) => void;
+  mother: Size;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -703,6 +828,12 @@ function PatternCanvas({
     if (!drag) return;
     const n = toNorm(p);
     switch (drag.k) {
+      case "art":
+        onArtworkChange({ ...drag.orig, cx: drag.orig.cx + n.x - drag.start.x, cy: drag.orig.cy + n.y - drag.start.y });
+        break;
+      case "artScale":
+        onArtworkChange({ ...drag.orig, w: Math.max(0.03, Math.abs(n.x - drag.orig.cx) * 2) });
+        break;
       case "node":
         setNodes(nodes.map((q, i) => (i === drag.i ? { ...q, x: n.x, y: n.y } : q)));
         break;
@@ -887,6 +1018,49 @@ function PatternCanvas({
           setDrag({ k: "move", start: toNorm(svgPoint(e)), orig: nodes });
         }}
       />
+
+      {artwork && isBody && (() => {
+        const aw = artwork.w * W;
+        const ah = aw * artwork.ratio;
+        const c = toSvg({ x: artwork.cx, y: artwork.cy });
+        const editable = size === mother && tool === "selecao";
+        return (
+          <g>
+            <clipPath id="outline-clip">
+              <path d={buildPath(nodes, W, H)} />
+            </clipPath>
+            <image
+              href={artwork.src}
+              x={c.x - aw / 2}
+              y={c.y - ah / 2}
+              width={aw}
+              height={ah}
+              preserveAspectRatio="none"
+              clipPath="url(#outline-clip)"
+              className={editable ? "cursor-move" : ""}
+              style={{ pointerEvents: editable ? "all" : "none" }}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                capture(e);
+                setDrag({ k: "art", start: toNorm(svgPoint(e)), orig: artwork });
+              }}
+            />
+            {editable && (
+              <>
+                <rect x={c.x - aw / 2} y={c.y - ah / 2} width={aw} height={ah} className="fill-none stroke-amber pointer-events-none" strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
+                {square({ x: c.x + aw / 2, y: c.y + ah / 2 }, "artScale", "fill-amber stroke-amber cursor-nwse-resize", (e) => {
+                  e.stopPropagation();
+                  capture(e);
+                  setDrag({ k: "artScale", orig: artwork });
+                })}
+              </>
+            )}
+            <text x={c.x} y={c.y - ah / 2 - unit} textAnchor="middle" fontSize={unit * 1.2} className="fill-amber font-mono pointer-events-none">
+              {fmt(aw)} × {fmt(ah)} cm · {Math.round(artwork.w * 100)}% da largura{size !== mother ? ` · auto de ${mother}` : ""}
+            </text>
+          </g>
+        );
+      })()}
 
       {/* Cotas */}
       <g className="pointer-events-none">
