@@ -254,7 +254,7 @@ function Index() {
 
   const redo = () => {
     if (!future.length) return;
-    const next = future[0]!;
+    const next = future[0]!;console.log("REDO", future.map(p=>p.table.M.bodyHeight+":"+p.styles.frente.fill));
     setFuture(future.slice(1));
     setPast((p) => [...p, snapRef.current]);
     restore(next);
