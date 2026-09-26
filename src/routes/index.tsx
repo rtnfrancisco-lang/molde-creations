@@ -21,7 +21,6 @@ export const Route = createFileRoute("/")({
       { property: "og:locale", content: "pt_BR" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
-    htmlAttrs: { lang: "pt-BR" },
   }),
   component: Index,
 });
