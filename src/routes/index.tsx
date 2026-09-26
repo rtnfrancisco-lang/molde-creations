@@ -1241,6 +1241,22 @@ function PatternCanvas({
   const setNodes = (next: Node[]) => onShapesChange({ ...shapes, [view]: next });
   const toSvg = (q: Pt): Pt => ({ x: (q.x - 0.5) * W, y: q.y * H });
   const toNorm = (p: Pt): Pt => ({ x: p.x / W + 0.5, y: p.y / H });
+  const lg = (l: Layer) => {
+    const aw = l.w * W;
+    return { c: toSvg({ x: l.cx, y: l.cy }), aw, ah: aw * l.ratio };
+  };
+  const toLocal = (l: Layer, p: Pt) => {
+    const { c, aw, ah } = lg(l);
+    const dx = p.x - c.x;
+    const dy = p.y - c.y;
+    const r = (-l.rot * Math.PI) / 180;
+    const lx = dx * Math.cos(r) - dy * Math.sin(r);
+    const ly = dx * Math.sin(r) + dy * Math.cos(r);
+    return { lx, ly, u: lx / aw + 0.5, v: ly / ah + 0.5 };
+  };
+  const setLayer = (l: Layer) => onLayersChange(layers.map((x) => (x.id === l.id ? l : x)));
+  const selL = layers.find((l) => l.id === selLayer) ?? null;
+  const layerNodeMode = tool === "forma" && selL?.kind === "vetor" && !selL.hidden;
   const svgPoint = (e: { clientX: number; clientY: number }): Pt => {
     const svg = svgRef.current!;
     const pt = svg.createSVGPoint();
@@ -1275,6 +1291,7 @@ function PatternCanvas({
 
   const onBgDown = (e: React.PointerEvent<SVGSVGElement>) => {
     const p = svgPoint(e);
+    if ((tool === "selecao" || tool === "forma") && e.button === 0) onSelLayer(null);
     if (tool === "zoom") {
       capture(e);
       setDrag({ k: "pan", sx: e.clientX, sy: e.clientY, orig: { x: zoom.px, y: zoom.py }, alt: e.altKey, at: p });
@@ -1308,6 +1325,47 @@ function PatternCanvas({
       case "artScale":
         onArtworkChange({ ...drag.orig, w: Math.max(0.03, Math.abs(n.x - drag.orig.cx) * 2) });
         break;
+      case "lmove":
+        setLayer({ ...drag.orig, cx: drag.orig.cx + n.x - drag.start.x, cy: drag.orig.cy + n.y - drag.start.y });
+        break;
+      case "lscale": {
+        const { lx } = toLocal(drag.orig, p);
+        setLayer({ ...drag.orig, w: Math.max(0.02, (2 * Math.abs(lx)) / W) });
+        break;
+      }
+      case "lrot": {
+        const { c } = lg(drag.orig);
+        let a = (Math.atan2(p.x - c.x, -(p.y - c.y)) * 180) / Math.PI;
+        if (e.shiftKey) a = Math.round(a / 15) * 15;
+        setLayer({ ...drag.orig, rot: Math.round(a * 10) / 10 });
+        break;
+      }
+      case "lnode": {
+        const l = layers.find((x) => x.id === drag.id);
+        if (!l?.paths) break;
+        const { u, v } = toLocal(l, p);
+        const paths = l.paths.map((pp, pi) =>
+          pi !== drag.pi
+            ? pp
+            : {
+                ...pp,
+                subs: pp.subs.map((s, si) =>
+                  si !== drag.si
+                    ? s
+                    : {
+                        ...s,
+                        nodes: s.nodes.map((q, i) => {
+                          if (i !== drag.i) return q;
+                          if (drag.which === "n") return { ...q, x: u, y: v };
+                          return { ...q, [drag.which]: { x: u - q.x, y: v - q.y } };
+                        }),
+                      },
+                ),
+              },
+        );
+        setLayer({ ...l, paths });
+        break;
+      }
       case "node":
         setNodes(nodes.map((q, i) => (i === drag.i ? { ...q, x: n.x, y: n.y } : q)));
         break;
@@ -1388,7 +1446,7 @@ function PatternCanvas({
   };
 
   const onDoubleClick = (e: React.MouseEvent) => {
-    if (tool !== "forma") return;
+    if (tool !== "forma" || layerNodeMode) return;
     const p = toNorm(svgPoint(e));
     let best = 0;
     let bestD = Infinity;
@@ -1429,7 +1487,7 @@ function PatternCanvas({
 
   const others = overlay ? SIZES.filter((s) => s !== size) : [];
   const title = { frente: "FRENTE", costas: "COSTAS", mangaEsq: "MANGA ESQUERDA", mangaDir: "MANGA DIREITA" }[view];
-  const showNodes = tool === "forma" || tool === "caneta";
+  const showNodes = (tool === "forma" && !layerNodeMode) || tool === "caneta";
   const nodesInteractive = tool === "forma" || (tool === "caneta" && !draft);
   const cursor = { selecao: "cursor-default", forma: "cursor-crosshair", caneta: "cursor-crosshair", zoom: "cursor-zoom-in", fita: "cursor-crosshair" }[tool];
   const tapeEnd = tape.b ?? (tape.a ? hover : null);
@@ -1496,6 +1554,7 @@ function PatternCanvas({
         onPointerDown={(e) => {
           if (tool !== "selecao") return;
           e.stopPropagation();
+          onSelLayer(null);
           capture(e);
           setDrag({ k: "move", start: toNorm(svgPoint(e)), orig: nodes });
         }}
@@ -1515,6 +1574,7 @@ function PatternCanvas({
           width: aw,
           height: ah,
           preserveAspectRatio: "none",
+          transform: `rotate(${artwork.rot ?? 0} ${c.x} ${c.y})`,
         };
         const down = (e: React.PointerEvent) => {
           e.stopPropagation();
@@ -1535,7 +1595,11 @@ function PatternCanvas({
                 onPointerDown={movable ? down : undefined}
               />
             )}
-            {clipped && <image {...imgProps} clipPath="url(#outline-clip)" style={{ pointerEvents: "none" }} />}
+            {clipped && (
+              <g clipPath="url(#outline-clip)">
+                <image {...imgProps} style={{ pointerEvents: "none" }} />
+              </g>
+            )}
             {movable && (
               <>
                 <rect x={c.x - aw / 2} y={c.y - ah / 2} width={aw} height={ah} className="fill-none stroke-amber pointer-events-none" strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
@@ -1554,6 +1618,113 @@ function PatternCanvas({
           </g>
         );
       })()}
+
+      {/* Objetos importados (camadas) */}
+      {layers.map((l) => {
+        if (l.hidden) return null;
+        const { c, aw, ah } = lg(l);
+        const sel = l.id === selLayer;
+        const pickable = tool === "selecao" || tool === "forma";
+        const down = (e: React.PointerEvent) => {
+          if (!pickable) return;
+          e.stopPropagation();
+          onSelLayer(l.id);
+          if (e.button !== 0 || tool !== "selecao") return;
+          capture(e);
+          setDrag({ k: "lmove", start: toNorm(svgPoint(e)), orig: l });
+        };
+        return (
+          <g key={l.id} transform={`translate(${c.x} ${c.y}) rotate(${l.rot})`}>
+            <g
+              className={tool === "selecao" ? "cursor-move" : ""}
+              style={{ pointerEvents: pickable ? "all" : "none" }}
+              onPointerDown={down}
+            >
+              {l.src ? (
+                <image href={l.src} x={-aw / 2} y={-ah / 2} width={aw} height={ah} preserveAspectRatio="none" />
+              ) : (
+                <>
+                  <rect x={-aw / 2} y={-ah / 2} width={aw} height={ah} fill="transparent" />
+                  <g transform={`translate(0 ${-ah / 2})`}>
+                    {l.paths!.map((p, pi) => (
+                      <path key={pi} d={layerPathD(p, aw, ah)} fill={p.fill ?? "none"} stroke={p.stroke ?? "none"} strokeWidth={p.sw * aw} fillRule={p.rule} />
+                    ))}
+                  </g>
+                </>
+              )}
+            </g>
+            {sel && (
+              <rect x={-aw / 2} y={-ah / 2} width={aw} height={ah} className="fill-none stroke-amber pointer-events-none" strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
+            )}
+            {sel && tool === "selecao" && (
+              <>
+                <line x1={0} y1={-ah / 2} x2={0} y2={-ah / 2 - unit * 3} className="stroke-amber pointer-events-none" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                <circle
+                  cx={0}
+                  cy={-ah / 2 - unit * 3}
+                  r={unit * 0.8}
+                  className="fill-amber stroke-amber cursor-grab"
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    capture(e);
+                    setDrag({ k: "lrot", orig: l });
+                  }}
+                />
+                {square({ x: aw / 2, y: ah / 2 }, "ls", "fill-amber stroke-amber cursor-nwse-resize", (e) => {
+                  e.stopPropagation();
+                  capture(e);
+                  setDrag({ k: "lscale", orig: l });
+                })}
+                <text x={0} y={ah / 2 + unit * 2.2} textAnchor="middle" fontSize={unit * 1.1} className="fill-amber font-mono pointer-events-none">
+                  {fmt(aw)} × {fmt(ah)} cm{l.rot ? ` · ${fmt(l.rot)}°` : ""}
+                </text>
+              </>
+            )}
+            {sel && layerNodeMode && l.paths && (
+              <g>
+                {l.paths.flatMap((pp, pi) =>
+                  pp.subs.flatMap((s, si) =>
+                    s.nodes.map((q, i) => {
+                      const P = (x: number, y: number) => ({ x: (x - 0.5) * aw, y: (y - 0.5) * ah });
+                      const pt = P(q.x, q.y);
+                      const hs = (["hIn", "hOut"] as const).filter((k) => q[k]);
+                      return (
+                        <g key={`${pi}-${si}-${i}`}>
+                          {hs.map((k) => {
+                            const h = P(q.x + q[k]!.x, q.y + q[k]!.y);
+                            return (
+                              <g key={k}>
+                                <line x1={pt.x} y1={pt.y} x2={h.x} y2={h.y} className="stroke-amber/70 pointer-events-none" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                                <circle
+                                  cx={h.x}
+                                  cy={h.y}
+                                  r={unit * 0.5}
+                                  className="fill-amber cursor-move"
+                                  onPointerDown={(e) => {
+                                    e.stopPropagation();
+                                    capture(e);
+                                    setDrag({ k: "lnode", id: l.id, pi, si, i, which: k });
+                                  }}
+                                />
+                              </g>
+                            );
+                          })}
+                          {square(pt, "n", "fill-ink stroke-cyan cursor-move", (e) => {
+                            e.stopPropagation();
+                            capture(e);
+                            setDrag({ k: "lnode", id: l.id, pi, si, i, which: "n" });
+                          })}
+                        </g>
+                      );
+                    }),
+                  ),
+                )}
+              </g>
+            )}
+          </g>
+        );
+      })}
+
 
       {/* Contorno sobre a estampa */}
       <path
@@ -1582,7 +1753,7 @@ function PatternCanvas({
       </g>
 
       {/* Seleção: caixa + alça de escala */}
-      {tool === "selecao" && (() => {
+      {tool === "selecao" && !selLayer && (() => {
         const a = toSvg({ x: box.x0, y: box.y0 });
         const b = toSvg({ x: box.x1, y: box.y1 });
         return (
