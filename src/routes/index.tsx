@@ -9,6 +9,11 @@ import {
   Table2,
   Save,
   RotateCcw,
+  MousePointer2,
+  Spline,
+  PenTool,
+  ZoomIn,
+  Maximize,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -41,8 +46,9 @@ const SIZES = ["PP", "P", "M", "G", "GG", "XG"] as const;
 type Size = (typeof SIZES)[number];
 type Grading = Record<Size, Measurements>;
 type View = "frente" | "costas" | "mangaEsq" | "mangaDir";
-type Node = { x: number; y: number; smooth: boolean };
-type Shapes = { frente: Node[]; costas: Node[] };
+type Node = { x: number; y: number; smooth: boolean; hIn?: { x: number; y: number }; hOut?: { x: number; y: number } };
+type Shapes = Record<View, Node[]>;
+type Tool = "selecao" | "forma" | "caneta" | "zoom" | "fita";
 type ClothingType = "Camiseta" | "Moletom" | "Regata" | "Manga Longa";
 
 const FIELDS: { key: Field; label: string; group: string }[] = [
@@ -86,7 +92,38 @@ const bodyShape = (neckDepth: number): Node[] => [
   { x: 0.08, y: 0.05, smooth: false },
 ];
 
-const DEFAULT_SHAPES: Shapes = { frente: bodyShape(0.12), costas: bodyShape(0.04) };
+const sleeveShape = (): Node[] => [
+  { x: 0, y: 0.32, smooth: false },
+  { x: 0.22, y: 0.1, smooth: true },
+  { x: 0.5, y: 0, smooth: true },
+  { x: 0.78, y: 0.1, smooth: true },
+  { x: 1, y: 0.32, smooth: false },
+  { x: 0.9, y: 1, smooth: false },
+  { x: 0.1, y: 1, smooth: false },
+];
+
+const DEFAULT_SHAPES: Shapes = {
+  frente: bodyShape(0.12),
+  costas: bodyShape(0.04),
+  mangaEsq: sleeveShape(),
+  mangaDir: sleeveShape().map((n) => ({ ...n, x: 1 - n.x })),
+};
+
+const TOOLS: { k: Tool; label: string; icon: typeof Ruler; key: string }[] = [
+  { k: "selecao", label: "Ferramenta Seleção", icon: MousePointer2, key: "V" },
+  { k: "forma", label: "Ferramenta Forma / Editar Nós", icon: Spline, key: "F" },
+  { k: "caneta", label: "Ferramenta Caneta", icon: PenTool, key: "P" },
+  { k: "zoom", label: "Ferramenta Zoom", icon: ZoomIn, key: "Z" },
+  { k: "fita", label: "Fita Métrica Digital", icon: Ruler, key: "M" },
+];
+
+const TOOL_HINTS: Record<Tool, string> = {
+  selecao: "Arraste o contorno para mover · arraste a alça do canto para escalar",
+  forma: "Arraste nós e alças · duplo clique adiciona nó · Alt+clique remove · Shift+clique alterna reta/curva",
+  caneta: "Clique para criar nós · clique e arraste para curvas · clique no 1º nó ou Enter fecha · Esc cancela",
+  zoom: "Clique para aproximar · Alt+clique afasta · arraste para mover a vista · roda do mouse também dá zoom",
+  fita: "Clique em dois pontos para medir a distância real em cm",
+};
 
 const LS_GRADING = "moldecore.tabelaTamanhos";
 const LS_SHAPES = "moldecore.formas";
@@ -113,6 +150,19 @@ function Index() {
   const [panel, setPanel] = useState<"medidas" | "tabela">("medidas");
   const [overlay, setOverlay] = useState(false);
   const [savedMsg, setSavedMsg] = useState("");
+  const [tool, setTool] = useState<Tool>("forma");
+  const [fitSignal, setFitSignal] = useState(0);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement;
+      if (el.tagName === "INPUT" || el.tagName === "SELECT" || e.ctrlKey || e.metaKey) return;
+      const t = TOOLS.find((x) => x.key === e.key.toUpperCase());
+      if (t) setTool(t.k);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // Carregar do armazenamento local
   useEffect(() => {
@@ -124,7 +174,7 @@ function Index() {
         setDraftGrading(parsed);
       }
       const s = localStorage.getItem(LS_SHAPES);
-      if (s) setShapes(JSON.parse(s));
+      if (s) setShapes({ ...DEFAULT_SHAPES, ...JSON.parse(s) });
     } catch {
       /* ignora dados corrompidos */
     }
@@ -301,26 +351,59 @@ function Index() {
               </label>
             </div>
 
-            <div className="flex-1 min-h-0 relative blueprint-grid blueprint-grid-fine overflow-hidden">
-              <PatternCanvas
-                view={view}
-                size={size}
-                graded={graded}
-                overlay={overlay}
-                shapes={shapes}
-                onShapesChange={updateShapes}
-              />
-              {(view === "frente" || view === "costas") && (
-                <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between text-[10px] font-mono text-faint">
-                  <span>Arraste os pontos · duplo clique adiciona ponto · Alt+clique remove · Shift+clique alterna curva/canto</span>
+            <div className="flex-1 min-h-0 flex">
+              <div className="w-12 shrink-0 bg-panel border-r border-line flex flex-col items-center py-2 gap-1 z-10">
+                {TOOLS.map((t) => (
+                  <button
+                    key={t.k}
+                    onClick={() => setTool(t.k)}
+                    aria-label={t.label}
+                    className={
+                      "group relative size-9 grid place-items-center rounded-md border transition-colors " +
+                      (tool === t.k
+                        ? "bg-cyan/15 border-cyan/50 text-cyan"
+                        : "border-transparent text-muted-foreground hover:bg-panel2 hover:text-white")
+                    }
+                  >
+                    <t.icon className="size-4" />
+                    <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded bg-panel2 border border-line px-2 py-1 text-[11px] text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                      {t.label} <span className="font-mono text-faint ml-1">{t.key}</span>
+                    </span>
+                  </button>
+                ))}
+                <div className="mt-auto" />
+                <button
+                  onClick={() => setFitSignal((n) => n + 1)}
+                  aria-label="Ajustar à tela"
+                  className="group relative size-9 grid place-items-center rounded-md text-muted-foreground hover:bg-panel2 hover:text-white"
+                >
+                  <Maximize className="size-4" />
+                  <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded bg-panel2 border border-line px-2 py-1 text-[11px] text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                    Ajustar à tela
+                  </span>
+                </button>
+              </div>
+              <div className="flex-1 min-w-0 relative blueprint-grid blueprint-grid-fine overflow-hidden">
+                <PatternCanvas
+                  view={view}
+                  size={size}
+                  graded={graded}
+                  overlay={overlay}
+                  shapes={shapes}
+                  onShapesChange={updateShapes}
+                  tool={tool}
+                  fitSignal={fitSignal}
+                />
+                <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between gap-4 text-[10px] font-mono text-faint pointer-events-none">
+                  <span>{TOOL_HINTS[tool]}</span>
                   <button
                     onClick={() => updateShapes({ ...shapes, [view]: DEFAULT_SHAPES[view] })}
-                    className="flex items-center gap-1 text-muted-foreground hover:text-cyan"
+                    className="pointer-events-auto flex items-center gap-1 text-muted-foreground hover:text-cyan whitespace-nowrap"
                   >
                     <RotateCcw className="size-3" /> Restaurar forma
                   </button>
                 </div>
-              )}
+              </div>
             </div>
           </section>
 
@@ -467,29 +550,43 @@ function Index() {
 
 /* ================= Canvas SVG ================= */
 
-function buildPath(pts: { x: number; y: number; smooth: boolean }[]) {
-  const n = pts.length;
-  if (n < 2) return "";
-  let path = `M ${pts[0]!.x} ${pts[0]!.y}`;
-  for (let i = 0; i < n; i++) {
-    const p0 = pts[(i - 1 + n) % n]!;
-    const p1 = pts[i]!;
-    const p2 = pts[(i + 1) % n]!;
-    const p3 = pts[(i + 2) % n]!;
-    if (p1.smooth || p2.smooth) {
-      const c1 = p1.smooth ? { x: p1.x + (p2.x - p0.x) / 6, y: p1.y + (p2.y - p0.y) / 6 } : p1;
-      const c2 = p2.smooth ? { x: p2.x - (p3.x - p1.x) / 6, y: p2.y - (p3.y - p1.y) / 6 } : p2;
-      path += ` C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${p2.x} ${p2.y}`;
-    } else {
-      path += ` L ${p2.x} ${p2.y}`;
-    }
-  }
-  return path + " Z";
-}
+type Pt = { x: number; y: number };
+type Drag =
+  | { k: "node"; i: number }
+  | { k: "hOut"; i: number }
+  | { k: "hIn"; i: number }
+  | { k: "pen"; i: number }
+  | { k: "move"; start: Pt; orig: Node[] }
+  | { k: "scale"; start: Pt; orig: Node[]; box: { x0: number; y0: number } }
+  | { k: "pan"; sx: number; sy: number; orig: Pt; alt: boolean; at: Pt };
 
-function sleevePath(w: number, h: number) {
-  const c = h * 0.32;
-  return `M ${-w / 2} ${c} C ${-w / 3} ${c * 0.9} ${-w / 5} 0 0 0 C ${w / 5} 0 ${w / 3} ${c * 0.9} ${w / 2} ${c} L ${w * 0.4} ${h} L ${-w * 0.4} ${h} Z`;
+function buildPath(nodes: Node[], w: number, h: number, closed = true) {
+  const n = nodes.length;
+  if (!n) return "";
+  const P = (q: Pt) => ({ x: (q.x - 0.5) * w, y: q.y * h });
+  const at = (i: number) => nodes[((i % n) + n) % n]!;
+  const s = P(at(0));
+  let d = `M ${s.x} ${s.y}`;
+  const segs = closed ? n : n - 1;
+  for (let i = 0; i < segs; i++) {
+    const a = at(i);
+    const b = at(i + 1);
+    const a0 = at(i - 1);
+    const b1 = at(i + 2);
+    let c1: Pt | null = null;
+    let c2: Pt | null = null;
+    if (a.hOut) c1 = { x: a.x + a.hOut.x, y: a.y + a.hOut.y };
+    else if (a.smooth) c1 = { x: a.x + (b.x - a0.x) / 6, y: a.y + (b.y - a0.y) / 6 };
+    if (b.hIn) c2 = { x: b.x + b.hIn.x, y: b.y + b.hIn.y };
+    else if (b.smooth) c2 = { x: b.x - (b1.x - a.x) / 6, y: b.y - (b1.y - a.y) / 6 };
+    const pb = P(b);
+    if (c1 || c2) {
+      const q1 = P(c1 ?? a);
+      const q2 = P(c2 ?? b);
+      d += ` C ${q1.x} ${q1.y} ${q2.x} ${q2.y} ${pb.x} ${pb.y}`;
+    } else d += ` L ${pb.x} ${pb.y}`;
+  }
+  return closed ? d + " Z" : d;
 }
 
 function PatternCanvas({
@@ -499,6 +596,8 @@ function PatternCanvas({
   overlay,
   shapes,
   onShapesChange,
+  tool,
+  fitSignal,
 }: {
   view: View;
   size: Size;
@@ -506,46 +605,191 @@ function PatternCanvas({
   overlay: boolean;
   shapes: Shapes;
   onShapesChange: (s: Shapes) => void;
+  tool: Tool;
+  fitSignal: number;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
-  const [drag, setDrag] = useState<number | null>(null);
+  const [drag, setDrag] = useState<Drag | null>(null);
+  const [draft, setDraft] = useState<Node[] | null>(null);
+  const [zoom, setZoom] = useState({ k: 1, px: 0, py: 0 });
+  const [tape, setTape] = useState<{ a: Pt | null; b: Pt | null }>({ a: null, b: null });
+  const [hover, setHover] = useState<Pt | null>(null);
+
   const isBody = view === "frente" || view === "costas";
-  const m = graded[size];
-  const W = isBody ? m.bodyWidth : m.sleeveWidth;
-  const H = isBody ? m.bodyHeight : m.sleeveHeight;
-  const maxW = Math.max(...SIZES.map((s) => (isBody ? graded[s].bodyWidth : graded[s].sleeveWidth)));
-  const maxH = Math.max(...SIZES.map((s) => (isBody ? graded[s].bodyHeight : graded[s].sleeveHeight)));
+  const dims = (g: Measurements) =>
+    isBody ? { w: g.bodyWidth, h: g.bodyHeight } : { w: g.sleeveWidth, h: g.sleeveHeight };
+  const { w: W, h: H } = dims(graded[size]);
+  const maxW = Math.max(...SIZES.map((s) => dims(graded[s]).w));
+  const maxH = Math.max(...SIZES.map((s) => dims(graded[s]).h));
   const pad = Math.max(maxW, maxH) * 0.18;
-  const viewBox = `${-maxW / 2 - pad} ${-pad} ${maxW + pad * 2} ${maxH + pad * 2}`;
-  const unit = Math.max(maxW, maxH) / 60;
+  const bw = maxW + pad * 2;
+  const bh = maxH + pad * 2;
+  const bcx = 0;
+  const bcy = maxH / 2;
+  const vw = bw / zoom.k;
+  const vh = bh / zoom.k;
+  const vx = bcx + zoom.px - vw / 2;
+  const vy = bcy + zoom.py - vh / 2;
+  const unit = Math.max(maxW, maxH) / 60 / zoom.k;
 
-  const nodes = isBody ? shapes[view] : [];
-  const toSvg = (n: Node, w = W, h = H) => ({ x: (n.x - 0.5) * w, y: n.y * h, smooth: n.smooth });
+  useEffect(() => setZoom({ k: 1, px: 0, py: 0 }), [fitSignal, view]);
+  useEffect(() => {
+    setDraft(null);
+    setTape({ a: null, b: null });
+  }, [tool, view]);
 
-  const pointerToNorm = (e: React.PointerEvent | React.MouseEvent) => {
+  const nodes = shapes[view];
+  const setNodes = (next: Node[]) => onShapesChange({ ...shapes, [view]: next });
+  const toSvg = (q: Pt): Pt => ({ x: (q.x - 0.5) * W, y: q.y * H });
+  const toNorm = (p: Pt): Pt => ({ x: p.x / W + 0.5, y: p.y / H });
+  const svgPoint = (e: { clientX: number; clientY: number }): Pt => {
     const svg = svgRef.current!;
     const pt = svg.createSVGPoint();
     pt.x = e.clientX;
     pt.y = e.clientY;
     const p = pt.matrixTransform(svg.getScreenCTM()!.inverse());
-    const clamp = (v: number) => Math.min(1.3, Math.max(-0.3, v));
-    return { x: clamp(p.x / W + 0.5), y: clamp(p.y / H) };
+    return { x: p.x, y: p.y };
+  };
+  const capture = (e: React.PointerEvent) => svgRef.current?.setPointerCapture(e.pointerId);
+
+  const commitDraft = () => {
+    if (draft && draft.length >= 3) setNodes(draft);
+    setDraft(null);
   };
 
-  const setNodes = (next: Node[]) => {
-    if (view === "frente" || view === "costas") onShapesChange({ ...shapes, [view]: next });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (tool !== "caneta" || !draft) return;
+      if (e.key === "Enter") commitDraft();
+      if (e.key === "Escape") setDraft(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  const box = {
+    x0: Math.min(...nodes.map((n) => n.x)),
+    y0: Math.min(...nodes.map((n) => n.y)),
+    x1: Math.max(...nodes.map((n) => n.x)),
+    y1: Math.max(...nodes.map((n) => n.y)),
+  };
+
+  const onBgDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    const p = svgPoint(e);
+    if (tool === "zoom") {
+      capture(e);
+      setDrag({ k: "pan", sx: e.clientX, sy: e.clientY, orig: { x: zoom.px, y: zoom.py }, alt: e.altKey, at: p });
+    } else if (tool === "fita") {
+      setTape((t) => (!t.a || t.b ? { a: p, b: null } : { a: t.a, b: p }));
+    } else if (tool === "caneta") {
+      if (draft && draft.length >= 3) {
+        const f = toSvg(draft[0]!);
+        if (Math.hypot(f.x - p.x, f.y - p.y) < unit * 1.5) {
+          commitDraft();
+          return;
+        }
+      }
+      const n = toNorm(p);
+      const next = [...(draft ?? []), { x: n.x, y: n.y, smooth: false }];
+      setDraft(next);
+      capture(e);
+      setDrag({ k: "pen", i: next.length - 1 });
+    }
+  };
+
+  const onMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    const p = svgPoint(e);
+    setHover(p);
+    if (!drag) return;
+    const n = toNorm(p);
+    switch (drag.k) {
+      case "node":
+        setNodes(nodes.map((q, i) => (i === drag.i ? { ...q, x: n.x, y: n.y } : q)));
+        break;
+      case "hOut":
+      case "hIn":
+        setNodes(
+          nodes.map((q, i) => {
+            if (i !== drag.i) return q;
+            const o = { x: n.x - q.x, y: n.y - q.y };
+            const m = { x: -o.x, y: -o.y };
+            return drag.k === "hOut" ? { ...q, hOut: o, hIn: m } : { ...q, hIn: o, hOut: m };
+          }),
+        );
+        break;
+      case "pen":
+        if (!draft) break;
+        setDraft(
+          draft.map((q, i) => {
+            if (i !== drag.i) return q;
+            const o = { x: n.x - q.x, y: n.y - q.y };
+            if (Math.hypot(o.x * W, o.y * H) < 0.3) return q;
+            return { ...q, smooth: true, hOut: o, hIn: { x: -o.x, y: -o.y } };
+          }),
+        );
+        break;
+      case "move": {
+        const dx = n.x - drag.start.x;
+        const dy = n.y - drag.start.y;
+        setNodes(drag.orig.map((q) => ({ ...q, x: q.x + dx, y: q.y + dy })));
+        break;
+      }
+      case "scale": {
+        const b = drag.box;
+        const sx = Math.max(0.05, (n.x - b.x0) / (drag.start.x - b.x0 || 1));
+        const sy = Math.max(0.05, (n.y - b.y0) / (drag.start.y - b.y0 || 1));
+        setNodes(
+          drag.orig.map((q) => {
+            const r: Node = { ...q, x: b.x0 + (q.x - b.x0) * sx, y: b.y0 + (q.y - b.y0) * sy };
+            if (q.hIn) r.hIn = { x: q.hIn.x * sx, y: q.hIn.y * sy };
+            if (q.hOut) r.hOut = { x: q.hOut.x * sx, y: q.hOut.y * sy };
+            return r;
+          }),
+        );
+        break;
+      }
+      case "pan": {
+        const svg = svgRef.current!;
+        const s = Math.max(vw / svg.clientWidth, vh / svg.clientHeight);
+        setZoom((z) => ({
+          ...z,
+          px: drag.orig.x - (e.clientX - drag.sx) * s,
+          py: drag.orig.y - (e.clientY - drag.sy) * s,
+        }));
+        break;
+      }
+    }
+  };
+
+  const onUp = (e: React.PointerEvent) => {
+    if (drag?.k === "pan" && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 4) {
+      const f = drag.alt ? 1 / 1.6 : 1.6;
+      const at = drag.at;
+      setZoom((z) => ({ k: Math.min(12, Math.max(0.3, z.k * f)), px: at.x - bcx, py: at.y - bcy }));
+    }
+    setDrag(null);
+  };
+
+  const onWheel = (e: React.WheelEvent) => {
+    const p = svgPoint(e);
+    const f = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    setZoom((z) => {
+      const k = Math.min(12, Math.max(0.3, z.k * f));
+      const r = k / z.k;
+      const cx = bcx + z.px;
+      const cy = bcy + z.py;
+      return { k, px: p.x + (cx - p.x) / r - bcx, py: p.y + (cy - p.y) / r - bcy };
+    });
   };
 
   const onDoubleClick = (e: React.MouseEvent) => {
-    if (!isBody) return;
-    const p = pointerToNorm(e);
+    if (tool !== "forma") return;
+    const p = toNorm(svgPoint(e));
     let best = 0;
     let bestD = Infinity;
     nodes.forEach((a, i) => {
       const b = nodes[(i + 1) % nodes.length]!;
-      const mx = (a.x + b.x) / 2;
-      const my = (a.y + b.y) / 2;
-      const dd = (mx - p.x) ** 2 + (my - p.y) ** 2;
+      const dd = ((a.x + b.x) / 2 - p.x) ** 2 + ((a.y + b.y) / 2 - p.y) ** 2;
       if (dd < bestD) {
         bestD = dd;
         best = i;
@@ -556,37 +800,73 @@ function PatternCanvas({
     setNodes(next);
   };
 
+  const onNodeDown = (e: React.PointerEvent, i: number) => {
+    e.stopPropagation();
+    if (tool === "forma") {
+      if (e.altKey) {
+        if (nodes.length > 3) setNodes(nodes.filter((_, j) => j !== i));
+        return;
+      }
+      if (e.shiftKey) {
+        setNodes(
+          nodes.map((q, j) => {
+            if (j !== i) return q;
+            const { hIn: _a, hOut: _b, ...rest } = q;
+            return { ...rest, smooth: !q.smooth };
+          }),
+        );
+        return;
+      }
+    }
+    capture(e);
+    setDrag({ k: "node", i });
+  };
+
   const others = overlay ? SIZES.filter((s) => s !== size) : [];
   const title = { frente: "FRENTE", costas: "COSTAS", mangaEsq: "MANGA ESQUERDA", mangaDir: "MANGA DIREITA" }[view];
+  const showNodes = tool === "forma" || tool === "caneta";
+  const nodesInteractive = tool === "forma" || (tool === "caneta" && !draft);
+  const cursor = { selecao: "cursor-default", forma: "cursor-crosshair", caneta: "cursor-crosshair", zoom: "cursor-zoom-in", fita: "cursor-crosshair" }[tool];
+  const tapeEnd = tape.b ?? (tape.a ? hover : null);
+  const sw = { strokeWidth: 1.5, vectorEffect: "non-scaling-stroke" as const };
+
+  const square = (p: Pt, key: string | number, cls: string, onDown?: (e: React.PointerEvent) => void) => (
+    <rect
+      key={key}
+      x={p.x - unit * 0.7}
+      y={p.y - unit * 0.7}
+      width={unit * 1.4}
+      height={unit * 1.4}
+      className={cls}
+      {...sw}
+      style={{ pointerEvents: onDown ? "auto" : "none" }}
+      onPointerDown={onDown}
+    />
+  );
 
   return (
     <svg
       ref={svgRef}
-      viewBox={viewBox}
-      className="absolute inset-0 w-full h-full select-none"
-      onPointerMove={(e) => {
-        if (drag === null) return;
-        const p = pointerToNorm(e);
-        setNodes(nodes.map((n, i) => (i === drag ? { ...n, ...p } : n)));
-      }}
-      onPointerUp={() => setDrag(null)}
-      onPointerLeave={() => setDrag(null)}
+      viewBox={`${vx} ${vy} ${vw} ${vh}`}
+      className={"absolute inset-0 w-full h-full select-none touch-none " + cursor}
+      onPointerDown={onBgDown}
+      onPointerMove={onMove}
+      onPointerUp={onUp}
+      onPointerLeave={() => setHover(null)}
+      onWheel={onWheel}
       onDoubleClick={onDoubleClick}
     >
-      <text x={-maxW / 2 - pad * 0.7} y={-pad * 0.5} fontSize={unit * 1.6} className="fill-faint font-mono">
+      <text x={-maxW / 2 - pad * 0.7} y={-pad * 0.5} fontSize={(Math.max(maxW, maxH) / 60) * 1.6} className="fill-faint font-mono">
         {title} · TAMANHO {size}
       </text>
 
       {others.map((s) => {
-        const g = graded[s];
-        const d = isBody
-          ? buildPath(nodes.map((n) => toSvg(n, g.bodyWidth, g.bodyHeight)))
-          : sleevePath(g.sleeveWidth, g.sleeveHeight);
+        const g = dims(graded[s]);
         return (
           <path
             key={s}
-            d={d}
-            className="fill-none stroke-faint"
+            d={buildPath(nodes, g.w, g.h)}
+            className="fill-none stroke-faint pointer-events-none"
             strokeWidth={1}
             strokeDasharray="4 3"
             vectorEffect="non-scaling-stroke"
@@ -595,100 +875,132 @@ function PatternCanvas({
       })}
 
       <path
-        d={isBody ? buildPath(nodes.map((n) => toSvg(n))) : sleevePath(W, H)}
-        transform={view === "mangaDir" ? "scale(-1,1)" : undefined}
-        className="fill-cyan/5 stroke-cyan"
+        d={buildPath(nodes, W, H)}
+        className={"fill-cyan/5 stroke-cyan " + (tool === "selecao" ? "cursor-move" : "")}
         strokeWidth={1.75}
         vectorEffect="non-scaling-stroke"
+        style={{ pointerEvents: tool === "selecao" ? "all" : "none" }}
+        onPointerDown={(e) => {
+          if (tool !== "selecao") return;
+          e.stopPropagation();
+          capture(e);
+          setDrag({ k: "move", start: toNorm(svgPoint(e)), orig: nodes });
+        }}
       />
 
       {/* Cotas */}
-      <line
-        x1={-W / 2}
-        x2={W / 2}
-        y1={H + unit * 3}
-        y2={H + unit * 3}
-        className="stroke-amber"
-        strokeWidth={1}
-        vectorEffect="non-scaling-stroke"
-      />
-      <text x={0} y={H + unit * 6} textAnchor="middle" fontSize={unit * 1.5} className="fill-amber font-mono">
-        LARGURA {fmt(W)} cm
-      </text>
-      <line
-        x1={W / 2 + unit * 3}
-        x2={W / 2 + unit * 3}
-        y1={0}
-        y2={H}
-        className="stroke-amber"
-        strokeWidth={1}
-        vectorEffect="non-scaling-stroke"
-      />
-      <text
-        x={W / 2 + unit * 5}
-        y={H / 2}
-        fontSize={unit * 1.5}
-        className="fill-amber font-mono"
-        transform={`rotate(90 ${W / 2 + unit * 5} ${H / 2})`}
-        textAnchor="middle"
-      >
-        ALTURA {fmt(H)} cm
-      </text>
+      <g className="pointer-events-none">
+        <line x1={-W / 2} x2={W / 2} y1={H + unit * 3} y2={H + unit * 3} className="stroke-amber" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        <text x={0} y={H + unit * 6} textAnchor="middle" fontSize={unit * 1.5} className="fill-amber font-mono">
+          LARGURA {fmt(W)} cm
+        </text>
+        <line x1={W / 2 + unit * 3} x2={W / 2 + unit * 3} y1={0} y2={H} className="stroke-amber" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        <text x={W / 2 + unit * 5} y={H / 2} fontSize={unit * 1.5} className="fill-amber font-mono" transform={`rotate(90 ${W / 2 + unit * 5} ${H / 2})`} textAnchor="middle">
+          ALTURA {fmt(H)} cm
+        </text>
+      </g>
 
-      {/* Pontos editáveis */}
-      {isBody &&
+      {/* Seleção: caixa + alça de escala */}
+      {tool === "selecao" && (() => {
+        const a = toSvg({ x: box.x0, y: box.y0 });
+        const b = toSvg({ x: box.x1, y: box.y1 });
+        return (
+          <g>
+            <rect x={a.x} y={a.y} width={b.x - a.x} height={b.y - a.y} className="fill-none stroke-cyan/60 pointer-events-none" strokeWidth={1} strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />
+            {[a, { x: b.x, y: a.y }, { x: a.x, y: b.y }].map((p, i) => square(p, "c" + i, "fill-ink stroke-cyan/60"))}
+            {square(b, "scale", "fill-cyan stroke-cyan cursor-nwse-resize", (e) => {
+              e.stopPropagation();
+              capture(e);
+              setDrag({ k: "scale", start: toNorm(svgPoint(e)), orig: nodes, box: { x0: box.x0, y0: box.y0 } });
+            })}
+          </g>
+        );
+      })()}
+
+      {/* Nós e alças */}
+      {showNodes &&
         nodes.map((n, i) => {
           const p = toSvg(n);
+          const handles = tool === "forma" ? ([["hIn", n.hIn], ["hOut", n.hOut]] as const) : [];
           return (
-            <g key={i}>
-              {n.smooth ? (
-                <circle
-                  cx={p.x}
-                  cy={p.y}
-                  r={unit * 0.9}
-                  className={"stroke-cyan cursor-move " + (drag === i ? "fill-cyan" : "fill-ink")}
-                  strokeWidth={1.5}
-                  vectorEffect="non-scaling-stroke"
-                  onPointerDown={(e) => handleNodeDown(e, i)}
-                />
-              ) : (
-                <rect
-                  x={p.x - unit * 0.8}
-                  y={p.y - unit * 0.8}
-                  width={unit * 1.6}
-                  height={unit * 1.6}
-                  className={"stroke-cyan cursor-move " + (drag === i ? "fill-cyan" : "fill-ink")}
-                  strokeWidth={1.5}
-                  vectorEffect="non-scaling-stroke"
-                  onPointerDown={(e) => handleNodeDown(e, i)}
-                />
+            <g key={i} style={{ opacity: draft ? 0.35 : 1 }}>
+              {handles.map(([k, h]) => {
+                if (!h) return null;
+                const hp = toSvg({ x: n.x + h.x, y: n.y + h.y });
+                return (
+                  <g key={k}>
+                    <line x1={p.x} y1={p.y} x2={hp.x} y2={hp.y} className="stroke-amber/70 pointer-events-none" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                    <circle
+                      cx={hp.x}
+                      cy={hp.y}
+                      r={unit * 0.6}
+                      className="fill-amber stroke-amber cursor-move"
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        capture(e);
+                        setDrag({ k, i });
+                      }}
+                    />
+                  </g>
+                );
+              })}
+              {square(
+                p,
+                "n",
+                "stroke-cyan " + (nodesInteractive ? "cursor-move " : "") + (drag?.k === "node" && drag.i === i ? "fill-cyan" : n.smooth ? "fill-cyan/30" : "fill-ink"),
+                nodesInteractive ? (e) => onNodeDown(e, i) : undefined,
               )}
             </g>
           );
         })}
-      {!isBody && (
-        <g>
-          <text x={0} y={H * 0.6} textAnchor="middle" fontSize={unit * 1.4} className="fill-faint font-mono">
-            CAVA DA MANGA
+
+      {/* Rascunho da caneta */}
+      {draft && (
+        <g className="pointer-events-none">
+          <path d={buildPath(draft, W, H, false)} className="fill-none stroke-amber" strokeWidth={1.75} vectorEffect="non-scaling-stroke" />
+          {hover && (() => {
+            const l = toSvg(draft[draft.length - 1]!);
+            return <line x1={l.x} y1={l.y} x2={hover.x} y2={hover.y} className="stroke-amber/40" strokeWidth={1} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />;
+          })()}
+          {draft.map((n, i) => {
+            const p = toSvg(n);
+            return (
+              <g key={i}>
+                {n.hOut && n.hIn && (() => {
+                  const o = toSvg({ x: n.x + n.hOut.x, y: n.y + n.hOut.y });
+                  const m = toSvg({ x: n.x + n.hIn.x, y: n.y + n.hIn.y });
+                  return <line x1={m.x} y1={m.y} x2={o.x} y2={o.y} className="stroke-amber/60" strokeWidth={1} vectorEffect="non-scaling-stroke" />;
+                })()}
+                {square(p, "d", i === 0 ? "fill-amber stroke-amber" : "fill-ink stroke-amber")}
+              </g>
+            );
+          })}
+        </g>
+      )}
+
+      {/* Fita métrica */}
+      {tape.a && tapeEnd && (
+        <g className="pointer-events-none">
+          <line x1={tape.a.x} y1={tape.a.y} x2={tapeEnd.x} y2={tapeEnd.y} className="stroke-amber" strokeWidth={1.5} strokeDasharray={tape.b ? undefined : "4 3"} vectorEffect="non-scaling-stroke" />
+          <circle cx={tape.a.x} cy={tape.a.y} r={unit * 0.5} className="fill-amber" />
+          <circle cx={tapeEnd.x} cy={tapeEnd.y} r={unit * 0.5} className="fill-amber" />
+          <rect
+            x={(tape.a.x + tapeEnd.x) / 2 - unit * 5}
+            y={(tape.a.y + tapeEnd.y) / 2 - unit * 3.2}
+            width={unit * 10}
+            height={unit * 2.4}
+            rx={unit * 0.4}
+            className="fill-panel2 stroke-amber/60"
+            strokeWidth={1}
+            vectorEffect="non-scaling-stroke"
+          />
+          <text x={(tape.a.x + tapeEnd.x) / 2} y={(tape.a.y + tapeEnd.y) / 2 - unit * 1.5} textAnchor="middle" fontSize={unit * 1.4} className="fill-amber font-mono">
+            {fmt(Math.hypot(tapeEnd.x - tape.a.x, tapeEnd.y - tape.a.y))} cm
           </text>
         </g>
       )}
     </svg>
   );
-
-  function handleNodeDown(e: React.PointerEvent, i: number) {
-    e.stopPropagation();
-    if (e.altKey) {
-      if (nodes.length > 4) setNodes(nodes.filter((_, j) => j !== i));
-      return;
-    }
-    if (e.shiftKey) {
-      setNodes(nodes.map((n, j) => (j === i ? { ...n, smooth: !n.smooth } : n)));
-      return;
-    }
-    svgRef.current?.setPointerCapture(e.pointerId);
-    setDrag(i);
-  }
 }
 
 function DimensionInput({
