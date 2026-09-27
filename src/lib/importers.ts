@@ -93,7 +93,7 @@ function parseD(d: string, host: SVGSVGElement): RSub[] {
         const f = s.pts[0]!;
         const l = s.pts[s.pts.length - 1]!;
         if (s.pts.length > 1 && Math.abs(f.x - l.x) < 1e-6 && Math.abs(f.y - l.y) < 1e-6) {
-          f.cin = l.cin;
+          if (l.cin) f.cin = l.cin;
           s.pts.pop();
         }
       }
@@ -144,7 +144,8 @@ function parseD(d: string, host: SVGSVGElement): RSub[] {
           e = { x: ox + num(), y: oy + num() };
           nc = c2;
         } else {
-          const q = C === "Q" ? { x: ox + num(), y: oy + num() } : lastQ ? { x: 2 * cx - lastQ.x, y: 2 * cy - lastQ.y } : { x: cx, y: cy };
+          const prevQ: P | null = lastQ;
+          const q: P = C === "Q" ? { x: ox + num(), y: oy + num() } : prevQ ? { x: 2 * cx - prevQ.x, y: 2 * cy - prevQ.y } : { x: cx, y: cy };
           e = { x: ox + num(), y: oy + num() };
           c1 = { x: cx + (2 / 3) * (q.x - cx), y: cy + (2 / 3) * (q.y - cy) };
           c2 = { x: e.x + (2 / 3) * (q.x - e.x), y: e.y + (2 / 3) * (q.y - e.y) };
