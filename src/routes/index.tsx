@@ -44,6 +44,7 @@ import {
   layerPathD,
   type Layer,
 } from "@/lib/importers";
+import { activeView } from "@/lib/active-view";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -344,6 +345,9 @@ function Index() {
     setShapes(next);
     localStorage.setItem(LS_SHAPES, JSON.stringify(next));
   };
+
+  /* Alimenta o desenho técnico do canvas com a vista ativa (a Costas tem buffer maior na barra). */
+  activeView.current = view;
 
   const graded = table;
 
@@ -1781,6 +1785,26 @@ function PatternCanvas({
         vectorEffect="non-scaling-stroke"
         style={partStyle.stroke ? { stroke: partStyle.stroke } : undefined}
       />
+
+      {/* Áreas técnicas de segurança e costura — recalculadas em cm a cada troca de tamanho */}
+      {(() => {
+        const seam = buildPath(nodes, W, H);
+        /* Sangria: +1 cm para fora em largura e altura (expansão exata). */
+        const bleed = `translate(0 -1) scale(${(W + 2) / W} ${(H + 2) / H})`;
+        /* Zona de segurança: 1 cm nas laterais e no topo; 4 cm na barra das Costas. */
+        const top = 1;
+        const bottom = activeView.current === "costas" ? 4 : 1;
+        const safeSx = Math.max((W - 2) / W, 0.1);
+        const safeSy = Math.max((H - top - bottom) / H, 0.1);
+        const safe = `translate(0 ${top}) scale(${safeSx} ${safeSy})`;
+        return (
+          <g className="pointer-events-none">
+            <path d={seam} transform={bleed} className="fill-none stroke-sky-400" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+            <path d={seam} className="fill-none stroke-ink" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+            <path d={seam} transform={safe} className="fill-none stroke-red-500" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+          </g>
+        );
+      })()}
       {artwork && artwork.clipped !== false && !pcEdit && (
         <text x={-W / 2} y={-unit * 1.5} fontSize={unit * 1.2} className="fill-cyan font-mono pointer-events-none">
           POWERCLIP · {size === mother ? "MOLDE MÃE" : `AUTO DE ${mother}`}
