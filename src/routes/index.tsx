@@ -217,6 +217,8 @@ const fmt = (n: number) => n.toFixed(1).replace(".", ",");
 
 /* ================= Página ================= */
 
+const PLOTTER_MARGIN = 2; // cm de margem padrão do quadro de mídia em volta do molde
+
 function Index() {
   const [clothingType, setClothingType] = useState<ClothingType>("Camiseta");
   const [table, setTable] = useState<Grading>(DEFAULT_TABLE);
