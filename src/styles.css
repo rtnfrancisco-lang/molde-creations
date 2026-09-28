@@ -88,10 +88,6 @@
   --garment: oklch(1 0 0);
 }
 
-.dark {
-  /* The drawing desk remains light even when a parent adds the .dark class. */
-}
-
 @layer base {
   * {
     border-color: var(--color-border);
