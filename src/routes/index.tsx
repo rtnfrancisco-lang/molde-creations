@@ -621,7 +621,6 @@ function Index() {
 
   /* ================= Exportação inteligente para Plotter ================= */
 
-  const PLOTTER_MARGIN = 2; // cm de margem padrão do quadro de mídia em volta do molde
 
   const activeDims = () => {
     const isBody = view === "frente" || view === "costas";
