@@ -708,8 +708,8 @@ function Index() {
     /* Contorno paralelo real: sangria e zona de segurança saem do MESMO traçado
        da Linha de Costura, deslocado na perpendicular de cada segmento e de cada
        curva (src/lib/vector-offset.ts). Nada de escalar largura/altura. */
-    const bleedPath = offsetPathD(path, 1);
-    const safetyPath = offsetPathD(path, -4);
+    const bleedPath = offsetPathD(path, 1, { join: "miter", miterLimit: 4 });
+    const safetyPath = offsetPathD(path, -4, { join: "miter", miterLimit: 4 });
     const bleed = `<path d="${bleedPath}" fill="none" stroke="#38bdf8" stroke-width="0.06" stroke-linejoin="round"/>`;
     const seamLine = `<path d="${path}" fill="none" stroke="#111827" stroke-width="0.06" stroke-linejoin="round"/>`;
     const safety = `<path d="${safetyPath}" fill="none" stroke="#ef4444" stroke-width="0.06" stroke-dasharray="0.5 0.35" stroke-linejoin="round"/>`;
