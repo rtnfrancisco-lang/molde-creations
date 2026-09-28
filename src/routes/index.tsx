@@ -240,6 +240,14 @@ function Index() {
   const [savedMsg, setSavedMsg] = useState("");
   const [tool, setTool] = useState<Tool>("forma");
   const [fitSignal, setFitSignal] = useState(0);
+  const [showSeam, setShowSeam] = useState(true);
+  const [showBleed, setShowBleed] = useState(true);
+  const [showSafety, setShowSafety] = useState(true);
+  const [plotterOpen, setPlotterOpen] = useState(false);
+  const [exportFmt, setExportFmt] = useState<"pdf" | "png">("pdf");
+  const [hideTech, setHideTech] = useState(false);
+  const [cropRect, setCropRect] = useState(true);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -611,6 +619,147 @@ function Index() {
     });
   };
 
+  /* ================= Exportação inteligente para Plotter ================= */
+
+  const PLOTTER_MARGIN = 2; // cm de margem padrão do quadro de mídia em volta do molde
+
+  const activeDims = () => {
+    const isBody = view === "frente" || view === "costas";
+    const mm = table[size];
+    const W = isBody ? mm.bodyWidth : mm.sleeveWidth;
+    const H = isBody ? mm.bodyHeight : mm.sleeveHeight;
+    const pad = cropRect ? 0 : 6;
+    return { W, H, pad, cmW: W + PLOTTER_MARGIN * 2 + pad * 2, cmH: H + PLOTTER_MARGIN * 2 + pad * 2 };
+  };
+
+  const buildPlotterSvg = (o: { hideTechnical: boolean; crop: boolean }) => {
+    const isBody = view === "frente" || view === "costas";
+    const mm = table[size];
+    const W = isBody ? mm.bodyWidth : mm.sleeveWidth;
+    const H = isBody ? mm.bodyHeight : mm.sleeveHeight;
+    const st = styles[view];
+    const mg = PLOTTER_MARGIN;
+    const pad = o.crop ? 0 : 6;
+    const cmW = W + mg * 2 + pad * 2;
+    const cmH = H + mg * 2 + pad * 2;
+    const x0 = -W / 2 - mg - pad;
+    const y0 = -mg - pad;
+    const path = buildPath(shapes[view], W, H);
+
+    const bleed = `<path d="${path}" transform="matrix(${(W + 2) / W} 0 0 ${(H + 2) / H} 0 -1)" fill="none" stroke="#38bdf8" stroke-width="0.06"/>`;
+    const seamLine = `<path d="${path}" fill="none" stroke="#111827" stroke-width="0.06"/>`;
+    const safety = `<path d="${path}" transform="matrix(${Math.max(0.2, (W - 8) / W)} 0 0 ${Math.max(0.2, (H - 8) / H)} 0 4)" fill="none" stroke="#ef4444" stroke-width="0.06" stroke-dasharray="0.5 0.35"/>`;
+    const tech = o.hideTechnical ? "" : bleed + seamLine + safety;
+
+    let img = "";
+    if (art) {
+      const aw = art.w * W;
+      const ah = aw * art.ratio;
+      const ax = (art.cx - 0.5) * W - aw / 2;
+      const ay = art.cy * H - ah / 2;
+      const im = `<image href="${art.src}" x="${ax}" y="${ay}" width="${aw}" height="${ah}" transform="rotate(${art.rot ?? 0} ${ax + aw / 2} ${ay + ah / 2})" preserveAspectRatio="none"/>`;
+      img = art.clipped === false ? im : `<g clip-path="url(#moldeClip)">${im}</g>`;
+    }
+
+    const objs = curLayers.map((l) => layerMarkup(l, W, H)).join("");
+    const body = `<path d="${path}" fill="${st.fill ?? "none"}"/>`;
+    const outline = o.hideTechnical
+      ? ""
+      : `<path d="${path}" fill="none" stroke="${st.stroke ?? "#111827"}" stroke-width="0.05"/>`;
+    const frame = `<rect x="${-W / 2 - mg}" y="${-mg}" width="${W + mg * 2}" height="${H + mg * 2}" fill="none" stroke="#111827" stroke-width="0.1"/>`;
+
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${cmW}cm" height="${cmH}cm" viewBox="${x0} ${y0} ${cmW} ${cmH}">` +
+      `<defs><clipPath id="moldeClip"><path d="${path}"/></clipPath></defs>` +
+      body +
+      img +
+      objs +
+      tech +
+      outline +
+      frame +
+      `</svg>`;
+    return { svg, cmW, cmH };
+  };
+
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const el = document.createElement("a");
+    el.href = url;
+    el.download = filename;
+    el.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  };
+
+  const rasterizeSvg = (svg: string, pxW: number, pxH: number) =>
+    new Promise<Blob>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = pxW;
+        canvas.height = pxH;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("canvas"));
+          return;
+        }
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, pxW, pxH);
+        ctx.drawImage(img, 0, 0, pxW, pxH);
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("png"))), "image/png");
+      };
+      img.onerror = () => reject(new Error("svg"));
+      img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+    });
+
+  const printVectorPdf = (svg: string, cmW: number, cmH: number, name: string) => {
+    const win = window.open("", "_blank", "width=900,height=720");
+    if (!win) {
+      downloadBlob(new Blob([svg], { type: "image/svg+xml" }), name + ".svg");
+      return false;
+    }
+    win.document.write(
+      `<!doctype html><html><head><meta charset="utf-8"><title>${name}</title>` +
+        `<style>@page{size:${cmW}cm ${cmH}cm;margin:0}html,body{margin:0;padding:0}svg{display:block;width:${cmW}cm;height:${cmH}cm}</style>` +
+        `</head><body>${svg}<script>window.addEventListener("load",function(){setTimeout(function(){window.focus();window.print();},400);});<\/script></body></html>`,
+    );
+    win.document.close();
+    return true;
+  };
+
+  const runExport = async () => {
+    setExporting(true);
+    try {
+      const { svg, cmW, cmH } = buildPlotterSvg({ hideTechnical: hideTech, crop: cropRect });
+      const base = `moldecore-plotter-${view}-${size}`;
+      if (exportFmt === "pdf") {
+        const ok = printVectorPdf(svg, cmW, cmH, base);
+        setSavedMsg(
+          ok
+            ? "Arquivo 1:1 pronto — na janela de impressão escolha Salvar como PDF"
+            : "Vetor 1:1 baixado como SVG",
+        );
+      } else {
+        const px = (cm: number) => Math.round((cm / 2.54) * 300);
+        const blob = await rasterizeSvg(svg, px(cmW), px(cmH));
+        downloadBlob(blob, `${base}-300dpi.png`);
+        setSavedMsg("PNG 300 DPI gerado no tamanho real");
+      }
+      setTimeout(() => setSavedMsg(""), 4500);
+      setPlotterOpen(false);
+    } catch {
+      setSavedMsg("Não foi possível gerar o arquivo de exportação");
+      setTimeout(() => setSavedMsg(""), 3500);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const techRows = [
+    { key: "seam", label: "Linha de Costura", dot: "bg-ink", on: showSeam, toggle: () => setShowSeam((v) => !v) },
+    { key: "bleed", label: "Margem de Sangria +1cm", dot: "bg-sky-400", on: showBleed, toggle: () => setShowBleed((v) => !v) },
+    { key: "safety", label: "Zona de Segurança -4cm", dot: "bg-red-500", on: showSafety, toggle: () => setShowSafety((v) => !v) },
+  ];
+
   const VIEWS: { key: View; label: string }[] = [
     { key: "frente", label: "Frente" },
     { key: "costas", label: "Costas" },
@@ -668,6 +817,183 @@ function Index() {
             Criar Novo Molde
           </button>
         </div>
+
+        {/* ===== Camadas técnicas do canvas — olhos de visibilidade ===== */}
+        <div className="px-5 pb-5 border-b border-line">
+          <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-faint mb-2">
+            Camadas Técnicas
+          </div>
+          <div className="space-y-1">
+            {techRows.map((row) => (
+              <button
+                key={row.key}
+                onClick={row.toggle}
+                aria-pressed={row.on}
+                title={(row.on ? "Ocultar " : "Mostrar ") + row.label}
+                className={
+                  "w-full flex items-center gap-2 px-2.5 py-2 rounded-md border text-[11px] text-left transition-colors " +
+                  (row.on
+                    ? "border-cyan/30 bg-cyan/5 text-foreground"
+                    : "border-line text-faint hover:text-foreground")
+                }
+              >
+                <span className={"size-1.5 shrink-0 rounded-full " + row.dot} />
+                <span className="flex-1 leading-tight">{row.label}</span>
+                {row.on ? <Eye className="size-3.5 text-cyan" /> : <EyeOff className="size-3.5" />}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ===== Exportação para plotter ===== */}
+        <div className="px-5 py-5 border-b border-line">
+          <button
+            onClick={() => setPlotterOpen(true)}
+            className="w-full flex items-center justify-center gap-2 bg-panel2 border border-cyan/40 text-cyan font-semibold text-sm rounded-md py-3 hover:bg-cyan/10 transition-colors"
+          >
+            <Download className="size-4" strokeWidth={2.5} />
+            Exportar para Plotter
+          </button>
+        </div>
+
+        {plotterOpen && (
+          <div
+            className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setPlotterOpen(false)}
+          >
+            <div
+              className="w-full max-w-md bg-panel border border-line rounded-xl shadow-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="h-12 px-4 border-b border-line flex items-center justify-between">
+                <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <Download className="size-4 text-cyan" />
+                  Exportar para Plotter
+                </span>
+                <button
+                  onClick={() => setPlotterOpen(false)}
+                  aria-label="Fechar exportação"
+                  className="text-muted-foreground hover:text-cyan"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+
+              <div className="p-4 space-y-4">
+                <div>
+                  <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-faint mb-2">
+                    Formato do arquivo
+                  </div>
+                  <div className="space-y-1.5">
+                    <button
+                      onClick={() => setExportFmt("pdf")}
+                      className={
+                        "w-full flex items-start gap-2.5 px-3 py-2.5 rounded-md border text-xs text-left transition-colors " +
+                        (exportFmt === "pdf"
+                          ? "border-cyan/50 bg-cyan/10 text-cyan"
+                          : "border-line text-muted-foreground hover:text-foreground")
+                      }
+                    >
+                      <span
+                        className={
+                          "mt-0.5 size-3 shrink-0 rounded-full border " +
+                          (exportFmt === "pdf" ? "border-cyan bg-cyan" : "border-line")
+                        }
+                      />
+                      <span className="flex-1 leading-snug">
+                        PDF vetorial — escala real 1:1
+                        <span className="block text-[10px] font-mono text-faint">
+                          Vetor puro no tamanho exato do quadro de mídia
+                        </span>
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => setExportFmt("png")}
+                      className={
+                        "w-full flex items-start gap-2.5 px-3 py-2.5 rounded-md border text-xs text-left transition-colors " +
+                        (exportFmt === "png"
+                          ? "border-cyan/50 bg-cyan/10 text-cyan"
+                          : "border-line text-muted-foreground hover:text-foreground")
+                      }
+                    >
+                      <span
+                        className={
+                          "mt-0.5 size-3 shrink-0 rounded-full border " +
+                          (exportFmt === "png" ? "border-cyan bg-cyan" : "border-line")
+                        }
+                      />
+                      <span className="flex-1 leading-snug">
+                        PNG — alta resolução 300 DPI
+                        <span className="block text-[10px] font-mono text-faint">
+                          Imagem raster no tamanho real para conferência
+                        </span>
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-faint mb-2">
+                    Opções de exportação
+                  </div>
+                  <div className="space-y-2">
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={hideTech}
+                        onChange={(e) => setHideTech(e.target.checked)}
+                        className="mt-0.5 size-4 shrink-0 accent-cyan"
+                      />
+                      <span className="text-xs text-foreground leading-snug">
+                        Esconder Linhas Técnicas de Segurança
+                        <span className="block text-[10px] font-mono text-faint">
+                          Remove a sangria azul, a costura preta e a zona vermelha — sai só a estampa
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={cropRect}
+                        onChange={(e) => setCropRect(e.target.checked)}
+                        className="mt-0.5 size-4 shrink-0 accent-cyan"
+                      />
+                      <span className="text-xs text-foreground leading-snug">
+                        Manter Apenas o Retângulo com a Estampa
+                        <span className="block text-[10px] font-mono text-faint">
+                          Recorta a saída exatamente na borda do quadro de mídia
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="rounded-md border border-line bg-panel2 p-2.5 text-[10px] font-mono text-muted-foreground leading-snug">
+                  SAÍDA · {view.toUpperCase()} · TAMANHO {size} · {fmt(activeDims().cmW)} × {fmt(activeDims().cmH)} cm
+                  {exportFmt === "png"
+                    ? ` · ${Math.round((activeDims().cmW / 2.54) * 300)} × ${Math.round((activeDims().cmH / 2.54) * 300)} px`
+                    : " · vetor 1:1"}
+                </div>
+              </div>
+
+              <div className="px-4 py-3 border-t border-line flex gap-2">
+                <button
+                  onClick={() => setPlotterOpen(false)}
+                  className="flex-1 py-2.5 rounded-md border border-line text-sm font-medium text-muted-foreground hover:text-foreground"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={runExport}
+                  disabled={exporting}
+                  className="flex-1 py-2.5 rounded-md bg-cyan text-primary-foreground text-sm font-semibold hover:bg-cyan/90 disabled:opacity-60"
+                >
+                  {exporting ? "Gerando…" : "Exportar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="px-5 pb-2 text-[10px] font-mono uppercase tracking-[0.18em] text-faint">
           Biblioteca
@@ -1800,8 +2126,12 @@ function PatternCanvas({
         return (
           <g className="pointer-events-none">
             <path d={seam} transform={bleed} className="fill-none stroke-sky-400" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-            <path d={seam} className="fill-none stroke-ink" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-            <path d={seam} transform={safe} className="fill-none stroke-red-500" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+            {showSeam && (
+              <path d={seam} className="fill-none stroke-ink" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+            )}
+            {showSafety && (
+              <path d={seam} transform={safe} className="fill-none stroke-red-500" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+            )}
           </g>
         );
       })()}
@@ -1810,6 +2140,32 @@ function PatternCanvas({
           POWERCLIP · {size === mother ? "MOLDE MÃE" : `AUTO DE ${mother}`}
         </text>
       )}
+
+      {/* Visibilidade da linha de sangria (+1cm) — filtra as camadas azuis do canvas */}
+      {!showBleed && (
+        <style>{`[class*="stroke-sky"], [class*="stroke-blue"] { display: none; }`}</style>
+      )}
+
+      {/* Quadro de Mídia do Plotter — retângulo externo automático em volta do molde */}
+      <g className="pointer-events-none">
+        <rect
+          x={-W / 2 - PLOTTER_MARGIN}
+          y={-PLOTTER_MARGIN}
+          width={W + PLOTTER_MARGIN * 2}
+          height={H + PLOTTER_MARGIN * 2}
+          className="fill-none stroke-ink"
+          strokeWidth={2}
+          vectorEffect="non-scaling-stroke"
+        />
+        <text
+          x={-W / 2 - PLOTTER_MARGIN}
+          y={-PLOTTER_MARGIN - unit * 1.2}
+          fontSize={unit * 1.3}
+          className="fill-faint font-mono"
+        >
+          QUADRO DE MÍDIA · {fmt(W + PLOTTER_MARGIN * 2)} × {fmt(H + PLOTTER_MARGIN * 2)} cm
+        </text>
+      </g>
 
       {/* Cotas */}
       <g className="pointer-events-none">
