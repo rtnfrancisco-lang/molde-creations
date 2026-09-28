@@ -1543,7 +1543,7 @@ function PatternCanvas({
 
       <path
         d={buildPath(nodes, W, H)}
-        className={"fill-cyan/5 stroke-cyan " + (tool === "selecao" ? "cursor-move" : "")}
+        className={"fill-garment stroke-cyan " + (tool === "selecao" ? "cursor-move" : "")}
         strokeWidth={1.75}
         vectorEffect="non-scaling-stroke"
         style={{
