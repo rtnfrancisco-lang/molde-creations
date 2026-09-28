@@ -4,12 +4,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/*
- * MoldeCore design system — TechnicalBlueprint direction.
- * Dark, tool-grade patternmaking workspace. Brand accent: cyan on graphite.
- * Colors use oklch. Brand tokens: ink, panel, panel2, line, cyan, cyanDim,
- * amber, muted, faint, plus the shadcn semantic set mapped for a dark UI.
- */
+/* MoldeCore light drafting workspace. Semantic colors keep the existing tools themeable. */
 
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
@@ -50,6 +45,8 @@
   --color-cyan-dim: var(--cyanDim);
   --color-amber: var(--amber);
   --color-faint: var(--faint);
+  --color-canvas: var(--canvas);
+  --color-garment: var(--garment);
 
   --font-display: "Space Grotesk", sans-serif;
   --font-mono: "IBM Plex Mono", monospace;
@@ -58,67 +55,37 @@
 :root {
   --radius: 0.5rem;
 
-  /* MoldeCore dark workspace palette (always dark) */
-  --background: oklch(0.18 0.014 264);
-  --foreground: oklch(0.93 0.01 250);
-  --card: oklch(0.21 0.015 264);
-  --card-foreground: oklch(0.93 0.01 250);
-  --popover: oklch(0.21 0.015 264);
-  --popover-foreground: oklch(0.93 0.01 250);
-  --primary: oklch(0.765 0.177 196.875);
-  --primary-foreground: oklch(0.18 0.014 264);
-  --secondary: oklch(0.26 0.02 250);
-  --secondary-foreground: oklch(0.93 0.01 250);
-  --muted: oklch(0.26 0.02 250);
-  --muted-foreground: oklch(0.64 0.015 248);
-  --accent: oklch(0.765 0.177 196.875);
-  --accent-foreground: oklch(0.18 0.014 264);
+  --background: oklch(0.975 0.003 255);
+  --foreground: oklch(0.235 0.02 255);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.235 0.02 255);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.235 0.02 255);
+  --primary: oklch(0.48 0.18 255);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.965 0.005 255);
+  --secondary-foreground: oklch(0.235 0.02 255);
+  --muted: oklch(0.965 0.005 255);
+  --muted-foreground: oklch(0.45 0.015 255);
+  --accent: oklch(0.93 0.025 255);
+  --accent-foreground: oklch(0.36 0.14 255);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: oklch(0.26 0.02 250);
-  --input: oklch(0.26 0.02 250);
-  --ring: oklch(0.765 0.177 196.875);
+  --border: oklch(0.9 0.008 255);
+  --input: oklch(0.9 0.008 255);
+  --ring: oklch(0.48 0.18 255);
 
-  --ink: oklch(0.18 0.014 264);
-  --panel: oklch(0.21 0.015 264);
-  --panel2: oklch(0.24 0.018 250);
-  --line: oklch(0.26 0.02 250);
-  --cyan: oklch(0.765 0.177 196.875);
-  --cyanDim: oklch(0.52 0.105 224);
-  --amber: oklch(0.769 0.188 70.08);
-  --muted-fg: oklch(0.64 0.015 248);
-  --faint: oklch(0.46 0.02 250);
-}
-
-.dark {
-  --background: oklch(0.18 0.014 264);
-  --foreground: oklch(0.93 0.01 250);
-  --card: oklch(0.21 0.015 264);
-  --card-foreground: oklch(0.93 0.01 250);
-  --popover: oklch(0.21 0.015 264);
-  --popover-foreground: oklch(0.93 0.01 250);
-  --primary: oklch(0.765 0.177 196.875);
-  --primary-foreground: oklch(0.18 0.014 264);
-  --secondary: oklch(0.26 0.02 250);
-  --secondary-foreground: oklch(0.93 0.01 250);
-  --muted: oklch(0.26 0.02 250);
-  --muted-foreground: oklch(0.64 0.015 248);
-  --accent: oklch(0.765 0.177 196.875);
-  --accent-foreground: oklch(0.18 0.014 264);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.765 0.177 196.875);
-
-  --ink: oklch(0.18 0.014 264);
-  --panel: oklch(0.21 0.015 264);
-  --panel2: oklch(0.24 0.018 250);
-  --line: oklch(0.26 0.02 250);
-  --cyan: oklch(0.765 0.177 196.875);
-  --cyanDim: oklch(0.52 0.105 224);
-  --amber: oklch(0.769 0.188 70.08);
-  --faint: oklch(0.46 0.02 250);
+  --ink: oklch(0.235 0.02 255);
+  --panel: oklch(1 0 0);
+  --panel2: oklch(0.965 0.005 255);
+  --line: oklch(0.9 0.008 255);
+  --cyan: oklch(0.48 0.18 255);
+  --cyanDim: oklch(0.4 0.13 255);
+  --amber: oklch(0.51 0.14 66);
+  --muted-fg: oklch(0.45 0.015 255);
+  --faint: oklch(0.52 0.013 255);
+  --canvas: oklch(0.957 0.004 255);
+  --garment: oklch(1 0 0);
 }
 
 @layer base {
@@ -133,17 +100,17 @@
   }
 }
 
-/* Blueprint drafting grid for the workspace canvas */
+/* Technical drafting grid on light gray paper. */
 @utility blueprint-grid {
   background-image:
-    linear-gradient(to right, color-mix(in oklab, var(--color-cyan) 6%, transparent) 1px, transparent 1px),
-    linear-gradient(to bottom, color-mix(in oklab, var(--color-cyan) 6%, transparent) 1px, transparent 1px);
+    linear-gradient(to right, color-mix(in oklab, var(--color-ink) 9%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--color-ink) 9%, transparent) 1px, transparent 1px);
   background-size: 28px 28px;
 }
 
 @utility blueprint-grid-fine {
   background-image:
-    linear-gradient(to right, color-mix(in oklab, var(--color-cyan) 3.5%, transparent) 1px, transparent 1px),
-    linear-gradient(to bottom, color-mix(in oklab, var(--color-cyan) 3.5%, transparent) 1px, transparent 1px);
+    linear-gradient(to right, color-mix(in oklab, var(--color-ink) 4%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--color-ink) 4%, transparent) 1px, transparent 1px);
   background-size: 14px 14px;
 }
