@@ -164,6 +164,17 @@ const sizeLabel = (clothingType: ClothingType, size: Size): string => {
   return size;
 };
 
+/* Molde Mãe padrão de cada tipo de peça.
+   Na Camisa Infantil o "M" corresponde ao 6ANOS, que é a numeração padrão da grade infantil. */
+const DEFAULT_MOTHER: Record<ClothingType, Size> = {
+  Camiseta: "M",
+  Moletom: "M",
+  Regata: "M",
+  "Manga Longa": "M",
+  "Camisa Infantil": "M",
+  "Camisa Baby Look": "M",
+};
+
 /* Nome legível da parte do molde a partir da vista ativa */
 const partLabel = (view: View): string => {
   switch (view) {
@@ -437,18 +448,20 @@ function Index() {
     setTimeout(() => setSavedMsg(""), 2500);
   };
 
-  /* Troca o tipo de peça e, quando existe, injeta a tabela de medidas pré-definida */
+  /* Troca o tipo de peça e, quando existe, injeta a tabela de medidas pré-definida.
+     O Molde Mãe volta para o padrão do tipo (na Camisa Infantil o M é exibido como 6ANOS). */
   const changeClothingType = (t: ClothingType) => {
     setClothingType(t);
     const preset = PRESET_TABLES[t];
     if (!preset) return;
     checkpoint("tipoPeca:" + t);
+    const dm = DEFAULT_MOTHER[t];
     setTable(preset);
     localStorage.setItem(LS_GRADING, JSON.stringify(preset));
-    setMother("M");
-    setSize("M");
-    localStorage.setItem(LS_MOTHER, "M");
-    setSavedMsg(`Tabela de medidas de ${t} carregada · Molde Mãe: M`);
+    setMother(dm);
+    setSize(dm);
+    localStorage.setItem(LS_MOTHER, dm);
+    setSavedMsg(`Tabela de medidas de ${t} carregada · Molde Mãe: ${sizeLabel(t, dm)}`);
     setTimeout(() => setSavedMsg(""), 3500);
   };
 
