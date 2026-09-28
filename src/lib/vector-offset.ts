@@ -16,25 +16,31 @@
       paralela). Cada Bézier é amostrada na própria equação da curva e a normal
       de cada amostra sai da derivada exata em t, então o decote, a cava e as
       laterais mantêm a distância constante, sem facetas nem cruzamentos.
-   3. Nos cantos (ombro x decote, bico da cava, quina da barra e da manga) o
-      encontro é resolvido pelo canto correto: miter (interseção das duas
-      paralelas) nos cantos internos e arco (round, raio igual à distância) nos
-      cantos externos — o mesmo comportamento do efeito "Contorno" do
-      CorelDRAW. A distância preta/azul/vermelha fica uniforme em todos os
-      milímetros do molde.
-   4. Laços e voltas que o offset para dentro cria em curvas apertadas são
+   3. CADA CANTO é resolvido por INTERSEÇÃO EXATA (esquadria / miter): a
+      paralela da aresta que chega e a paralela da aresta que sai são duas
+      retas, e o canto azul/vermelho fica no ponto onde elas se cruzam. Assim a
+      quina acompanha o nó da linha mestra (o quadrado branco) apontando na
+      bissetriz do vértice, e a distância preta → azul continua exatamente 1,0 cm
+      em toda a volta, inclusive no bico do ombro, no encontro com o decote, na
+      quina da cava, da barra e da manga.
+   4. Só quando a ponta é aguda demais (a esquadria passaria do limite) ou quando
+      as duas paralelas são paralelas entre si (volta de 180°) o canto é fechado
+      com arco de raio igual à distância — evita bico gigante sem deformar a
+      paralela.
+   5. Laços e voltas que o offset para dentro cria em curvas apertadas são
       cortados nas auto-interseções, evitando linhas cruzadas ou trechos que
       encostam na linha mestra.
 
-   API: offsetPathD(d, distance[, options]).
+   API: offsetPathD(d, distance[, options]). Por padrão join = "miter": os
+   cantos saem em esquadria, alinhados com o nó da linha mestra.
    ============================================================================ */
 
 type Vec = { x: number; y: number };
 
 export type OffsetOptions = {
-  /** Canto externo: "round" (padrão, como o Contorno do CorelDRAW) ou "miter". */
+  /** Canto em esquadria: "miter" (padrão, interseção exata) ou "round". */
   join?: "round" | "miter";
-  /** Limite do miter quando join = "miter" (padrão 4). */
+  /** Limite da esquadria antes de virar arco/chanfro (padrão 4). */
   miterLimit?: number;
   /** Tolerância em cm usada para amostrar as curvas (padrão: até 0,06 cm). */
   tolerance?: number;
@@ -343,7 +349,24 @@ const segCross = (p1: Vec, p2: Vec, p3: Vec, p4: Vec): Vec | null => {
   return { x: p1.x + r.x * t, y: p1.y + r.y * t };
 };
 
-/** Constrói a polilinha paralela, resolvendo cada canto (miter x round). */
+/**
+ * Constrói a polilinha paralela resolvendo CADA canto por INTERSEÇÃO EXATA
+ * (esquadria / miter), como no efeito Contorno do CorelDRAW:
+ *
+ *   paralela da aresta anterior  ->  pIn  = p + nIn  * k
+ *   paralela da aresta seguinte  ->  pOut = p + nOut * k
+ *   canto                        ->  interseção das duas retas (lineIntersect)
+ *
+ * O ponto de encontro pertence às duas paralelas, logo está exatamente a |k| de
+ * distância perpendicular da linha mestra — no bico do ombro, no encontro
+ * ombro/decote, na quina da cava, da barra e da manga. Nada de empurrar vértice
+ * nem de deformar a quina.
+ *
+ * No lado em que o offset abre vão (lado externo do canto) vale o limite do
+ * miter: ponta aguda demais fecha com arco/chanfro, para não criar bico
+ * gigante. No lado em que o offset fecha, a interseção é obrigatória (limite
+ * folgado), porque ali o cruzamento das paralelas É o canto correto.
+ */
 const offsetPolyline = (
   samples: Sample[],
   k: number,
@@ -368,8 +391,8 @@ const offsetPolyline = (
     const nOut = perp(tOut);
     const turn = Math.atan2(cross(tIn, tOut), dot(tIn, tOut));
 
-    /* Trecho liso: o ponto deslocado na normal já é a paralela exata. */
-    if (Math.abs(turn) < 1e-4) {
+    /* Trecho reto: o ponto deslocado na normal já é a paralela exata. */
+    if (Math.abs(turn) < 1e-5) {
       push({ x: s.p.x + nOut.x * k, y: s.p.y + nOut.y * k });
       continue;
     }
@@ -377,26 +400,29 @@ const offsetPolyline = (
     const pIn = { x: s.p.x + nIn.x * k, y: s.p.y + nIn.y * k };
     const pOut = { x: s.p.x + nOut.x * k, y: s.p.y + nOut.y * k };
 
-    /* Canto voltado para o lado do offset: precisa de arco. Canto do lado
-       oposto é interno e fecha na interseção das duas paralelas (miter). */
-    const convex = cross(tIn, tOut) * k > 0;
+    /* 1) Esquadria: interseção matemática das duas paralelas. */
     const hit = lineIntersect(pIn, tIn, pOut, tOut);
-    let useMiter = false;
     if (hit) {
-      const ml = mag(sub(hit, s.p));
-      useMiter = convex ? join === "miter" && ml <= K * miterLimit : ml <= K * 25;
+      const gap = cross(tIn, tOut) * k > 0;
+      const limit = (gap ? miterLimit : 25) * K;
+      if (mag(sub(hit, s.p)) <= limit) {
+        push(hit);
+        continue;
+      }
     }
 
-    if (useMiter && hit) {
-      push(hit);
-      continue;
-    }
-
-    const a0 = Math.atan2(nIn.y * k, nIn.x * k);
-    const steps = Math.max(2, Math.ceil(Math.abs(turn) / 0.1));
-    for (let j = 0; j <= steps; j++) {
-      const a = a0 + turn * (j / steps);
-      push({ x: s.p.x + Math.cos(a) * K, y: s.p.y + Math.sin(a) * K });
+    /* 2) Ponta aguda demais ou paralelas sem cruzamento: fecha o canto com arco
+       de raio |k| (round) ou chanfro, mantendo a distância perpendicular. */
+    if (join === "round") {
+      const a0 = Math.atan2(nIn.y * k, nIn.x * k);
+      const steps = Math.max(2, Math.ceil(Math.abs(turn) / 0.1));
+      for (let j = 0; j <= steps; j++) {
+        const a = a0 + turn * (j / steps);
+        push({ x: s.p.x + Math.cos(a) * K, y: s.p.y + Math.sin(a) * K });
+      }
+    } else {
+      push(pIn);
+      push(pOut);
     }
   }
 
@@ -443,7 +469,7 @@ const removeLoops = (input: Vec[], closed: boolean): Vec[] => {
 export function offsetPathD(d: string, distance: number, options: OffsetOptions = {}): string {
   if (!d || !Number.isFinite(distance) || distance === 0) return d;
 
-  const join = options.join ?? "round";
+  const join = options.join ?? "miter";
   const miterLimit = options.miterLimit ?? 4;
   const tol = options.tolerance ?? Math.max(0.02, Math.min(0.06, Math.abs(distance) * 0.05));
 
@@ -466,7 +492,10 @@ export function offsetPathD(d: string, distance: number, options: OffsetOptions 
   const parts: string[] = [];
   for (const b of built) {
     const raw = offsetPolyline(b.samples, k, join, miterLimit);
-    const pts = removeLoops(raw, b.closed);
+    /* Laço só nasce no offset para DENTRO (curvatura mais apertada que a
+       distância). No contorno externo da sangria o traçado sai intacto, para
+       não cortar as quinas resolvidas por interseção. */
+    const pts = distance > 0 ? raw : removeLoops(raw, b.closed);
     if (pts.length < 2) continue;
     let s = `M ${fmt(pts[0]!.x)} ${fmt(pts[0]!.y)}`;
     for (let i = 1; i < pts.length; i++) s += ` L ${fmt(pts[i]!.x)} ${fmt(pts[i]!.y)}`;
