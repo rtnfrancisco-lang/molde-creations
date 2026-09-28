@@ -141,6 +141,50 @@ const PRESET_TABLES: Partial<Record<ClothingType, Grading>> = {
   "Camisa Baby Look": BABY_LOOK_TABLE,
 };
 
+/* ===== Nomenclatura dinâmica de tamanho / rótulo técnico ===== */
+
+/* Mapa de idades usado apenas para "Camisa Infantil" */
+const INFANTIL_AGE_MAP: Record<Size, string> = {
+  PP: "2ANOS",
+  P: "4ANOS",
+  M: "6ANOS",
+  G: "8ANOS",
+  GG: "10ANOS",
+  XG: "12ANOS",
+};
+
+/* Rótulo do tamanho de acordo com o tipo de peça:
+   - Camisa Baby Look: "BL " + tamanho (ex.: BL PP, BL M)
+   - Camisa Infantil: idade correspondente (ex.: 2ANOS, 12ANOS)
+   - Demais: o próprio tamanho (PP, P, M, ...) */
+const sizeLabel = (clothingType: ClothingType, size: Size): string => {
+  if (clothingType === "Camisa Baby Look") return `BL ${size}`;
+  if (clothingType === "Camisa Infantil") return INFANTIL_AGE_MAP[size];
+  return size;
+};
+
+/* Nome legível da parte do molde a partir da vista ativa */
+const partLabel = (view: View): string => {
+  switch (view) {
+    case "frente":
+      return "FRENTE";
+    case "costas":
+      return "COSTAS";
+    case "mangaEsq":
+      return "MANGA ESQ";
+    case "mangaDir":
+      return "MANGA DIR";
+  }
+};
+
+/* Texto do indicador técnico (canto superior esquerdo): [Tamanho] [Parte] */
+const techLabel = (clothingType: ClothingType, size: Size, view: View): string =>
+  `${sizeLabel(clothingType, size)} ${partLabel(view)}`;
+
+/* Nome do arquivo exportado: MoldeCore_BL_M_FRENTE / MoldeCore_6ANOS_COSTAS */
+const exportName = (clothingType: ClothingType, size: Size, view: View): string =>
+  `MoldeCore_${techLabel(clothingType, size, view).replace(/\s+/g, "_")}`;
+
 const bodyShape = (neckDepth: number): Node[] => [
   { x: 0.33, y: 0, smooth: false },
   { x: 0.4, y: neckDepth * 0.7, smooth: true },
@@ -614,7 +658,7 @@ function Index() {
       setTimeout(() => {
         const el = document.createElement("a");
         el.href = url;
-        el.download = `moldecore-${view}-${sz}.svg`;
+        el.download = `${exportName(clothingType, sz, view)}.svg`;
         el.click();
         URL.revokeObjectURL(url);
       }, idx * 250);
