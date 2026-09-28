@@ -1226,6 +1226,9 @@ function Index() {
                   selLayer={selLayer}
                   onSelLayer={setSelLayer}
                   onLayersChange={(arr) => setViewLayers(arr)}
+                  showSeam={showSeam}
+                  showBleed={showBleed}
+                  showSafety={showSafety}
                 />
                 {/* Painel de camadas */}
                 <div className="absolute top-3 right-3 w-60 rounded-md border border-line bg-panel shadow-lg text-xs z-10">
@@ -1564,6 +1567,9 @@ function PatternCanvas({
   selLayer,
   onSelLayer,
   onLayersChange,
+  showSeam = true,
+  showBleed = true,
+  showSafety = true,
 }: {
   view: View;
   size: Size;
@@ -1583,6 +1589,9 @@ function PatternCanvas({
   selLayer: string | null;
   onSelLayer: (id: string | null) => void;
   onLayersChange: (l: Layer[]) => void;
+  showSeam?: boolean;
+  showBleed?: boolean;
+  showSafety?: boolean;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
