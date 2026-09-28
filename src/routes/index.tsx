@@ -573,7 +573,7 @@ function Index() {
   ];
 
   return (
-    <div className="min-h-screen w-full bg-ink text-foreground font-display antialiased flex">
+    <div className="min-h-screen w-full bg-background text-foreground font-display antialiased flex">
       {/* ============ SIDEBAR ============ */}
       <aside className="w-64 shrink-0 bg-panel border-r border-line flex flex-col">
         <div className="px-5 pt-6 pb-5 border-b border-line">
@@ -582,7 +582,7 @@ function Index() {
               <Shirt className="size-5 text-cyan" strokeWidth={2} />
             </div>
             <div>
-              <div className="text-lg font-bold tracking-tight text-white leading-none">
+              <div className="text-lg font-bold tracking-tight text-foreground leading-none">
                 Molde<span className="text-cyan">Core</span>
               </div>
               <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-faint mt-1.5">
@@ -600,7 +600,7 @@ function Index() {
             <select
               value={clothingType}
               onChange={(e) => setClothingType(e.target.value as ClothingType)}
-              className="w-full appearance-none bg-panel2 border border-line rounded-md pl-3 pr-9 py-2.5 text-sm text-white font-medium focus:outline-none focus:border-cyan/60 cursor-pointer"
+              className="w-full appearance-none bg-panel2 border border-line rounded-md pl-3 pr-9 py-2.5 text-sm text-foreground font-medium focus:outline-none focus:border-cyan/60 cursor-pointer"
             >
               <option>Camiseta</option>
               <option>Moletom</option>
@@ -612,7 +612,7 @@ function Index() {
         </div>
 
         <div className="px-5 py-5">
-          <button className="w-full flex items-center justify-center gap-2 bg-cyan text-ink font-semibold text-sm rounded-md py-3 hover:bg-cyan/90 transition-colors">
+          <button className="w-full flex items-center justify-center gap-2 bg-cyan text-primary-foreground font-semibold text-sm rounded-md py-3 hover:bg-cyan/90 transition-colors">
             <Plus className="size-4" strokeWidth={2.5} />
             Criar Novo Molde
           </button>
@@ -629,8 +629,8 @@ function Index() {
               className={
                 "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors " +
                 (item.active
-                  ? "bg-cyan/10 border border-cyan/25 text-white"
-                  : "text-muted-foreground hover:bg-panel2 hover:text-white")
+                  ? "bg-cyan/10 border border-cyan/25 text-cyan"
+                  : "text-muted-foreground hover:bg-panel2 hover:text-foreground")
               }
             >
               <span className={"size-1.5 rounded-full " + (item.active ? "bg-cyan" : "bg-faint")} />
@@ -648,7 +648,7 @@ function Index() {
               AV
             </div>
             <div className="min-w-0">
-              <div className="text-sm text-white truncate">Aria Vance</div>
+              <div className="text-sm text-foreground truncate">Aria Vance</div>
               <div className="text-[10px] font-mono uppercase tracking-wider text-faint">Modelista</div>
             </div>
           </div>
@@ -657,11 +657,11 @@ function Index() {
 
       {/* ============ PRINCIPAL ============ */}
       <main className="flex-1 min-w-0 flex flex-col">
-        <header className="h-16 shrink-0 border-b border-line bg-panel/60 flex items-center justify-between px-6 gap-4">
+        <header className="h-16 shrink-0 border-b border-line bg-panel flex items-center justify-between px-6 gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <span className="text-[10px] font-mono uppercase tracking-[0.18em] text-faint">Área de Trabalho</span>
             <span className="text-faint">/</span>
-            <span className="text-sm font-medium text-white truncate">{clothingType} — Sublimação</span>
+            <span className="text-sm font-medium text-foreground truncate">{clothingType} — Sublimação</span>
           </div>
           <div className="flex items-center gap-3">
           <div className="flex items-center bg-panel2 border border-line rounded-md p-1">
@@ -691,7 +691,7 @@ function Index() {
                 onClick={() => setSize(s)}
                 className={
                   "px-2 py-1 rounded text-xs font-mono font-semibold transition-colors " +
-                  (s === size ? "bg-cyan text-ink" : "text-muted-foreground hover:text-white")
+                  (s === size ? "bg-cyan text-primary-foreground" : "text-muted-foreground hover:text-foreground")
                 }
               >
                 {s}
@@ -705,7 +705,7 @@ function Index() {
         <div className="flex-1 min-h-0 flex">
           <section className="flex-1 min-w-0 flex flex-col">
             {/* Abas de vista */}
-            <div className="h-12 shrink-0 border-b border-line bg-panel/40 flex items-center justify-between gap-3 px-4 overflow-x-auto">
+            <div className="h-12 shrink-0 border-b border-line bg-panel flex items-center justify-between gap-3 px-4 overflow-x-auto">
               <div className="flex items-center gap-1">
                 {VIEWS.map((v) => (
                   <button
@@ -715,7 +715,7 @@ function Index() {
                       "px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors border " +
                       (view === v.key
                         ? "bg-cyan/10 border-cyan/40 text-cyan"
-                        : "border-transparent text-muted-foreground hover:text-white")
+                        : "border-transparent text-muted-foreground hover:text-foreground")
                     }
                   >
                     {v.label}
@@ -737,7 +737,7 @@ function Index() {
               />
               <button
                 onClick={() => importRef.current?.click()}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap bg-cyan text-ink hover:bg-cyan/90"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap bg-cyan text-primary-foreground hover:bg-cyan/90"
               >
                 <FileUp className="size-3.5" /> Importar
               </button>
@@ -764,7 +764,7 @@ function Index() {
                     onClick={pcState === "free" ? pcApply : pcState === "locked" ? pcEditStart : pcApply}
                     className={
                       "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap border " +
-                      (pcState === "editing" ? "border-amber/60 text-amber bg-amber/10" : "border-line text-muted-foreground hover:text-white")
+                      (pcState === "editing" ? "border-amber/60 text-amber bg-amber/10" : "border-line text-muted-foreground hover:text-foreground")
                     }
                   >
                     <Crop className="size-3.5" />
@@ -781,7 +781,7 @@ function Index() {
               )}
               <button
                 onClick={exportAll}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap border border-line text-muted-foreground hover:text-white"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap border border-line text-muted-foreground hover:text-foreground"
               >
                 <Download className="size-3.5" /> Exportar Tamanhos
               </button>
@@ -808,11 +808,11 @@ function Index() {
                       "group relative size-9 grid place-items-center rounded-md border transition-colors " +
                       (tool === t.k
                         ? "bg-cyan/15 border-cyan/50 text-cyan"
-                        : "border-transparent text-muted-foreground hover:bg-panel2 hover:text-white")
+                        : "border-transparent text-muted-foreground hover:bg-panel2 hover:text-foreground")
                     }
                   >
                     <t.icon className="size-4" />
-                    <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded bg-panel2 border border-line px-2 py-1 text-[11px] text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded bg-panel2 border border-line px-2 py-1 text-[11px] text-foreground opacity-0 group-hover:opacity-100 transition-opacity">
                       {t.label} <span className="font-mono text-faint ml-1">{t.key}</span>
                     </span>
                   </button>
@@ -821,15 +821,15 @@ function Index() {
                 <button
                   onClick={() => setFitSignal((n) => n + 1)}
                   aria-label="Ajustar à tela"
-                  className="group relative size-9 grid place-items-center rounded-md text-muted-foreground hover:bg-panel2 hover:text-white"
+                  className="group relative size-9 grid place-items-center rounded-md text-muted-foreground hover:bg-panel2 hover:text-foreground"
                 >
                   <Maximize className="size-4" />
-                  <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded bg-panel2 border border-line px-2 py-1 text-[11px] text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded bg-panel2 border border-line px-2 py-1 text-[11px] text-foreground opacity-0 group-hover:opacity-100 transition-opacity">
                     Ajustar à tela
                   </span>
                 </button>
               </div>
-              <div className="flex-1 min-w-0 relative blueprint-grid blueprint-grid-fine overflow-hidden">
+              <div className="flex-1 min-w-0 relative bg-canvas blueprint-grid blueprint-grid-fine overflow-hidden">
                 <PatternCanvas
                   view={view}
                   size={size}
@@ -851,10 +851,10 @@ function Index() {
                   onLayersChange={(arr) => setViewLayers(arr)}
                 />
                 {/* Painel de camadas */}
-                <div className="absolute top-3 right-3 w-60 rounded-md border border-line bg-panel/95 shadow-xl text-xs z-10">
+                <div className="absolute top-3 right-3 w-60 rounded-md border border-line bg-panel shadow-lg text-xs z-10">
                   <button
                     onClick={() => setLayersOpen((o) => !o)}
-                    className="w-full flex items-center justify-between px-3 py-2 text-white"
+                    className="w-full flex items-center justify-between px-3 py-2 text-foreground"
                   >
                     <span className="flex items-center gap-2 font-medium">
                       <LayersIcon className="size-3.5 text-cyan" /> Camadas / Objetos
@@ -884,7 +884,7 @@ function Index() {
                             }}
                             className={
                               "group flex items-center gap-1.5 px-2 py-1.5 cursor-pointer " +
-                              (sel ? "bg-cyan/15 text-cyan" : "text-muted-foreground hover:bg-panel2 hover:text-white")
+                              (sel ? "bg-cyan/15 text-cyan" : "text-muted-foreground hover:bg-panel2 hover:text-foreground")
                             }
                           >
                             <Icon className="size-3.5 shrink-0" />
@@ -907,7 +907,7 @@ function Index() {
                                   e.stopPropagation();
                                   run();
                                 }}
-                                className="p-0.5 rounded hover:text-white"
+                                className="p-0.5 rounded hover:text-foreground"
                               >
                                 <I className="size-3" />
                               </button>
@@ -941,7 +941,7 @@ function Index() {
 
           {menu && (
             <div
-              className="fixed z-50 min-w-56 rounded-md border border-line bg-panel2 py-1 shadow-xl text-xs"
+              className="fixed z-50 min-w-56 rounded-md border border-line bg-panel2 py-1 shadow-lg text-xs"
               style={{ left: menu.x, top: menu.y }}
               onClick={(e) => e.stopPropagation()}
             >
@@ -965,7 +965,7 @@ function Index() {
                           i.run();
                           setMenu(null);
                         }}
-                        className="w-full text-left px-3 py-1.5 text-white hover:bg-cyan/15 hover:text-cyan"
+                        className="w-full text-left px-3 py-1.5 text-foreground hover:bg-cyan/15 hover:text-cyan"
                       >
                         {i.label}
                       </button>
@@ -991,7 +991,7 @@ function Index() {
                       i.run();
                       setMenu(null);
                     }}
-                    className="w-full text-left px-3 py-1.5 text-white hover:bg-cyan/15 hover:text-cyan"
+                    className="w-full text-left px-3 py-1.5 text-foreground hover:bg-cyan/15 hover:text-cyan"
                   >
                     {i.label}
                   </button>
@@ -1013,7 +1013,7 @@ function Index() {
                   onClick={() => setPanel(k)}
                   className={
                     "flex items-center justify-center gap-1.5 py-3 text-xs font-medium border-b-2 transition-colors " +
-                    (panel === k ? "border-cyan text-white" : "border-transparent text-muted-foreground hover:text-white")
+                    (panel === k ? "border-cyan text-cyan" : "border-transparent text-muted-foreground hover:text-foreground")
                   }
                 >
                   <Icon className="size-3.5" /> {label}
@@ -1025,7 +1025,7 @@ function Index() {
               <>
                 <div className="px-5 py-4 border-b border-line">
                   <div className="flex items-center justify-between">
-                    <h2 className="text-sm font-semibold text-white">Dimensões do Molde Base</h2>
+                    <h2 className="text-sm font-semibold text-foreground">Dimensões do Molde Base</h2>
                     <label className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-cyan bg-cyan/10 border border-cyan/25 rounded px-1.5 py-0.5">
                       <Crown className="size-3" /> Molde Mãe
                       <select
@@ -1062,7 +1062,7 @@ function Index() {
                     {FIELDS.map((f) => (
                       <div key={f.key} className="flex justify-between text-[11px] font-mono py-0.5">
                         <span className="text-faint">{f.label}</span>
-                        <span className="text-white">{fmt(graded[size][f.key])} cm</span>
+                        <span className="text-foreground">{fmt(graded[size][f.key])} cm</span>
                       </div>
                     ))}
                   </div>
@@ -1070,7 +1070,7 @@ function Index() {
                 <div className="px-5 py-4 border-t border-line mt-auto">
                   <button
                     onClick={() => setSize(mother)}
-                    className="w-full flex items-center justify-center gap-2 bg-cyan text-ink font-semibold text-sm rounded-md py-3 hover:bg-cyan/90 transition-colors"
+                    className="w-full flex items-center justify-center gap-2 bg-cyan text-primary-foreground font-semibold text-sm rounded-md py-3 hover:bg-cyan/90 transition-colors"
                   >
                     <Wand2 className="size-4" strokeWidth={2.5} />
                     Gerar Molde Base
@@ -1083,7 +1083,7 @@ function Index() {
             ) : (
               <>
                 <div className="px-5 py-4 border-b border-line">
-                  <h2 className="text-sm font-semibold text-white">Configurar Tabela de Tamanhos</h2>
+                  <h2 className="text-sm font-semibold text-foreground">Configurar Tabela de Tamanhos</h2>
                   <p className="text-[11px] text-faint mt-1 font-mono">
                     Medidas finais de cada tamanho em cm · aplicadas na hora
                   </p>
@@ -1102,7 +1102,7 @@ function Index() {
                     <tbody>
                       {SIZES.map((s) => (
                         <tr key={s}>
-                          <td className={"pl-2 font-semibold whitespace-nowrap " + (s === mother ? "text-cyan" : "text-white")}>
+                          <td className={"pl-2 font-semibold whitespace-nowrap " + (s === mother ? "text-cyan" : "text-foreground")}>
                             {s}
                             {s === mother && <Crown className="inline size-3 ml-1 -mt-0.5" />}
                           </td>
@@ -1113,7 +1113,7 @@ function Index() {
                                 step="0.5"
                                 value={table[s][f.key]}
                                 onChange={(e) => updateTable(s, f.key, parseFloat(e.target.value) || 0)}
-                                className="w-full bg-panel2 border border-line rounded px-1.5 py-1.5 text-center text-white disabled:opacity-40 focus:outline-none focus:border-cyan/60"
+                                className="w-full bg-panel2 border border-line rounded px-1.5 py-1.5 text-center text-foreground disabled:opacity-40 focus:outline-none focus:border-cyan/60"
                               />
                             </td>
                           ))}
@@ -1125,7 +1125,7 @@ function Index() {
                 <div className="px-5 py-4 border-t border-line mt-auto space-y-2">
                   <button
                     onClick={saveGrading}
-                    className="w-full flex items-center justify-center gap-2 bg-cyan text-ink font-semibold text-sm rounded-md py-3 hover:bg-cyan/90 transition-colors"
+                    className="w-full flex items-center justify-center gap-2 bg-cyan text-primary-foreground font-semibold text-sm rounded-md py-3 hover:bg-cyan/90 transition-colors"
                   >
                     <Save className="size-4" /> Salvar Padrão
                   </button>
@@ -1709,7 +1709,7 @@ function PatternCanvas({
                               </g>
                             );
                           })}
-                          {square(pt, "n", "fill-ink stroke-cyan cursor-move", (e) => {
+                          {square(pt, "n", "fill-garment stroke-cyan cursor-move", (e) => {
                             e.stopPropagation();
                             capture(e);
                             setDrag({ k: "lnode", id: l.id, pi, si, i, which: "n" });
@@ -1759,7 +1759,7 @@ function PatternCanvas({
         return (
           <g>
             <rect x={a.x} y={a.y} width={b.x - a.x} height={b.y - a.y} className="fill-none stroke-cyan/60 pointer-events-none" strokeWidth={1} strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />
-            {[a, { x: b.x, y: a.y }, { x: a.x, y: b.y }].map((p, i) => square(p, "c" + i, "fill-ink stroke-cyan/60"))}
+            {[a, { x: b.x, y: a.y }, { x: a.x, y: b.y }].map((p, i) => square(p, "c" + i, "fill-garment stroke-cyan/60"))}
             {square(b, "scale", "fill-cyan stroke-cyan cursor-nwse-resize", (e) => {
               e.stopPropagation();
               capture(e);
@@ -1799,7 +1799,7 @@ function PatternCanvas({
               {square(
                 p,
                 "n",
-                "stroke-cyan " + (nodesInteractive ? "cursor-move " : "") + (drag?.k === "node" && drag.i === i ? "fill-cyan" : n.smooth ? "fill-cyan/30" : "fill-ink"),
+                "stroke-cyan " + (nodesInteractive ? "cursor-move " : "") + (drag?.k === "node" && drag.i === i ? "fill-cyan" : n.smooth ? "fill-cyan/30" : "fill-garment"),
                 nodesInteractive ? (e) => onNodeDown(e, i) : undefined,
               )}
             </g>
@@ -1823,7 +1823,7 @@ function PatternCanvas({
                   const m = toSvg({ x: n.x + n.hIn.x, y: n.y + n.hIn.y });
                   return <line x1={m.x} y1={m.y} x2={o.x} y2={o.y} className="stroke-amber/60" strokeWidth={1} vectorEffect="non-scaling-stroke" />;
                 })()}
-                {square(p, "d", i === 0 ? "fill-amber stroke-amber" : "fill-ink stroke-amber")}
+                {square(p, "d", i === 0 ? "fill-amber stroke-amber" : "fill-garment stroke-amber")}
               </g>
             );
           })}
@@ -1842,7 +1842,7 @@ function PatternCanvas({
             width={unit * 10}
             height={unit * 2.4}
             rx={unit * 0.4}
-            className="fill-panel2 stroke-amber/60"
+            className="fill-panel stroke-amber/60"
             strokeWidth={1}
             vectorEffect="non-scaling-stroke"
           />
@@ -1917,7 +1917,7 @@ function PaletteDock({
   return (
     <div className="w-44 shrink-0 bg-panel border-l border-line flex flex-col">
       <div className="h-12 shrink-0 border-b border-line flex items-center justify-between px-3">
-        <span className="flex items-center gap-1.5 text-xs font-semibold text-white">
+        <span className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
           <Palette className="size-3.5 text-cyan" /> Paleta
         </span>
         <button onClick={() => setOpen(false)} aria-label="Recolher paleta" className="text-muted-foreground hover:text-cyan">
@@ -1930,7 +1930,7 @@ function PaletteDock({
             <button
               key={m}
               onClick={() => setMode(m)}
-              className={"py-1 rounded " + (mode === m ? "bg-cyan text-ink font-semibold" : "text-muted-foreground")}
+              className={"py-1 rounded " + (mode === m ? "bg-cyan text-primary-foreground font-semibold" : "text-muted-foreground")}
             >
               Paleta {m.toUpperCase()}
             </button>
@@ -1949,7 +1949,7 @@ function PaletteDock({
               onClick={() => onTarget(k)}
               className={
                 "w-full flex items-center gap-2 px-2 py-1.5 rounded border text-[11px] text-left " +
-                (target === k ? "border-cyan/50 bg-cyan/10 text-white" : "border-line text-muted-foreground hover:text-white")
+                (target === k ? "border-cyan/50 bg-cyan/10 text-cyan" : "border-line text-muted-foreground hover:text-foreground")
               }
             >
               <span
@@ -1999,7 +1999,7 @@ function PaletteDock({
             <div className="flex items-start gap-2">
               <span className="size-8 shrink-0 rounded border border-line" style={{ background: info.hex || "transparent" }} />
               <div className="text-[10px] font-mono leading-snug min-w-0">
-                <div className="text-white break-words">{info.label}</div>
+                <div className="text-foreground break-words">{info.label}</div>
                 {mode === "cmyk" && info.hex && <div className="text-faint">{info.hex}</div>}
               </div>
             </div>
@@ -2037,7 +2037,7 @@ function DimensionInput({
           step="0.1"
           value={value}
           onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-          className="w-full bg-panel2 border border-line rounded-md pl-3 pr-12 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-cyan/60 focus:ring-1 focus:ring-cyan/30"
+          className="w-full bg-panel2 border border-line rounded-md pl-3 pr-12 py-2.5 text-sm font-mono text-foreground focus:outline-none focus:border-cyan/60 focus:ring-1 focus:ring-cyan/30"
         />
         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-mono text-faint">cm</span>
       </div>
