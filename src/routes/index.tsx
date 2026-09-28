@@ -45,6 +45,7 @@ import {
   type Layer,
 } from "@/lib/importers";
 import { activeView } from "@/lib/active-view";
+import { offsetPathD } from "@/lib/vector-offset";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -691,9 +692,14 @@ function Index() {
     const y0 = -mg - pad;
     const path = buildPath(shapes[view], W, H);
 
-    const bleed = `<path d="${path}" transform="matrix(${(W + 2) / W} 0 0 ${(H + 2) / H} 0 -1)" fill="none" stroke="#38bdf8" stroke-width="0.06"/>`;
-    const seamLine = `<path d="${path}" fill="none" stroke="#111827" stroke-width="0.06"/>`;
-    const safety = `<path d="${path}" transform="matrix(${Math.max(0.2, (W - 8) / W)} 0 0 ${Math.max(0.2, (H - 8) / H)} 0 4)" fill="none" stroke="#ef4444" stroke-width="0.06" stroke-dasharray="0.5 0.35"/>`;
+    /* Contorno paralelo real: sangria e zona de segurança saem do MESMO traçado
+       da Linha de Costura, deslocado na perpendicular de cada segmento e de cada
+       curva (src/lib/vector-offset.ts). Nada de escalar largura/altura. */
+    const bleedPath = offsetPathD(path, 1);
+    const safetyPath = offsetPathD(path, -4);
+    const bleed = `<path d="${bleedPath}" fill="none" stroke="#38bdf8" stroke-width="0.06" stroke-linejoin="round"/>`;
+    const seamLine = `<path d="${path}" fill="none" stroke="#111827" stroke-width="0.06" stroke-linejoin="round"/>`;
+    const safety = `<path d="${safetyPath}" fill="none" stroke="#ef4444" stroke-width="0.06" stroke-dasharray="0.5 0.35" stroke-linejoin="round"/>`;
     const tech = o.hideTechnical ? "" : bleed + seamLine + safety;
 
     let img = "";
