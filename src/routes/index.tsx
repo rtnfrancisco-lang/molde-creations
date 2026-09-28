@@ -271,9 +271,33 @@ const LIBRARY = [
 
 const fmt = (n: number) => n.toFixed(1).replace(".", ",");
 
+/* Limites absolutos (X_min, X_max, Y_min, Y_max) de um traçado "d".
+   O motor de offset devolve só M/L (polilinha), então os pares de números são
+   lidos na ordem em que aparecem. Serve para o quadro de mídia colar exatamente
+   na Linha Azul de Sangria, sem margem nem padding. */
+const pathBounds = (d: string): { minX: number; minY: number; maxX: number; maxY: number } | null => {
+  const nums = d.match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi);
+  if (!nums || nums.length < 4) return null;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (let i = 0; i + 1 < nums.length; i += 2) {
+    const x = Number(nums[i]!);
+    const y = Number(nums[i + 1]!);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+  }
+  if (!Number.isFinite(minX)) return null;
+  return { minX, minY, maxX, maxY };
+};
+
 /* ================= Página ================= */
 
-const PLOTTER_MARGIN = 2; // cm de margem padrão do quadro de mídia em volta do molde
+const PLOTTER_MARGIN = 2; // margem de reserva do quadro de mídia (usada só se a sangria não puder ser lida)
 
 function Index() {
   const [clothingType, setClothingType] = useState<ClothingType>("Camiseta");
@@ -697,12 +721,6 @@ function Index() {
     const W = isBody ? mm.bodyWidth : mm.sleeveWidth;
     const H = isBody ? mm.bodyHeight : mm.sleeveHeight;
     const st = styles[view];
-    const mg = PLOTTER_MARGIN;
-    const pad = o.crop ? 0 : 6;
-    const cmW = W + mg * 2 + pad * 2;
-    const cmH = H + mg * 2 + pad * 2;
-    const x0 = -W / 2 - mg - pad;
-    const y0 = -mg - pad;
     const path = buildPath(shapes[view], W, H);
 
     /* Contorno paralelo real: sangria e zona de segurança saem do MESMO traçado
@@ -730,10 +748,32 @@ function Index() {
     const outline = o.hideTechnical
       ? ""
       : `<path d="${path}" fill="none" stroke="${st.stroke ?? "#111827"}" stroke-width="0.05"/>`;
-    const frame = `<rect x="${-W / 2 - mg}" y="${-mg}" width="${W + mg * 2}" height="${H + mg * 2}" fill="none" stroke="#111827" stroke-width="0.1"/>`;
 
+    /* Quadro de mídia / Área de Mídia: o retângulo preto passa a coincidir
+       EXATAMENTE com a Linha Azul de Sangria. Os limites (X_min, X_max, Y_min,
+       Y_max) são lidos do próprio traçado da sangria — nada de margem, padding
+       ou sobra cinza/branca em cima, embaixo ou nas laterais. */
+    const bb =
+      pathBounds(bleedPath) ?? {
+        minX: -W / 2 - PLOTTER_MARGIN,
+        minY: -PLOTTER_MARGIN,
+        maxX: W / 2 + PLOTTER_MARGIN,
+        maxY: H + PLOTTER_MARGIN,
+      };
+    const cmW = Math.max(0.1, bb.maxX - bb.minX);
+    const cmH = Math.max(0.1, bb.maxY - bb.minY);
+    const x0 = bb.minX;
+    const y0 = bb.minY;
+
+    const frame = `<rect x="${x0.toFixed(3)}" y="${y0.toFixed(3)}" width="${cmW.toFixed(3)}" height="${cmH.toFixed(3)}" fill="none" stroke="#111827" stroke-width="0.1"/>`;
+    /* Rótulo técnico fixo de produção: [Tamanho] [Parte] no canto superior
+       esquerdo, por dentro da borda. Fica embutido no arquivo mesmo quando as
+       linhas técnicas são escondidas. */
+    const label = `<text x="${(x0 + 0.6).toFixed(2)}" y="${(y0 + 1.3).toFixed(2)}" font-family="monospace" font-size="1" fill="#111827">${techLabel(clothingType, size, view)}</text>`;
+
+    /* A janela de exportação é recortada exatamente nos limites do quadro. */
     const svg =
-      `<svg xmlns="http://www.w3.org/2000/svg" width="${cmW}cm" height="${cmH}cm" viewBox="${x0} ${y0} ${cmW} ${cmH}">` +
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${cmW.toFixed(3)}cm" height="${cmH.toFixed(3)}cm" viewBox="${x0.toFixed(3)} ${y0.toFixed(3)} ${cmW.toFixed(3)} ${cmH.toFixed(3)}">` +
       `<defs><clipPath id="moldeClip"><path d="${path}"/></clipPath></defs>` +
       body +
       img +
@@ -741,6 +781,7 @@ function Index() {
       tech +
       outline +
       frame +
+      label +
       `</svg>`;
     return { svg, cmW, cmH };
   };
@@ -2221,23 +2262,37 @@ function PatternCanvas({
 
       {/* Quadro de Mídia do Plotter — retângulo externo automático em volta do molde */}
       <g className="pointer-events-none">
-        <rect
-          x={-W / 2 - PLOTTER_MARGIN}
-          y={-PLOTTER_MARGIN}
-          width={W + PLOTTER_MARGIN * 2}
-          height={H + PLOTTER_MARGIN * 2}
-          className="fill-none stroke-ink"
-          strokeWidth={2}
-          vectorEffect="non-scaling-stroke"
-        />
-        <text
-          x={-W / 2 - PLOTTER_MARGIN}
-          y={-PLOTTER_MARGIN - unit * 1.2}
-          fontSize={unit * 1.3}
-          className="fill-faint font-mono"
-        >
-          QUADRO DE MÍDIA · {fmt(W + PLOTTER_MARGIN * 2)} × {fmt(H + PLOTTER_MARGIN * 2)} cm
-        </text>
+        {(() => {
+          /* Mesma caixa usada na exportação: limites absolutos da Linha Azul de
+             Sangria, sem margem, para o quadro colar no contorno do molde. */
+          const bb =
+            pathBounds(offsetPathD(buildPath(nodes, W, H), 1, { join: "miter", miterLimit: 4 })) ?? {
+              minX: -W / 2 - PLOTTER_MARGIN,
+              minY: -PLOTTER_MARGIN,
+              maxX: W / 2 + PLOTTER_MARGIN,
+              maxY: H + PLOTTER_MARGIN,
+            };
+          const fx = bb.minX;
+          const fy = bb.minY;
+          const fw = Math.max(0.1, bb.maxX - bb.minX);
+          const fh = Math.max(0.1, bb.maxY - bb.minY);
+          return (
+            <>
+              <rect
+                x={fx}
+                y={fy}
+                width={fw}
+                height={fh}
+                className="fill-none stroke-ink"
+                strokeWidth={2}
+                vectorEffect="non-scaling-stroke"
+              />
+              <text x={fx} y={fy - unit * 1.2} fontSize={unit * 1.3} className="fill-faint font-mono">
+                QUADRO DE MÍDIA · {fmt(fw)} × {fmt(fh)} cm
+              </text>
+            </>
+          );
+        })()}
       </g>
 
       {/* Cotas */}
