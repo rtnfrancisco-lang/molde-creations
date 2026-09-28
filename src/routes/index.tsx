@@ -88,7 +88,7 @@ const NO_ART: Artworks = { frente: null, costas: null, mangaEsq: null, mangaDir:
 const NO_STYLE: PartStyle = { stroke: null, fill: null };
 const DEFAULT_STYLES: Styles = { frente: NO_STYLE, costas: NO_STYLE, mangaEsq: NO_STYLE, mangaDir: NO_STYLE };
 type Tool = "selecao" | "forma" | "caneta" | "zoom" | "fita";
-type ClothingType = "Camiseta" | "Moletom" | "Regata" | "Manga Longa";
+type ClothingType = "Camiseta" | "Moletom" | "Regata" | "Manga Longa" | "Camisa Infantil" | "Camisa Baby Look";
 
 const FIELDS: { key: Field; label: string; group: string }[] = [
   { key: "bodyHeight", label: "Altura do Corpo", group: "Corpo" },
@@ -111,6 +111,33 @@ const DEFAULT_TABLE: Grading = {
   G: d(74, 54, 23, 21),
   GG: d(76, 56, 24, 22),
   XG: d(78, 58, 25, 23),
+};
+
+/* ================= Tabelas pré-definidas por tipo de peça (Molde Mãe = M) ================= */
+
+const INFANTIL_TABLE: Grading = {
+  PP: d(42, 32, 13, 12),
+  P: d(47, 35, 14.5, 13),
+  M: d(51, 38, 16, 14),
+  G: d(56, 41, 17.5, 15),
+  GG: d(61, 44, 19, 16),
+  XG: d(65, 47, 20.5, 17),
+};
+
+const BABY_LOOK_TABLE: Grading = {
+  PP: d(56, 38, 13, 13.5),
+  P: d(58, 40, 14, 14.5),
+  M: d(60, 43, 15, 15.5),
+  G: d(62, 46, 16, 16.5),
+  GG: d(64, 49, 17, 17.5),
+  XG: d(66, 52, 18, 18.5),
+};
+
+const NEW_CLOTHING_TYPES: ClothingType[] = ["Camisa Infantil", "Camisa Baby Look"];
+
+const PRESET_TABLES: Partial<Record<ClothingType, Grading>> = {
+  "Camisa Infantil": INFANTIL_TABLE,
+  "Camisa Baby Look": BABY_LOOK_TABLE,
 };
 
 const bodyShape = (neckDepth: number): Node[] => [
@@ -349,6 +376,21 @@ function Index() {
     localStorage.setItem(LS_GRADING, JSON.stringify(table));
     setSavedMsg("Tabela salva neste navegador");
     setTimeout(() => setSavedMsg(""), 2500);
+  };
+
+  /* Troca o tipo de peça e, quando existe, injeta a tabela de medidas pré-definida */
+  const changeClothingType = (t: ClothingType) => {
+    setClothingType(t);
+    const preset = PRESET_TABLES[t];
+    if (!preset) return;
+    checkpoint("tipoPeca:" + t);
+    setTable(preset);
+    localStorage.setItem(LS_GRADING, JSON.stringify(preset));
+    setMother("M");
+    setSize("M");
+    localStorage.setItem(LS_MOTHER, "M");
+    setSavedMsg(`Tabela de medidas de ${t} carregada · Molde Mãe: M`);
+    setTimeout(() => setSavedMsg(""), 3500);
   };
 
   const artView: View = view;
@@ -599,9 +641,14 @@ function Index() {
           <div className="relative">
             <select
               value={clothingType}
-              onChange={(e) => setClothingType(e.target.value as ClothingType)}
+              onChange={(e) => changeClothingType(e.target.value as ClothingType)}
               className="w-full appearance-none bg-panel2 border border-line rounded-md pl-3 pr-9 py-2.5 text-sm text-foreground font-medium focus:outline-none focus:border-cyan/60 cursor-pointer"
             >
+              {NEW_CLOTHING_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
               <option>Camiseta</option>
               <option>Moletom</option>
               <option>Regata</option>
