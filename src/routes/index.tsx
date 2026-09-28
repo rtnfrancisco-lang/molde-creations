@@ -217,6 +217,8 @@ const fmt = (n: number) => n.toFixed(1).replace(".", ",");
 
 /* ================= Página ================= */
 
+const PLOTTER_MARGIN = 2; // cm de margem padrão do quadro de mídia em volta do molde
+
 function Index() {
   const [clothingType, setClothingType] = useState<ClothingType>("Camiseta");
   const [table, setTable] = useState<Grading>(DEFAULT_TABLE);
@@ -621,7 +623,6 @@ function Index() {
 
   /* ================= Exportação inteligente para Plotter ================= */
 
-  const PLOTTER_MARGIN = 2; // cm de margem padrão do quadro de mídia em volta do molde
 
   const activeDims = () => {
     const isBody = view === "frente" || view === "costas";
@@ -1226,6 +1227,9 @@ function Index() {
                   selLayer={selLayer}
                   onSelLayer={setSelLayer}
                   onLayersChange={(arr) => setViewLayers(arr)}
+                  showSeam={showSeam}
+                  showBleed={showBleed}
+                  showSafety={showSafety}
                 />
                 {/* Painel de camadas */}
                 <div className="absolute top-3 right-3 w-60 rounded-md border border-line bg-panel shadow-lg text-xs z-10">
@@ -1564,6 +1568,9 @@ function PatternCanvas({
   selLayer,
   onSelLayer,
   onLayersChange,
+  showSeam = true,
+  showBleed = true,
+  showSafety = true,
 }: {
   view: View;
   size: Size;
@@ -1583,6 +1590,9 @@ function PatternCanvas({
   selLayer: string | null;
   onSelLayer: (id: string | null) => void;
   onLayersChange: (l: Layer[]) => void;
+  showSeam?: boolean;
+  showBleed?: boolean;
+  showSafety?: boolean;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
