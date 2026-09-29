@@ -360,7 +360,7 @@ const parseFigures = (d: string): Figure[] | null => {
 
 /* --------------------- amostragem com normais exatas --------------------- */
 
-type Sample = { p: Vec; tIn: Vec; tOut: Vec };
+type Sample = { p: Vec; tIn: Vec; tOut: Vec; anchor: boolean };
 type BuiltFigure = { samples: Sample[]; closed: boolean; area: number };
 
 const cubicAt = (s: CubicSeg, t: number): Vec => {
@@ -387,22 +387,40 @@ const cubicTangent = (s: CubicSeg, t: number): Vec => {
   };
 };
 
-/** Subdivide a curva até o desvio da corda cair abaixo da tolerância. */
-const sampleCubic = (s: CubicSeg, tol: number, out: { p: Vec; t: Vec }[]): void => {
+/** A tangente na ponta pode ter derivada nula quando uma alça coincide com o nó. */
+const endpointTangent = (s: CubicSeg, atEnd: boolean): Vec => {
+  const p = atEnd ? s.p3 : s.p0;
+  const controls = atEnd ? [s.c2, s.c1, s.p0] : [s.c1, s.c2, s.p3];
+  for (const q of controls) {
+    const t = unit(atEnd ? sub(p, q) : sub(q, p));
+    if (mag(t) > EPS) return t;
+  }
+  return { x: 0, y: 0 };
+};
+
+/** Subdivide até a própria paralela (não apenas a curva mestra) ter erro pequeno. */
+const sampleCubic = (s: CubicSeg, tol: number, k: number, out: { p: Vec; t: Vec }[]): void => {
   const rec = (t0: number, t1: number, depth: number) => {
     const p0 = cubicAt(s, t0);
     const p3 = cubicAt(s, t1);
-    const pm = cubicAt(s, (t0 + t1) / 2);
+    const tm = (t0 + t1) / 2;
+    const pm = cubicAt(s, tm);
     const chord = sub(p3, p0);
     const dev = mag(chord) > EPS ? Math.abs(cross(sub(pm, p0), unit(chord))) : mag(sub(pm, p0));
-    if (depth >= 10 || dev <= tol) {
+    const tStart = t0 === 0 ? endpointTangent(s, false) : unit(cubicTangent(s, t0));
+    const tEnd = t1 === 1 ? endpointTangent(s, true) : unit(cubicTangent(s, t1));
+    const tMid = unit(cubicTangent(s, tm));
+    const a = offsetPoint(p0, tStart, k);
+    const b = offsetPoint(p3, tEnd, k);
+    const m = offsetPoint(pm, tMid, k);
+    const offsetError = mag(sub(m, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }));
+    if (depth >= 14 || (dev <= tol && offsetError <= tol)) {
       const prev = out[out.length - 1];
-      const tv = unit(cubicTangent(s, t1));
+      const tv = tEnd;
       const tang = mag(tv) > EPS ? tv : prev ? unit(sub(p3, prev.p)) : { x: 1, y: 0 };
       out.push({ p: p3, t: tang });
       return;
     }
-    const tm = (t0 + t1) / 2;
     rec(t0, tm, depth + 1);
     rec(tm, t1, depth + 1);
   };
@@ -410,7 +428,7 @@ const sampleCubic = (s: CubicSeg, tol: number, out: { p: Vec; t: Vec }[]): void 
 };
 
 /** Lista de amostras da figura, com a tangente de entrada e de saída em cada ponto. */
-const buildSamples = (fig: Figure, tol: number): BuiltFigure => {
+const buildSamples = (fig: Figure, tol: number, k: number): BuiltFigure => {
   const samples: Sample[] = [];
 
   /* Ponto de junção: se o novo ponto cai em cima do último, ele não vira um nó
@@ -418,32 +436,35 @@ const buildSamples = (fig: Figure, tol: number): BuiltFigure => {
      da Bézier (t = 0 / t = 1) na ponta compartilhada com a reta do ombro na hora
      de resolver a esquadria pela bissetriz. A tolerância acompanha a do molde. */
   const joinEps = Math.max(tol * 0.05, 1e-9);
-  const add = (p: Vec, t: Vec) => {
+  const add = (p: Vec, t: Vec, anchor: boolean) => {
     const last = samples[samples.length - 1];
     if (last && mag(sub(last.p, p)) <= joinEps) {
       last.tOut = t;
       last.p = p;
+      last.anchor ||= anchor;
       return;
     }
-    samples.push({ p, tIn: t, tOut: t });
+    samples.push({ p, tIn: t, tOut: t, anchor });
   };
 
   let first = true;
   for (const seg of fig.segs) {
-    const pts: { p: Vec; t: Vec }[] = [];
+    const pts: { p: Vec; t: Vec; anchor: boolean }[] = [];
     if (seg.kind === "L") {
       const t = unit(sub(seg.b, seg.a));
-      pts.push({ p: seg.a, t }, { p: seg.b, t });
+      pts.push({ p: seg.a, t, anchor: true }, { p: seg.b, t, anchor: true });
     } else {
-      pts.push({ p: seg.p0, t: unit(cubicTangent(seg, 0)) });
-      sampleCubic(seg, tol, pts);
+      pts.push({ p: seg.p0, t: endpointTangent(seg, false), anchor: true });
+      const sampled: { p: Vec; t: Vec }[] = [];
+      sampleCubic(seg, tol, k, sampled);
+      sampled.forEach((q, i) => pts.push({ ...q, anchor: i === sampled.length - 1 }));
     }
     for (const q of pts) {
       if (first) {
-        samples.push({ p: q.p, tIn: q.t, tOut: q.t });
+        samples.push({ p: q.p, tIn: q.t, tOut: q.t, anchor: true });
         first = false;
       } else {
-        add(q.p, q.t);
+        add(q.p, q.t, q.anchor);
       }
     }
   }
@@ -520,7 +541,7 @@ const solveCorner = (
   tOut: Vec,
   k: number,
   join: "round" | "miter",
-  miterLimit: number,
+  _miterLimit: number,
 ): Corner => {
   const pIn = offsetPoint(v, tIn, k);
   const pOut = offsetPoint(v, tOut, k);
@@ -534,7 +555,6 @@ const solveCorner = (
   if (turn < 1e-7) return { kind: "straight", p: pOut };
 
   const cosHalf = Math.cos(turn / 2); // = sin(ângulo interno / 2)
-  const sinHalf = Math.sin(turn / 2);
   const nIn = perp(tIn);
   const nOut = perp(tOut);
   const sum = { x: nIn.x + nOut.x, y: nIn.y + nOut.y };
@@ -542,22 +562,19 @@ const solveCorner = (
 
   /* Volta de 180° (ou ângulo degenerado): as duas paralelas não se cruzam —
      fecha com chanfro ou arco, sempre a |k| da mestra. */
-  if (sinHalf <= 1e-9 || sumLen <= 1e-9 || cosHalf <= 1e-9) {
+  if (sumLen <= 1e-9 || cosHalf <= 1e-9) {
     return { kind: "bevel", pts: join === "round" ? roundArc(v, tIn, tOut, k) : [pIn, pOut] };
   }
 
   const bis = { x: sum.x / sumLen, y: sum.y / sumLen };
-  const dist = k / cosHalf; // distância medida NA bissetriz até o encontro
-  const limit = miterLimit * Math.abs(k);
-
-  if (Math.abs(dist) <= limit) {
-    const p = { x: v.x + bis.x * dist, y: v.y + bis.y * dist };
-    if (Number.isFinite(p.x) && Number.isFinite(p.y)) return { kind: "miter", p };
-  }
-
-  /* Esquadria passou do limite: chanfro com os DOIS pontos a |k| da mestra —
-     era aqui que o cap antigo trazia a linha para cima da preta. */
-  return { kind: "bevel", pts: join === "round" ? roundArc(v, tIn, tOut, k) : [pIn, pOut] };
+  /* Ângulo interno = π - turn; sen(ângulo interno/2) = cos(turn/2).
+     Não truncar nem chanfrar nós reais: as duas cores devem manter o mesmo eixo. */
+  const halfAngle = (Math.PI - turn) / 2;
+  const dist = k / Math.sin(halfAngle);
+  const p = { x: v.x + bis.x * dist, y: v.y + bis.y * dist };
+  return Number.isFinite(p.x) && Number.isFinite(p.y)
+    ? { kind: "miter", p }
+    : { kind: "bevel", pts: join === "round" ? roundArc(v, tIn, tOut, k) : [pIn, pOut] };
 };
 
 /** Cruzamento próprio de dois segmentos (ignora toques nas pontas/vértices). */
@@ -583,6 +600,7 @@ const offsetPolyline = (
   k: number,
   join: "round" | "miter",
   miterLimit: number,
+  closed: boolean,
 ): Vec[] => {
   const n = samples.length;
   const out: Vec[] = [];
@@ -595,8 +613,8 @@ const offsetPolyline = (
 
   for (let i = 0; i < n; i++) {
     const s = samples[i]!;
-    const prevP = n > 1 ? samples[(i - 1 + n) % n]!.p : s.p;
-    const nextP = n > 1 ? samples[(i + 1) % n]!.p : s.p;
+    const prevP = i > 0 ? samples[i - 1]!.p : closed ? samples[n - 1]!.p : s.p;
+    const nextP = i < n - 1 ? samples[i + 1]!.p : closed ? samples[0]!.p : s.p;
 
     /* Tangente de entrada e de saída NO vértice. No lado curvo é a DERIVADA
        exata da Bézier na ponta (t = 1 na entrada, t = 0 na saída); se o nó vier
@@ -610,6 +628,12 @@ const offsetPolyline = (
        que jogar um ponto em cima da linha de costura). */
     if (mag(tIn) <= 1e-9 || mag(tOut) <= 1e-9) continue;
 
+    /* Pontos interiores de uma curva são normais puras; só as âncoras recebem
+       a esquadria da bissetriz. Extremidades abertas têm apenas uma tangente. */
+    if (!s.anchor || (!closed && (i === 0 || i === n - 1))) {
+      push(offsetPoint(s.p, i === n - 1 ? tIn : tOut, k));
+      continue;
+    }
     const corner = solveCorner(s.p, tIn, tOut, k, join, miterLimit);
     if (corner.kind === "bevel") {
       for (const p of corner.pts) push(p);
@@ -702,7 +726,7 @@ export function offsetPathD(d: string, distance: number, options: OffsetOptions 
 
   const built: BuiltFigure[] = [];
   for (const f of figures) {
-    const b = buildSamples(f, tol);
+    const b = buildSamples(f, tol, distance);
     if (b.samples.length >= 2) built.push(b);
   }
   if (built.length === 0) return d;
@@ -715,7 +739,7 @@ export function offsetPathD(d: string, distance: number, options: OffsetOptions 
 
   const parts: string[] = [];
   for (const b of built) {
-    const raw = offsetPolyline(b.samples, k, join, miterLimit);
+    const raw = offsetPolyline(b.samples, k, join, miterLimit, b.closed);
     /* Laço só nasce no offset para DENTRO (curvatura mais apertada que a
        distância). No contorno externo da sangria o traçado sai intacto, para
        não cortar as quinas resolvidas pela bissetriz. */
