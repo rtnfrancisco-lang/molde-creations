@@ -45,9 +45,9 @@
        apenas âncoras verdadeiras recebem esquadria. Nós não são truncados
        por um limite de esquadria: ambos os vértices ficam sobre a bissetriz.
 
-   5. LAÇOS — no offset para DENTRO (zona de segurança) curvas apertadas fazem a
-      paralela se cruzar; esses laços são cortados na auto-interseção para não
-      sobrar trecho atravessando a linha mestre.
+    5. CANTOS PRESERVADOS — não se cortam laços no traçado resultante: fazer
+       isso substituiria os vértices obrigatórios por interseções fora do eixo
+       dos nós (sobretudo na zona de segurança interna).
 
    API: offsetPathD(d, distance[, options]).
    ============================================================================ */
@@ -573,19 +573,6 @@ const solveCorner = (
     : { kind: "bevel", pts: join === "round" ? roundArc(v, tIn, tOut, k) : [pIn, pOut] };
 };
 
-/** Cruzamento próprio de dois segmentos (ignora toques nas pontas/vértices). */
-const segCross = (p1: Vec, p2: Vec, p3: Vec, p4: Vec): Vec | null => {
-  const r = sub(p2, p1);
-  const s = sub(p4, p3);
-  const den = cross(r, s);
-  if (Math.abs(den) < 1e-12) return null;
-  const qp = sub(p3, p1);
-  const t = cross(qp, s) / den;
-  const u = cross(qp, r) / den;
-  if (t <= 1e-6 || t >= 1 - 1e-6 || u <= 1e-6 || u >= 1 - 1e-6) return null;
-  return { x: p1.x + r.x * t, y: p1.y + r.y * t };
-};
-
 /**
  * Constrói a polilinha paralela resolvendo CADA canto pela bissetriz exata do
  * nó (esquadria / miter), como no efeito Contorno do CorelDRAW, e mantendo todos
@@ -636,39 +623,6 @@ const offsetPolyline = (
     } else {
       push(corner.p);
     }
-  }
-
-  return out;
-};
-
-/** Corta laços criados por curva apertada nos offsets para dentro. */
-const removeLoops = (input: Vec[], closed: boolean): Vec[] => {
-  let out = input;
-  if (out.length < 4) return out;
-
-  for (let guard = 0; guard < 32; guard++) {
-    const n = out.length;
-    if (n < 4) break;
-    const segCount = closed ? n : n - 1;
-    let cut = false;
-
-    for (let i = 0; i < segCount && !cut; i++) {
-      const a = out[i]!;
-      const b = out[(i + 1) % n]!;
-      for (let j = i + 2; j < segCount; j++) {
-        if (closed && i === 0 && j === segCount - 1) continue;
-        const c = out[j]!;
-        const e = out[(j + 1) % n]!;
-        const x = segCross(a, b, c, e);
-        if (x) {
-          out = out.slice(0, i + 1).concat([x], out.slice(j + 1));
-          cut = true;
-          break;
-        }
-      }
-    }
-
-    if (!cut) break;
   }
 
   return out;
@@ -736,10 +690,9 @@ export function offsetPathD(d: string, distance: number, options: OffsetOptions 
   const parts: string[] = [];
   for (const b of built) {
     const raw = offsetPolyline(b.samples, k, join, miterLimit, b.closed);
-    /* Laço só nasce no offset para DENTRO (curvatura mais apertada que a
-       distância). No contorno externo da sangria o traçado sai intacto, para
-       não cortar as quinas resolvidas pela bissetriz. */
-    const pts = distance < 0 ? removeLoops(raw, b.closed) : raw;
+    /* Preservar cada vértice calculado na bissetriz, inclusive nos recortes
+       côncavos: cortar auto-interseções deslocaria os cantos dos nós mestres. */
+    const pts = raw;
     if (pts.length < 2) continue;
     let s = `M ${fmt(pts[0]!.x)} ${fmt(pts[0]!.y)}`;
     for (let i = 1; i < pts.length; i++) s += ` L ${fmt(pts[i]!.x)} ${fmt(pts[i]!.y)}`;
