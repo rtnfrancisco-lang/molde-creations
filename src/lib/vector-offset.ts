@@ -626,6 +626,63 @@ const offsetPolyline = (
   return out;
 };
 
+/* --------------------- limpeza de auto-interseções (offset interno) --------------------- */
+
+/**
+ * Interseção do segmento p1->p2 com o segmento p3->p4, se houver (parâmetros em
+ * [0,1] nos dois). Usada só para limpar os laços que o offset PARA DENTRO cria
+ * em cantos estreitos (ombro/decote), onde as duas paralelas internas se cruzam.
+ */
+const segIntersect = (p1: Vec, p2: Vec, p3: Vec, p4: Vec): Vec | null => {
+  const r = sub(p2, p1);
+  const s = sub(p4, p3);
+  const denom = cross(r, s);
+  if (Math.abs(denom) < EPS) return null;
+  const qp = sub(p3, p1);
+  const t = cross(qp, s) / denom;
+  const u = cross(qp, r) / denom;
+  const marginT = 1e-9;
+  if (t < -marginT || t > 1 + marginT || u < -marginT || u > 1 + marginT) return null;
+  return { x: p1.x + r.x * t, y: p1.y + r.y * t };
+};
+
+/**
+ * Remove laços invertidos da polilinha resultante do offset PARA DENTRO. Quando
+ * dois segmentos não adjacentes se cruzam, o trecho entre eles é um laço (o bico
+ * invertido do ombro e a reta vertical fantasma no centro): descartamos esse
+ * trecho e emendamos os dois lados no ponto exato de interseção. É aplicado só
+ * na linha vermelha (distância negativa); a azul e a preta não passam por aqui.
+ */
+const removeSelfIntersections = (pts: Vec[], closed: boolean): Vec[] => {
+  if (pts.length < 4) return pts;
+  let poly = pts.slice();
+  const maxPasses = 8;
+  for (let pass = 0; pass < maxPasses; pass++) {
+    const n = poly.length;
+    const segCount = closed ? n : n - 1;
+    let cut = false;
+    for (let i = 0; i < segCount && !cut; i++) {
+      const a1 = poly[i]!;
+      const a2 = poly[(i + 1) % n]!;
+      for (let j = i + 2; j < segCount && !cut; j++) {
+        // pula segmentos adjacentes (compartilham vértice) e o fechamento colado no início
+        if (i === 0 && j === segCount - 1 && closed) continue;
+        const b1 = poly[j]!;
+        const b2 = poly[(j + 1) % n]!;
+        const hit = segIntersect(a1, a2, b1, b2);
+        if (!hit) continue;
+        // corta o laço: mantém 0..i, insere o cruzamento, retoma em j+1
+        const head = poly.slice(0, i + 1);
+        const tail = poly.slice(j + 1);
+        poly = [...head, hit, ...tail];
+        cut = true;
+      }
+    }
+    if (!cut) break;
+  }
+  return poly;
+};
+
 /** Caixa dos pontos de controle: serve só para estimar a tolerância da amostragem. */
 const sizeOf = (figures: Figure[]): number => {
   let minX = Infinity;
@@ -687,9 +744,11 @@ export function offsetPathD(d: string, distance: number, options: OffsetOptions 
   const parts: string[] = [];
   for (const b of built) {
     const raw = offsetPolyline(b.samples, k, join, b.closed);
-    /* Preservar cada vértice calculado na bissetriz, inclusive nos recortes
-       côncavos: cortar auto-interseções deslocaria os cantos dos nós mestres. */
-    const pts = raw;
+    /* Offset PARA FORA (azul) preserva cada vértice da bissetriz — não tem laço.
+       Offset PARA DENTRO (vermelho) pode cruzar em cantos estreitos como ombro e
+       decote, gerando o bico invertido e a reta vertical fantasma: só nesse caso
+       limpamos as auto-interseções, emendando no ponto exato de cruzamento. */
+    const pts = distance < 0 ? removeSelfIntersections(raw, b.closed) : raw;
     if (pts.length < 2) continue;
     let s = `M ${fmt(pts[0]!.x)} ${fmt(pts[0]!.y)}`;
     for (let i = 1; i < pts.length; i++) s += ` L ${fmt(pts[i]!.x)} ${fmt(pts[i]!.y)}`;
