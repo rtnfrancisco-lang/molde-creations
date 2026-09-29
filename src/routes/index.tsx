@@ -2287,8 +2287,14 @@ function PatternCanvas({
                 strokeWidth={2}
                 vectorEffect="non-scaling-stroke"
               />
-              <text x={fx} y={fy - unit * 1.2} fontSize={unit * 1.3} className="fill-faint font-mono">
-                QUADRO DE MÍDIA · {fmt(fw)} × {fmt(fh)} cm
+              <text
+                x={fx + unit * 1.2}
+                y={fy + unit * 2.2}
+                fontSize={unit * 1.3}
+                fontWeight="bold"
+                className="fill-ink font-mono uppercase"
+              >
+                {techLabel(clothingType, size, view)} · QUADRO DE MÍDIA {fmt(fw)} × {fmt(fh)} cm
               </text>
             </>
           );
