@@ -2235,25 +2235,19 @@ function PatternCanvas({
         style={partStyle.stroke ? { stroke: partStyle.stroke } : undefined}
       />
 
-      {/* Áreas técnicas de segurança e costura — recalculadas em cm a cada troca de tamanho */}
+      {/* Mesma geometria vetorial do arquivo de produção, em centímetros reais. */}
       {(() => {
         const seam = buildPath(nodes, W, H);
-        /* Sangria: +1 cm para fora em largura e altura (expansão exata). */
-        const bleed = `translate(0 -1) scale(${(W + 2) / W} ${(H + 2) / H})`;
-        /* Zona de segurança: 1 cm nas laterais e no topo; 4 cm na barra das Costas. */
-        const top = 1;
-        const bottom = activeView.current === "costas" ? 4 : 1;
-        const safeSx = Math.max((W - 2) / W, 0.1);
-        const safeSy = Math.max((H - top - bottom) / H, 0.1);
-        const safe = `translate(0 ${top}) scale(${safeSx} ${safeSy})`;
+        const bleed = offsetPathD(seam, BLEED_OFFSET_CM, TECHNICAL_OFFSET_OPTIONS);
+        const safety = offsetPathD(seam, SAFETY_OFFSET_CM, TECHNICAL_OFFSET_OPTIONS);
         return (
           <g className="pointer-events-none">
-            <path d={seam} transform={bleed} className="fill-none stroke-sky-400" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+            {showBleed && <path d={bleed} className="fill-none stroke-sky-400" strokeWidth={1} vectorEffect="non-scaling-stroke" />}
             {showSeam && (
               <path d={seam} className="fill-none stroke-ink" strokeWidth={1} vectorEffect="non-scaling-stroke" />
             )}
             {showSafety && (
-              <path d={seam} transform={safe} className="fill-none stroke-red-500" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+              <path d={safety} className="fill-none stroke-red-500" strokeWidth={1} vectorEffect="non-scaling-stroke" />
             )}
           </g>
         );
@@ -2264,18 +2258,13 @@ function PatternCanvas({
         </text>
       )}
 
-      {/* Visibilidade da linha de sangria (+1cm) — filtra as camadas azuis do canvas */}
-      {!showBleed && (
-        <style>{`[class*="stroke-sky"], [class*="stroke-blue"] { display: none; }`}</style>
-      )}
-
       {/* Quadro de Mídia do Plotter — retângulo externo automático em volta do molde */}
       <g className="pointer-events-none">
         {(() => {
           /* Mesma caixa usada na exportação: limites absolutos da Linha Azul de
              Sangria, sem margem, para o quadro colar no contorno do molde. */
           const bb =
-            pathBounds(offsetPathD(buildPath(nodes, W, H), 1, { join: "miter", miterLimit: 4 })) ?? {
+            pathBounds(offsetPathD(buildPath(nodes, W, H), BLEED_OFFSET_CM, TECHNICAL_OFFSET_OPTIONS)) ?? {
               minX: -W / 2 - PLOTTER_MARGIN,
               minY: -PLOTTER_MARGIN,
               maxX: W / 2 + PLOTTER_MARGIN,
