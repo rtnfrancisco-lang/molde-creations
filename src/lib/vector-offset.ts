@@ -40,14 +40,10 @@
       nenhum deslocamento lateral: bico do ombro, encontro com o decote, quina
       da cava/manga e barra.
 
-   4. SEM ACHATAMENTO / SEM COLAPSO — quando a esquadria passa do limite
-      ("miter limit"), o ponto NÃO escorrega mais pela bissetriz até o limite:
-      era isso que trazia o vértice azul para cima da linha preta nas quinas
-      agudas (a distância até a mestra caía para menos de metade do deslocamento
-      pedido e a linha colapsava ao sair do canto rumo à cava/manga). Agora,
-      passando do limite, o canto vira CHANFRO com os DOIS pontos na distância
-      exata |d| (ou arco de raio |d| no join "round"). A paralela nunca fica mais
-      perto da linha mestra do que o deslocamento pedido.
+    4. SEM ACHATAMENTO — a subdivisão mede o erro da curva deslocada, não só
+       o desvio da curva mestra. Amostras interiores seguem a normal local;
+       apenas âncoras verdadeiras recebem esquadria. Nós não são truncados
+       por um limite de esquadria: ambos os vértices ficam sobre a bissetriz.
 
    5. LAÇOS — no offset para DENTRO (zona de segurança) curvas apertadas fazem a
       paralela se cruzar; esses laços são cortados na auto-interseção para não
@@ -61,7 +57,7 @@ type Vec = { x: number; y: number };
 export type OffsetOptions = {
   /** Canto em esquadria por interseção exata ("miter", padrão) ou arco ("round"). */
   join?: "round" | "miter";
-  /** Limite da esquadria em múltiplos da distância (padrão 4). */
+  /** Compatibilidade com chamadas anteriores; nós reais nunca são truncados. */
   miterLimit?: number;
   /** Tolerância da subdivisão das curvas, na mesma unidade do "d" (padrão: 0,005% da diagonal do molde). */
   tolerance?: number;
@@ -89,9 +85,9 @@ const perp = (t: Vec): Vec => ({ x: t.y, y: -t.x });
 const cross = (a: Vec, b: Vec): number => a.x * b.y - a.y * b.x;
 const dot = (a: Vec, b: Vec): number => a.x * b.x + a.y * b.y;
 
-/** Arredonda para 3 casas e evita "-0" no resultado. */
+/** Preserva a posição submilimétrica da bissetriz e evita "-0" no SVG. */
 const fmt = (v: number): string => {
-  const r = Math.round(v * 1000) / 1000;
+  const r = Math.round(v * 1e6) / 1e6;
   return String(Object.is(r, -0) ? 0 : r);
 };
 
@@ -532,8 +528,8 @@ const roundArc = (v: Vec, tIn: Vec, tOut: Vec, k: number): Vec[] => {
  * perpendicular dos DOIS lados (reta ou Bézier, porque a tangente usada é a
  * derivada exata na ponta de cada um deles). Nenhum deslocamento lateral.
  *
- * Passando do miter limit o canto vira chanfro (ou arco) com os dois pontos a
- * exatamente |k| — nunca escorregando pela bissetriz até colar na linha mestra.
+  * Só a volta degenerada de 180° usa chanfro/arco: suas normais opostas não
+  * definem uma bissetriz única. Nós normais nunca são truncados.
  */
 const solveCorner = (
   v: Vec,
