@@ -1313,6 +1313,7 @@ function Index() {
               </div>
               <div className="flex-1 min-w-0 relative bg-canvas blueprint-grid blueprint-grid-fine overflow-hidden">
                 <PatternCanvas
+                  clothingType={clothingType}
                   view={view}
                   size={size}
                   graded={graded}
@@ -1675,7 +1676,9 @@ function PatternCanvas({
   showSeam = true,
   showBleed = true,
   showSafety = true,
+  clothingType,
 }: {
+  clothingType: ClothingType;
   view: View;
   size: Size;
   graded: Record<Size, Measurements>;
