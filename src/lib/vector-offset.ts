@@ -301,7 +301,7 @@ const parseFigures = (d: string): Figure[] | null => {
 
     if (C === "Q" || C === "T") {
       for (let i = 0; i + 4 <= args.length; i += 4) {
-        const q =
+        const q: { x: number; y: number } =
           C === "Q"
             ? { x: ax(i), y: ay(i + 1) }
             : ctrlQ
