@@ -22,24 +22,32 @@
       distância perpendicular do traçado mestre em toda a volta — decote, ombro,
       cava, barra e manga.
 
-   3. CANTO POR BISSETRIZ (esquadria / miter) — em CADA vértice, inclusive nos
-      encontros entre reta e Bézier (ombro x decote, ombro x cava):
-        n_in  = normal do lado que chega  (perp da tangente EXATA em p)
-        n_out = normal do lado que sai    (perp da tangente EXATA em p)
-        b     = unit(n_in + n_out)        <- bissetriz do vértice
-        canto = p + b * (d / cos(φ/2))    <- ponto de união
-      A tangente de um lado curvo é a DERIVADA da Bézier na própria ponta
-      (t = 0 na entrada, t = 1 na saída) — nunca uma corda aproximada. A quina
-      cai sempre em cima da bissetriz do nó mestre (o quadrado branco): bico do
-      ombro, encontro com o decote, quina da cava, da barra e da manga, como no
-      efeito Contorno do CorelDRAW.
+   3. CANTO PELA BISSETRIZ EXATA DO NÓ — em cada âncora (o quadrado branco do
+      canvas) são lidas as DUAS tangentes: a de ENTRADA (derivada exata do lado
+      que chega, no fim do segmento) e a de SAÍDA (derivada exata do lado que
+      sai, no início do segmento). Reta x reta, reta x Bézier e Bézier x Bézier
+      passam pelo MESMO cálculo:
 
-   4. MITER LIMIT — quando a esquadria passa do limite (ponta aguda demais) o
-      ponto de união escorrega pela PRÓPRIA bissetriz até o limite, em vez de
-      virar chanfro: era o chanfro (com d = 4 cm) que achatava a linha vermelha
-      no ombro e a jogava por cima da linha mestra. Só na volta de 180°, onde as
-      duas paralelas não se cruzam, o canto fecha com arco (join: "round") ou
-      com chanfro, sempre mantendo a distância |d|.
+        θ     = ângulo entre tIn e tOut
+        nIn   = perp(tIn)            nOut = perp(tOut)
+        b     = unit(nIn + nOut)     <- bissetriz do vértice
+        dist  = |d| / sin(ângulo interno / 2)      (ângulo interno = π - θ)
+              = |d| / cos(θ / 2)
+        canto = p + b * dist
+
+      O vértice deslocado das linhas Azul (+1,0 cm) e Vermelha (-margem) cai
+      SEMPRE em cima dessa bissetriz, a |d| exatos das duas paralelas — sem
+      nenhum deslocamento lateral: bico do ombro, encontro com o decote, quina
+      da cava/manga e barra.
+
+   4. SEM ACHATAMENTO / SEM COLAPSO — quando a esquadria passa do limite
+      ("miter limit"), o ponto NÃO escorrega mais pela bissetriz até o limite:
+      era isso que trazia o vértice azul para cima da linha preta nas quinas
+      agudas (a distância até a mestra caía para menos de metade do deslocamento
+      pedido e a linha colapsava ao sair do canto rumo à cava/manga). Agora,
+      passando do limite, o canto vira CHANFRO com os DOIS pontos na distância
+      exata |d| (ou arco de raio |d| no join "round"). A paralela nunca fica mais
+      perto da linha mestra do que o deslocamento pedido.
 
    5. LAÇOS — no offset para DENTRO (zona de segurança) curvas apertadas fazem a
       paralela se cruzar; esses laços são cortados na auto-interseção para não
@@ -58,6 +66,13 @@ export type OffsetOptions = {
   /** Tolerância da subdivisão das curvas, na mesma unidade do "d" (padrão: 0,005% da diagonal do molde). */
   tolerance?: number;
 };
+
+/** Deslocamento canônico da Margem de Sangria (azul): 1,0 cm para fora. */
+export const BLEED_OFFSET_CM = 1;
+/** Deslocamento canônico da Zona de Segurança (vermelha): 4 cm para dentro. */
+export const SAFETY_OFFSET_CM = -4;
+/** Opções usadas por quem desenha/exporta as linhas técnicas. */
+export const TECHNICAL_OFFSET_OPTIONS: OffsetOptions = { join: "miter", miterLimit: 4 };
 
 const EPS = 1e-12;
 
@@ -401,7 +416,7 @@ const buildSamples = (fig: Figure, tol: number): BuiltFigure => {
   /* Ponto de junção: se o novo ponto cai em cima do último, ele não vira um nó
      novo — só atualiza a tangente de saída. É isso que carrega a DERIVADA exata
      da Bézier (t = 0 / t = 1) na ponta compartilhada com a reta do ombro na hora
-     de resolver a esquadria. A tolerância acompanha a do molde. */
+     de resolver a esquadria pela bissetriz. A tolerância acompanha a do molde. */
   const joinEps = Math.max(tol * 0.05, 1e-9);
   const add = (p: Vec, t: Vec) => {
     const last = samples[samples.length - 1];
@@ -456,38 +471,93 @@ const buildSamples = (fig: Figure, tol: number): BuiltFigure => {
 
 /* --------------------------- offset / junções --------------------------- */
 
+/** Ponto da paralela: o nó deslocado na normal da tangente informada. */
+const offsetPoint = (p: Vec, t: Vec, k: number): Vec => {
+  const n = perp(unit(t));
+  return { x: p.x + n.x * k, y: p.y + n.y * k };
+};
+
+type Corner =
+  | { kind: "straight"; p: Vec }
+  | { kind: "miter"; p: Vec }
+  | { kind: "bevel"; pts: Vec[] };
+
+/** Arco de raio |k| em volta do nó, do lado que chega até o lado que sai. */
+const roundArc = (v: Vec, tIn: Vec, tOut: Vec, k: number): Vec[] => {
+  const K = Math.abs(k);
+  const pIn = offsetPoint(v, tIn, k);
+  const turn = Math.atan2(cross(tIn, tOut), dot(tIn, tOut));
+  const a0 = Math.atan2(pIn.y - v.y, pIn.x - v.x);
+  const steps = Math.max(2, Math.ceil(Math.abs(turn) / 0.1));
+  const pts: Vec[] = [];
+  for (let j = 0; j <= steps; j++) {
+    const a = a0 + turn * (j / steps);
+    pts.push({ x: v.x + Math.cos(a) * K, y: v.y + Math.sin(a) * K });
+  }
+  return pts;
+};
+
 /**
- * Canto de esquadria resolvido pela BISSETRIZ das duas normais — é a mesma
- * interseção das paralelas, calculada de forma estável e sempre em cima da
- * bissetriz do vértice:
+ * Resolve UM nó (a âncora branca) pela BISSETRIZ EXATA do ângulo entre as duas
+ * tangentes — a de ENTRADA (lado que chega) e a de SAÍDA (lado que sai):
  *
- *   b     = unit(n_in + n_out)      (bissetriz do nó mestre)
- *   φ     = ângulo entre n_in e n_out
- *   reach = k / cos(φ/2)            (distância do vértice até o encontro)
- *   canto = p + b * reach
+ *   θ      = ângulo entre tIn e tOut
+ *   nIn    = perp(tIn)             nOut = perp(tOut)
+ *   b      = unit(nIn + nOut)      <- bissetriz do vértice
+ *   dist   = |k| / sin(ângulo interno / 2) = |k| / cos(θ / 2)
+ *   canto  = p + b * dist
  *
- * Como |n_in| = |n_out| = 1, cos(φ/2) = |n_in + n_out| / 2, e o ponto continua
- * exatamente a |k| de distância perpendicular dos DOIS lados — reta ou Bézier,
- * porque a tangente usada é a derivada exata na ponta de cada um deles.
- * Devolve null só na volta de 180°, onde as paralelas não se cruzam.
+ * O ponto está, por construção, na bissetriz do nó e a |k| exatos de distância
+ * perpendicular dos DOIS lados (reta ou Bézier, porque a tangente usada é a
+ * derivada exata na ponta de cada um deles). Nenhum deslocamento lateral.
+ *
+ * Passando do miter limit o canto vira chanfro (ou arco) com os dois pontos a
+ * exatamente |k| — nunca escorregando pela bissetriz até colar na linha mestra.
  */
-const miterPoint = (v: Vec, nIn: Vec, nOut: Vec, k: number, miterLimit: number): Vec | null => {
+const solveCorner = (
+  v: Vec,
+  tIn: Vec,
+  tOut: Vec,
+  k: number,
+  join: "round" | "miter",
+  miterLimit: number,
+): Corner => {
+  const pIn = offsetPoint(v, tIn, k);
+  const pOut = offsetPoint(v, tOut, k);
+
+  const sinT = cross(tIn, tOut);
+  const cosT = dot(tIn, tOut);
+  const turn = Math.abs(Math.atan2(sinT, cosT)); // ângulo entre as tangentes
+
+  /* Sem virada de direção (reta, ou curva densa o bastante para a tangente
+     praticamente não mudar): a paralela é o próprio ponto deslocado na normal. */
+  if (turn < 1e-7) return { kind: "straight", p: pOut };
+
+  const cosHalf = Math.cos(turn / 2); // = sin(ângulo interno / 2)
+  const sinHalf = Math.sin(turn / 2);
+  const nIn = perp(tIn);
+  const nOut = perp(tOut);
   const sum = { x: nIn.x + nOut.x, y: nIn.y + nOut.y };
-  const len = mag(sum);
-  if (len < 1e-9) return null;
+  const sumLen = mag(sum);
 
-  const bis = { x: sum.x / len, y: sum.y / len };
-  const cosHalf = Math.min(1, len / 2);
-  let reach = k / cosHalf;
+  /* Volta de 180° (ou ângulo degenerado): as duas paralelas não se cruzam —
+     fecha com chanfro ou arco, sempre a |k| da mestra. */
+  if (sinHalf <= 1e-9 || sumLen <= 1e-9 || cosHalf <= 1e-9) {
+    return { kind: "bevel", pts: join === "round" ? roundArc(v, tIn, tOut, k) : [pIn, pOut] };
+  }
 
-  /* Miter limit: a esquadria escorrega pela PRÓPRIA bissetriz até o limite em vez
-     de virar chanfro — o alinhamento com o nó mestre é preservado e a linha não
-     achata no ombro. */
-  const cap = miterLimit * Math.abs(k);
-  if (Math.abs(reach) > cap) reach = Math.sign(reach) * cap;
+  const bis = { x: sum.x / sumLen, y: sum.y / sumLen };
+  const dist = k / cosHalf; // distância medida NA bissetriz até o encontro
+  const limit = miterLimit * Math.abs(k);
 
-  const p = { x: v.x + bis.x * reach, y: v.y + bis.y * reach };
-  return Number.isFinite(p.x) && Number.isFinite(p.y) ? p : null;
+  if (Math.abs(dist) <= limit) {
+    const p = { x: v.x + bis.x * dist, y: v.y + bis.y * dist };
+    if (Number.isFinite(p.x) && Number.isFinite(p.y)) return { kind: "miter", p };
+  }
+
+  /* Esquadria passou do limite: chanfro com os DOIS pontos a |k| da mestra —
+     era aqui que o cap antigo trazia a linha para cima da preta. */
+  return { kind: "bevel", pts: join === "round" ? roundArc(v, tIn, tOut, k) : [pIn, pOut] };
 };
 
 /** Cruzamento próprio de dois segmentos (ignora toques nas pontas/vértices). */
@@ -504,22 +574,9 @@ const segCross = (p1: Vec, p2: Vec, p3: Vec, p4: Vec): Vec | null => {
 };
 
 /**
- * Constrói a polilinha paralela resolvendo CADA canto por BISSETRIZ
- * (esquadria / miter), como no efeito Contorno do CorelDRAW:
- *
- *   n_in  = perp(tangente de entrada exata em p)   <- lado que chega
- *   n_out = perp(tangente de saída exata em p)     <- lado que sai
- *   canto = p + unit(n_in + n_out) * (k / cos(φ/2))
- *
- * Esse ponto é exatamente a interseção das duas paralelas, logo está a |k| de
- * distância perpendicular da linha mestra e fica SEMPRE em cima da bissetriz do
- * vértice — no bico do ombro, no encontro com o decote e na quina da cava, reta
- * com curva ou curva com curva, sem empurrar vértice nem deformar a quina.
- *
- * Miter limit: quando a esquadria passa do limite o ponto escorrega pela própria
- * bissetriz (mantendo o alinhamento com o nó mestre) em vez de virar chanfro.
- * Só na volta de 180°, onde as paralelas não se cruzam, o canto fecha com arco
- * de raio |k| (join "round") ou com chanfro.
+ * Constrói a polilinha paralela resolvendo CADA canto pela bissetriz exata do
+ * nó (esquadria / miter), como no efeito Contorno do CorelDRAW, e mantendo todos
+ * os pontos na distância |k| da linha mestra.
  */
 const offsetPolyline = (
   samples: Sample[],
@@ -528,7 +585,6 @@ const offsetPolyline = (
   miterLimit: number,
 ): Vec[] => {
   const n = samples.length;
-  const K = Math.abs(k);
   const out: Vec[] = [];
 
   const push = (p: Vec) => {
@@ -543,50 +599,22 @@ const offsetPolyline = (
     const nextP = n > 1 ? samples[(i + 1) % n]!.p : s.p;
 
     /* Tangente de entrada e de saída NO vértice. No lado curvo é a DERIVADA
-       exata da Bézier na ponta (t = 0 na entrada, t = 1 na saída); se o nó vier
+       exata da Bézier na ponta (t = 1 na entrada, t = 0 na saída); se o nó vier
        com alça em cima dele mesmo (derivada nula) a direção cai para a corda
        vizinha — sem isso o ponto deslocado colapsava em cima da linha mestra. */
     let tIn = unit(s.tIn);
     let tOut = unit(s.tOut);
     if (mag(tIn) <= 1e-9) tIn = mag(sub(s.p, prevP)) > 1e-9 ? unit(sub(s.p, prevP)) : tOut;
     if (mag(tOut) <= 1e-9) tOut = mag(sub(nextP, s.p)) > 1e-9 ? unit(sub(nextP, s.p)) : tIn;
+    /* Sem direção conhecida: nenhum ponto é criado (melhor faltar um vértice do
+       que jogar um ponto em cima da linha de costura). */
+    if (mag(tIn) <= 1e-9 || mag(tOut) <= 1e-9) continue;
 
-    const nIn = perp(tIn);
-    const nOut = perp(tOut);
-    const pIn = { x: s.p.x + nIn.x * k, y: s.p.y + nIn.y * k };
-    const pOut = { x: s.p.x + nOut.x * k, y: s.p.y + nOut.y * k };
-
-    const turned = Math.abs(cross(tIn, tOut)) > 1e-9 || dot(tIn, tOut) < 0;
-
-    /* Trecho sem mudança de direção (reta, ou curva densa o bastante para a
-       tangente praticamente não virar): a paralela exata já é o próprio ponto
-       deslocado na normal. */
-    if (!turned) {
-      push(pOut);
-      continue;
-    }
-
-    /* 1) Esquadria por bissetriz: reta x reta, reta x Bézier e Bézier x Bézier
-       passam pelo MESMO cálculo, cada lado com a sua tangente exata na ponta. */
-    const miter = miterPoint(s.p, nIn, nOut, k, miterLimit);
-    if (miter) {
-      push(miter);
-      continue;
-    }
-
-    /* 2) Volta de 180° (as duas paralelas não se cruzam): fecha com arco de raio
-       |k| no join "round" ou com chanfro, sempre mantendo a distância |k|. */
-    if (join === "round") {
-      const a0 = Math.atan2(pIn.y - s.p.y, pIn.x - s.p.x);
-      const turn = Math.atan2(cross(tIn, tOut), dot(tIn, tOut));
-      const steps = Math.max(2, Math.ceil(Math.abs(turn) / 0.1));
-      for (let j = 0; j <= steps; j++) {
-        const a = a0 + turn * (j / steps);
-        push({ x: s.p.x + Math.cos(a) * K, y: s.p.y + Math.sin(a) * K });
-      }
+    const corner = solveCorner(s.p, tIn, tOut, k, join, miterLimit);
+    if (corner.kind === "bevel") {
+      for (const p of corner.pts) push(p);
     } else {
-      push(pIn);
-      push(pOut);
+      push(corner.p);
     }
   }
 
@@ -690,7 +718,7 @@ export function offsetPathD(d: string, distance: number, options: OffsetOptions 
     const raw = offsetPolyline(b.samples, k, join, miterLimit);
     /* Laço só nasce no offset para DENTRO (curvatura mais apertada que a
        distância). No contorno externo da sangria o traçado sai intacto, para
-       não cortar as quinas resolvidas por interseção. */
+       não cortar as quinas resolvidas pela bissetriz. */
     const pts = distance < 0 ? removeLoops(raw, b.closed) : raw;
     if (pts.length < 2) continue;
     let s = `M ${fmt(pts[0]!.x)} ${fmt(pts[0]!.y)}`;
