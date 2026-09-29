@@ -10,3 +10,4 @@
 <!-- LOVABLE:END -->
 - Imported files live as per-view layers (src/lib/importers.ts): SVG parsed to editable nodes, PDF rasterized page 1 via pdfjs-dist — keeps canvas one SVG coordinate system.
 - MoldeCore uses semantic light-workspace tokens, including canvas and garment surfaces, in src/styles.css; this keeps vector tools and panels visually consistent without changing saved artwork colors.
+- Render technical outlines and plotter bounds from the same vector-offset generator used for export, so node bisectors and centimeter distances cannot diverge between screen and output.
