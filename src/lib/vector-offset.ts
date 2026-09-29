@@ -45,9 +45,16 @@
        apenas âncoras verdadeiras recebem esquadria. Nós não são truncados
        por um limite de esquadria: ambos os vértices ficam sobre a bissetriz.
 
-    5. CANTOS PRESERVADOS — não se cortam laços no traçado resultante: fazer
-       isso substituiria os vértices obrigatórios por interseções fora do eixo
-       dos nós (sobretudo na zona de segurança interna).
+    5. CORREÇÃO DO OFFSET INTERNO (linha Vermelha) — o deslocamento PARA DENTRO
+       é limpo por ANÉIS, não por pares de segmentos: (a) todo ponto que cruzou
+       para fora da Linha de Costura é descartado, e (b) cada auto-cruzamento
+       parte o traçado em dois anéis fechados e sobrevive o anel que permanece
+       dentro do molde (empate: o de maior área). O bico invertido do ombro e a
+       reta vertical fantasma formam o anel menor e desaparecem, com a emenda
+       caindo exatamente sobre o cruzamento. No offset interno o canto ainda
+       respeita um limite de esquadria (INWARD_MITER_LIMIT): ângulo fechado
+       demais fecha em chanfro plano em vez de bico comprido. O offset PARA FORA
+       (linha Azul) segue intacto.
 
    API: offsetPathD(d, distance[, options]).
    ============================================================================ */
@@ -57,7 +64,13 @@ type Vec = { x: number; y: number };
 export type OffsetOptions = {
   /** Canto em esquadria por interseção exata ("miter", padrão) ou arco ("round"). */
   join?: "round" | "miter";
-  /** Compatibilidade com chamadas anteriores; nós reais nunca são truncados. */
+  /**
+   * Limite de esquadria aplicado SOMENTE ao offset para dentro (distância
+   * negativa), em múltiplos de |d|: vale enquanto
+   * |d| / sin(ângulo interno / 2) <= miterLimit × |d|. Acima disso o nó fecha
+   * em chanfro plano, em vez de disparar um bico comprido. No offset para fora
+   * o limite é infinito: nenhum nó da linha Azul é truncado.
+   */
   miterLimit?: number;
   /** Tolerância da subdivisão das curvas, na mesma unidade do "d" (padrão: 0,005% da diagonal do molde). */
   tolerance?: number;
@@ -67,6 +80,12 @@ export type OffsetOptions = {
 export const BLEED_OFFSET_CM = 1;
 /** Deslocamento canônico da Zona de Segurança (vermelha): 4 cm para dentro. */
 export const SAFETY_OFFSET_CM = -4;
+/**
+ * Limite de esquadria do offset PARA DENTRO (Zona de Segurança). 2,5 significa:
+ * o canto na bissetriz só é usado até 2,5 × |d|; passou disso, o nó fecha em
+ * chanfro plano — é isso que evita o bico comprido que rasgava o peito.
+ */
+export const INWARD_MITER_LIMIT = 2.5;
 /** Opções usadas por quem desenha/exporta as linhas técnicas. */
 export const TECHNICAL_OFFSET_OPTIONS: OffsetOptions = { join: "miter" };
 
@@ -537,6 +556,7 @@ const solveCorner = (
   tOut: Vec,
   k: number,
   join: "round" | "miter",
+  miterLimit: number,
 ): Corner => {
   const pIn = offsetPoint(v, tIn, k);
   const pOut = offsetPoint(v, tOut, k);
@@ -561,11 +581,18 @@ const solveCorner = (
     return { kind: "bevel", pts: join === "round" ? roundArc(v, tIn, tOut, k) : [pIn, pOut] };
   }
 
-  const bis = { x: sum.x / sumLen, y: sum.y / sumLen };
   /* Ângulo interno = π - turn; sen(ângulo interno/2) = cos(turn/2).
-     Não truncar nem chanfrar nós reais: as duas cores devem manter o mesmo eixo. */
+     Esquadria acima do limite (canto fechado demais para a distância pedida):
+     o pico fecha em chanfro PLANO entre as duas paralelas em vez de disparar o
+     bico comprido que atravessava o peito. No offset interno o limite é finito;
+     na linha Azul é infinito, então nenhum nó dela é truncado. */
   const halfAngle = (Math.PI - turn) / 2;
   const dist = k / Math.sin(halfAngle);
+  if (!(Math.abs(dist) <= miterLimit * Math.abs(k))) {
+    return { kind: "bevel", pts: join === "round" ? roundArc(v, tIn, tOut, k) : [pIn, pOut] };
+  }
+
+  const bis = { x: sum.x / sumLen, y: sum.y / sumLen };
   const p = { x: v.x + bis.x * dist, y: v.y + bis.y * dist };
   return Number.isFinite(p.x) && Number.isFinite(p.y)
     ? { kind: "miter", p }
@@ -582,6 +609,7 @@ const offsetPolyline = (
   k: number,
   join: "round" | "miter",
   closed: boolean,
+  miterLimit: number,
 ): Vec[] => {
   const n = samples.length;
   const out: Vec[] = [];
@@ -615,7 +643,7 @@ const offsetPolyline = (
       push(offsetPoint(s.p, i === n - 1 ? tIn : tOut, k));
       continue;
     }
-    const corner = solveCorner(s.p, tIn, tOut, k, join);
+    const corner = solveCorner(s.p, tIn, tOut, k, join, miterLimit);
     if (corner.kind === "bevel") {
       for (const p of corner.pts) push(p);
     } else {
@@ -647,40 +675,120 @@ const segIntersect = (p1: Vec, p2: Vec, p3: Vec, p4: Vec): Vec | null => {
 };
 
 /**
- * Remove laços invertidos da polilinha resultante do offset PARA DENTRO. Quando
- * dois segmentos não adjacentes se cruzam, o trecho entre eles é um laço (o bico
- * invertido do ombro e a reta vertical fantasma no centro): descartamos esse
- * trecho e emendamos os dois lados no ponto exato de interseção. É aplicado só
- * na linha vermelha (distância negativa); a azul e a preta não passam por aqui.
+ * Limpeza do offset PARA DENTRO (Zona de Segurança) por ANÉIS — abordagem de
+ * inserção de polígono, no lugar do recorte par a par de segmentos, que invertia
+ * a ordem dos vértices:
+ *
+ *   1. DISTÂNCIA CHECADA — todo ponto que cruzou para fora da Linha de Costura é
+ *      descartado (teste ponto-dentro-do-molde contra a própria amostragem do
+ *      traçado mestre). A vermelha nunca fica com distância negativa.
+ *
+ *   2. LAÇOS POR ANEL — cada auto-cruzamento parte o traçado em DOIS anéis
+ *      fechados; permanece o anel que fica DENTRO do molde (empate: o de maior
+ *      área). O bico invertido do ombro e a reta vertical fantasma formam o anel
+ *      menor e desaparecem; a emenda cai exatamente sobre o cruzamento.
+ *
+ *   3. O resultado é UM anel simples, fechado e contínuo, acompanhando decote,
+ *      cava, ombro e barra por dentro do molde.
  */
-const removeSelfIntersections = (pts: Vec[], closed: boolean): Vec[] => {
-  if (pts.length < 4) return pts;
-  let poly = pts.slice();
-  const maxPasses = 8;
-  for (let pass = 0; pass < maxPasses; pass++) {
-    const n = poly.length;
-    const segCount = closed ? n : n - 1;
-    let cut = false;
-    for (let i = 0; i < segCount && !cut; i++) {
-      const a1 = poly[i]!;
-      const a2 = poly[(i + 1) % n]!;
-      for (let j = i + 2; j < segCount && !cut; j++) {
-        // pula segmentos adjacentes (compartilham vértice) e o fechamento colado no início
-        if (i === 0 && j === segCount - 1 && closed) continue;
-        const b1 = poly[j]!;
-        const b2 = poly[(j + 1) % n]!;
-        const hit = segIntersect(a1, a2, b1, b2);
-        if (!hit) continue;
-        // corta o laço: mantém 0..i, insere o cruzamento, retoma em j+1
-        const head = poly.slice(0, i + 1);
-        const tail = poly.slice(j + 1);
-        poly = [...head, hit, ...tail];
-        cut = true;
-      }
-    }
-    if (!cut) break;
+
+/** Área assinada do anel (fórmula do sapateiro). */
+const ringArea = (pts: Vec[]): number => {
+  let a = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i]!;
+    const q = pts[(i + 1) % pts.length]!;
+    a += p.x * q.y - q.x * p.y;
   }
-  return poly;
+  return a / 2;
+};
+
+/** Remove pontos repetidos e o fechamento duplicado, mantendo a ordem. */
+const dedupeRing = (pts: Vec[], eps = 1e-7): Vec[] => {
+  const out: Vec[] = [];
+  for (const p of pts) {
+    const last = out[out.length - 1];
+    if (!last || mag(sub(last, p)) > eps) out.push(p);
+  }
+  while (out.length > 1 && mag(sub(out[0]!, out[out.length - 1]!)) <= eps) out.pop();
+  return out;
+};
+
+/** Ponto dentro do polígono (ray casting) — vale para qualquer sentido de desenho. */
+const pointInRing = (p: Vec, ring: Vec[]): boolean => {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const a = ring[i]!;
+    const b = ring[j]!;
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+};
+
+/** Fração dos pontos do anel que estão dentro do molde mestre (0 a 1). */
+const insideRatio = (pts: Vec[], master: Vec[]): number => {
+  if (pts.length === 0 || master.length < 3) return 0;
+  let n = 0;
+  for (const p of pts) if (pointInRing(p, master)) n++;
+  return n / pts.length;
+};
+
+/**
+ * Primeiro cruzamento entre dois lados NÃO adjacentes do anel, já devolvido como
+ * os dois anéis fechados que ele cria (ambos nascendo do ponto de cruzamento).
+ */
+const splitAtFirstCross = (pts: Vec[]): [Vec[], Vec[]] | null => {
+  const n = pts.length;
+  if (n < 4) return null;
+  for (let i = 0; i < n; i++) {
+    const a1 = pts[i]!;
+    const a2 = pts[(i + 1) % n]!;
+    for (let j = i + 1; j < n; j++) {
+      if (j === i + 1) continue;
+      if (i === 0 && j === n - 1) continue; // lados que se tocam no fechamento
+      const b1 = pts[j]!;
+      const b2 = pts[(j + 1) % n]!;
+      const hit = segIntersect(a1, a2, b1, b2);
+      if (!hit) continue;
+      const head = [hit, ...pts.slice(i + 1, j + 1)];
+      const tail = [hit, ...pts.slice(j + 1), ...pts.slice(0, i + 1)];
+      if (head.length < 3 || tail.length < 3) continue;
+      return [head, tail];
+    }
+  }
+  return null;
+};
+
+/** Entre os dois anéis, fica o que se mantém dentro do molde (empate: o de maior área). */
+const pickInnerRing = (a: Vec[], b: Vec[], master: Vec[]): Vec[] => {
+  const ra = insideRatio(a, master);
+  const rb = insideRatio(b, master);
+  if (Math.abs(ra - rb) > 0.05) return ra > rb ? a : b;
+  return Math.abs(ringArea(a)) >= Math.abs(ringArea(b)) ? a : b;
+};
+
+/** Repete a divisão até o anel ficar simples, sem nenhum cruzamento. */
+const resolveInnerLoops = (pts: Vec[], master: Vec[], depth = 0): Vec[] => {
+  const ring = dedupeRing(pts);
+  if (ring.length < 4 || depth > 24) return ring;
+  const split = splitAtFirstCross(ring);
+  if (!split) return ring;
+  return resolveInnerLoops(pickInnerRing(split[0], split[1], master), master, depth + 1);
+};
+
+/** Entrada da limpeza interna: descarta o que saiu do molde e resolve os laços. */
+const inwardRing = (raw: Vec[], master: Vec[]): Vec[] => {
+  let ring = dedupeRing(raw);
+  if (ring.length < 4) return ring;
+
+  /* 1) Distância checada: ponto fora da Linha de Costura não entra na vermelha. */
+  if (master.length >= 3) {
+    const inside = ring.filter((p) => pointInRing(p, master));
+    if (inside.length >= 3 && inside.length < ring.length) ring = dedupeRing(inside);
+  }
+
+  /* 2) Bicos invertidos do offset interno viram anéis: fica o anel de dentro. */
+  return resolveInnerLoops(ring, master);
 };
 
 /** Caixa dos pontos de controle: serve só para estimar a tolerância da amostragem. */
@@ -720,6 +828,9 @@ export function offsetPathD(d: string, distance: number, options: OffsetOptions 
   if (!d || !Number.isFinite(distance) || distance === 0) return d;
 
   const join = options.join ?? "miter";
+  /* Limite de esquadria só existe no offset interno: o de fora fica sem
+     truncamento (Infinity), preservando os nós da linha Azul. */
+  const miterLimit = distance < 0 ? options.miterLimit ?? INWARD_MITER_LIMIT : Infinity;
 
   const figures = parseFigures(d);
   if (!figures || figures.length === 0) return d;
@@ -743,12 +854,13 @@ export function offsetPathD(d: string, distance: number, options: OffsetOptions 
 
   const parts: string[] = [];
   for (const b of built) {
-    const raw = offsetPolyline(b.samples, k, join, b.closed);
+    const raw = offsetPolyline(b.samples, k, join, b.closed, miterLimit);
     /* Offset PARA FORA (azul) preserva cada vértice da bissetriz — não tem laço.
        Offset PARA DENTRO (vermelho) pode cruzar em cantos estreitos como ombro e
-       decote, gerando o bico invertido e a reta vertical fantasma: só nesse caso
-       limpamos as auto-interseções, emendando no ponto exato de cruzamento. */
-    const pts = distance < 0 ? removeSelfIntersections(raw, b.closed) : raw;
+       decote: só nesse caso o traçado passa pela limpeza por anéis (descarta o
+       que saiu do molde e fica com o anel interno). */
+    const master = b.samples.map((s) => s.p);
+    const pts = distance < 0 && b.closed ? inwardRing(raw, master) : raw;
     if (pts.length < 2) continue;
     let s = `M ${fmt(pts[0]!.x)} ${fmt(pts[0]!.y)}`;
     for (let i = 1; i < pts.length; i++) s += ` L ${fmt(pts[i]!.x)} ${fmt(pts[i]!.y)}`;
