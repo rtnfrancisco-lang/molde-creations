@@ -81,11 +81,11 @@ export const BLEED_OFFSET_CM = 1;
 /** Deslocamento canônico da Zona de Segurança (vermelha): 4 cm para dentro. */
 export const SAFETY_OFFSET_CM = -4;
 /**
- * Limite de esquadria do offset PARA DENTRO (Zona de Segurança). 2,5 significa:
- * o canto na bissetriz só é usado até 2,5 × |d|; passou disso, o nó fecha em
+ * Limite de esquadria do offset PARA DENTRO (Zona de Segurança). 1.3 significa:
+ * o canto na bissetriz só é usado até 1.3 × |d|; passou disso, o nó fecha em
  * chanfro plano — é isso que evita o bico comprido que rasgava o peito.
  */
-export const INWARD_MITER_LIMIT = 2.5;
+export const INWARD_MITER_LIMIT = 1.3;
 /** Opções usadas por quem desenha/exporta as linhas técnicas. */
 export const TECHNICAL_OFFSET_OPTIONS: OffsetOptions = { join: "miter" };
 
@@ -725,6 +725,23 @@ const pointInRing = (p: Vec, ring: Vec[]): boolean => {
   return inside;
 };
 
+/** Puxa o ponto pOff de volta para dentro do molde caso ele tenha saído. */
+const ensureInside = (pOff: Vec, vOrig: Vec, master: Vec[]): Vec => {
+  if (master.length < 3 || pointInRing(pOff, master)) return pOff;
+  let low = 0;
+  let high = 1;
+  for (let step = 0; step < 10; step++) {
+    const mid = (low + high) / 2;
+    const testP = { x: vOrig.x + (pOff.x - vOrig.x) * mid, y: vOrig.y + (pOff.y - vOrig.y) * mid };
+    if (pointInRing(testP, master)) {
+      low = mid;
+    } else {
+      high = mid;
+    }
+  }
+  return { x: vOrig.x + (pOff.x - vOrig.x) * low, y: vOrig.y + (pOff.y - vOrig.y) * low };
+};
+
 /** Fração dos pontos do anel que estão dentro do molde mestre (0 a 1). */
 const insideRatio = (pts: Vec[], master: Vec[]): number => {
   if (pts.length === 0 || master.length < 3) return 0;
@@ -776,18 +793,30 @@ const resolveInnerLoops = (pts: Vec[], master: Vec[], depth = 0): Vec[] => {
   return resolveInnerLoops(pickInnerRing(split[0], split[1], master), master, depth + 1);
 };
 
-/** Entrada da limpeza interna: descarta o que saiu do molde e resolve os laços. */
+/** Entrada da limpeza interna: ajusta pontos para dentro do molde e resolve os laços. */
 const inwardRing = (raw: Vec[], master: Vec[]): Vec[] => {
   let ring = dedupeRing(raw);
   if (ring.length < 4) return ring;
 
-  /* 1) Distância checada: ponto fora da Linha de Costura não entra na vermelha. */
+  /* 1) Ajusta pontos que saíram do molde trazendo-os de volta para dentro sem remover nós. */
   if (master.length >= 3) {
-    const inside = ring.filter((p) => pointInRing(p, master));
-    if (inside.length >= 3 && inside.length < ring.length) ring = dedupeRing(inside);
+    ring = ring.map((p) => {
+      if (pointInRing(p, master)) return p;
+      let nearest = master[0]!;
+      let minD = mag(sub(p, nearest));
+      for (let i = 1; i < master.length; i++) {
+        const d = mag(sub(p, master[i]!));
+        if (d < minD) {
+          minD = d;
+          nearest = master[i]!;
+        }
+      }
+      return ensureInside(p, nearest, master);
+    });
+    ring = dedupeRing(ring);
   }
 
-  /* 2) Bicos invertidos do offset interno viram anéis: fica o anel de dentro. */
+  /* 2) Bicos invertidos do offset interno viram anéis: fica o anel principal interno. */
   return resolveInnerLoops(ring, master);
 };
 
