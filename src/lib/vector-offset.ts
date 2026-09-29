@@ -81,11 +81,11 @@ export const BLEED_OFFSET_CM = 1;
 /** Deslocamento canônico da Zona de Segurança (vermelha): 4 cm para dentro. */
 export const SAFETY_OFFSET_CM = -4;
 /**
- * Limite de esquadria do offset PARA DENTRO (Zona de Segurança). 1.3 significa:
- * o canto na bissetriz só é usado até 1.3 × |d|; passou disso, o nó fecha em
- * chanfro plano — é isso que evita o bico comprido que rasgava o peito.
+ * Limite de esquadria do offset PARA DENTRO (Zona de Segurança). 2.5 permite que
+ * cantos de até 90° (razão ~1.414) mantenham esquadria perfeita na bissetriz sem
+ * criar chanfros diagonais indesejados na barra ou nas laterais.
  */
-export const INWARD_MITER_LIMIT = 1.3;
+export const INWARD_MITER_LIMIT = 2.5;
 /** Opções usadas por quem desenha/exporta as linhas técnicas. */
 export const TECHNICAL_OFFSET_OPTIONS: OffsetOptions = { join: "miter" };
 
@@ -793,30 +793,12 @@ const resolveInnerLoops = (pts: Vec[], master: Vec[], depth = 0): Vec[] => {
   return resolveInnerLoops(pickInnerRing(split[0], split[1], master), master, depth + 1);
 };
 
-/** Entrada da limpeza interna: ajusta pontos para dentro do molde e resolve os laços. */
+/** Entrada da limpeza interna: resolve os laços de auto-interseção no offset negativo. */
 const inwardRing = (raw: Vec[], master: Vec[]): Vec[] => {
-  let ring = dedupeRing(raw);
+  const ring = dedupeRing(raw);
   if (ring.length < 4) return ring;
 
-  /* 1) Ajusta pontos que saíram do molde trazendo-os de volta para dentro sem remover nós. */
-  if (master.length >= 3) {
-    ring = ring.map((p) => {
-      if (pointInRing(p, master)) return p;
-      let nearest = master[0]!;
-      let minD = mag(sub(p, nearest));
-      for (let i = 1; i < master.length; i++) {
-        const d = mag(sub(p, master[i]!));
-        if (d < minD) {
-          minD = d;
-          nearest = master[i]!;
-        }
-      }
-      return ensureInside(p, nearest, master);
-    });
-    ring = dedupeRing(ring);
-  }
-
-  /* 2) Bicos invertidos do offset interno viram anéis: fica o anel principal interno. */
+  /* Bicos invertidos do offset interno viram anéis: fica o anel principal interno. */
   return resolveInnerLoops(ring, master);
 };
 
