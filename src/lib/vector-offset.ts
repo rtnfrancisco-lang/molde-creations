@@ -68,7 +68,7 @@ export const BLEED_OFFSET_CM = 1;
 /** Deslocamento canônico da Zona de Segurança (vermelha): 4 cm para dentro. */
 export const SAFETY_OFFSET_CM = -4;
 /** Opções usadas por quem desenha/exporta as linhas técnicas. */
-export const TECHNICAL_OFFSET_OPTIONS: OffsetOptions = { join: "miter", miterLimit: 4 };
+export const TECHNICAL_OFFSET_OPTIONS: OffsetOptions = { join: "miter" };
 
 const EPS = 1e-12;
 
@@ -537,7 +537,6 @@ const solveCorner = (
   tOut: Vec,
   k: number,
   join: "round" | "miter",
-  _miterLimit: number,
 ): Corner => {
   const pIn = offsetPoint(v, tIn, k);
   const pOut = offsetPoint(v, tOut, k);
@@ -582,7 +581,6 @@ const offsetPolyline = (
   samples: Sample[],
   k: number,
   join: "round" | "miter",
-  miterLimit: number,
   closed: boolean,
 ): Vec[] => {
   const n = samples.length;
@@ -617,7 +615,7 @@ const offsetPolyline = (
       push(offsetPoint(s.p, i === n - 1 ? tIn : tOut, k));
       continue;
     }
-    const corner = solveCorner(s.p, tIn, tOut, k, join, miterLimit);
+    const corner = solveCorner(s.p, tIn, tOut, k, join);
     if (corner.kind === "bevel") {
       for (const p of corner.pts) push(p);
     } else {
@@ -665,7 +663,6 @@ export function offsetPathD(d: string, distance: number, options: OffsetOptions 
   if (!d || !Number.isFinite(distance) || distance === 0) return d;
 
   const join = options.join ?? "miter";
-  const miterLimit = options.miterLimit ?? 4;
 
   const figures = parseFigures(d);
   if (!figures || figures.length === 0) return d;
@@ -689,7 +686,7 @@ export function offsetPathD(d: string, distance: number, options: OffsetOptions 
 
   const parts: string[] = [];
   for (const b of built) {
-    const raw = offsetPolyline(b.samples, k, join, miterLimit, b.closed);
+    const raw = offsetPolyline(b.samples, k, join, b.closed);
     /* Preservar cada vértice calculado na bissetriz, inclusive nos recortes
        côncavos: cortar auto-interseções deslocaria os cantos dos nós mestres. */
     const pts = raw;
