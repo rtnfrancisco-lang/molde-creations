@@ -421,6 +421,73 @@ const pathBounds = (d: string): { minX: number; minY: number; maxX: number; maxY
 
 const PLOTTER_MARGIN = 2; // margem de reserva do quadro de mídia (usada só se a sangria não puder ser lida)
 
+function CanvasContextMenu({
+  x,
+  y,
+  disabled,
+  onCut,
+  onCopy,
+  onPaste,
+  onDelete,
+  onBringForward,
+  onSendBackward,
+  onPowerClip,
+}: {
+  x: number;
+  y: number;
+  disabled: boolean;
+  onCut: () => void;
+  onCopy: () => void;
+  onPaste: () => void;
+  onDelete: () => void;
+  onBringForward: () => void;
+  onSendBackward: () => void;
+  onPowerClip: () => void;
+}) {
+  const itemClass =
+    "flex w-full items-center justify-between gap-5 rounded px-2.5 py-2 text-left text-xs text-foreground transition-colors hover:bg-accent disabled:pointer-events-none disabled:opacity-40";
+
+  return (
+    <div
+      className="fixed z-[100] min-w-52 rounded-lg border border-line bg-panel p-1.5 shadow-xl"
+      style={{ left: Math.min(x, window.innerWidth - 230), top: Math.min(y, window.innerHeight - 300) }}
+      onContextMenu={(event) => event.preventDefault()}
+    >
+      <button type="button" className={itemClass} disabled={disabled} onClick={onCut}>
+        <span>Recortar</span>
+        <span className="font-mono text-[10px] text-muted-foreground">Ctrl+X</span>
+      </button>
+      <button type="button" className={itemClass} disabled={disabled} onClick={onCopy}>
+        <span>Copiar</span>
+        <span className="font-mono text-[10px] text-muted-foreground">Ctrl+C</span>
+      </button>
+      <button type="button" className={itemClass} onClick={onPaste}>
+        <span>Colar</span>
+        <span className="font-mono text-[10px] text-muted-foreground">Ctrl+V</span>
+      </button>
+      <div className="my-1 border-t border-line" />
+      <button type="button" className={itemClass} disabled={disabled} onClick={onDelete}>
+        <span>Excluir</span>
+        <span className="font-mono text-[10px] text-muted-foreground">Delete</span>
+      </button>
+      <div className="my-1 border-t border-line" />
+      <button type="button" className={itemClass} disabled={disabled} onClick={onBringForward}>
+        <span>Trazer para Frente</span>
+        <span className="font-mono text-[10px] text-muted-foreground">Camada</span>
+      </button>
+      <button type="button" className={itemClass} disabled={disabled} onClick={onSendBackward}>
+        <span>Enviar para Trás</span>
+        <span className="font-mono text-[10px] text-muted-foreground">Camada</span>
+      </button>
+      <div className="my-1 border-t border-line" />
+      <button type="button" className={itemClass} disabled={disabled} onClick={onPowerClip}>
+        <span>Aplicar PowerClip</span>
+        <span className="font-mono text-[10px] text-muted-foreground">Enter</span>
+      </button>
+    </div>
+  );
+}
+
 function Index() {
   const [clothingType, setClothingType] = useState<ClothingType>("Camiseta");
   const tamanhosExibidos =
@@ -449,6 +516,9 @@ function Index() {
   const [colorTarget, setColorTarget] = useState<ColorTarget>("preenchimento");
   const [pcEdit, setPcEdit] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const contextMenuRootRef = useRef<Root | null>(null);
+  const contextMenuHostRef = useRef<HTMLDivElement | null>(null);
+  const clipboardLayerRef = useRef<Layer | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [shapes, setShapes] = useState<Shapes>(DEFAULT_SHAPES);
   const [size, setSize] = useState<Size>("M");
@@ -467,16 +537,155 @@ function Index() {
   const [cropRect, setCropRect] = useState(true);
   const [exporting, setExporting] = useState(false);
 
+  const selectedLayer = () => {
+    if (!selLayer) return null;
+    return layers[view].find((layer) => String((layer as Layer & { id?: string }).id) === selLayer) ?? null;
+  };
+
+  const copySelectedLayer = () => {
+    const selected = selectedLayer();
+    if (!selected) return;
+    clipboardLayerRef.current = structuredClone(selected);
+    setMenu(null);
+  };
+
+  const deleteSelectedLayer = () => {
+    if (!selectedLayer()) return;
+    checkpoint("layers");
+    setLayers((current) => {
+      const next = { ...current, [view]: current[view].filter((layer) => String((layer as Layer & { id?: string }).id) !== selLayer) };
+      saveLS(LS_LAYERS, next);
+      return next;
+    });
+    setSelLayer(null);
+    setMenu(null);
+  };
+
+  const pasteLayer = () => {
+    const source = clipboardLayerRef.current;
+    if (!source) return;
+    const pasted = structuredClone(source) as Layer & Record<string, unknown>;
+    const sourceId = String((pasted as Layer & { id?: string }).id ?? "camada");
+    (pasted as Record<string, unknown>).id = `${sourceId}-copia-${Date.now()}`;
+    if (typeof pasted.x === "number") pasted.x += 10;
+    if (typeof pasted.y === "number") pasted.y += 10;
+    if (typeof pasted.cx === "number") pasted.cx += 10;
+    if (typeof pasted.cy === "number") pasted.cy += 10;
+    checkpoint("layers");
+    setLayers((current) => {
+      const next = { ...current, [view]: [...current[view], pasted] };
+      saveLS(LS_LAYERS, next);
+      return next;
+    });
+    setSelLayer(String((pasted as Layer & { id?: string }).id));
+    setMenu(null);
+  };
+
+  const cutSelectedLayer = () => {
+    copySelectedLayer();
+    deleteSelectedLayer();
+  };
+
+  const moveSelectedLayer = (direction: "front" | "back") => {
+    if (!selLayer) return;
+    const current = layers[view];
+    const index = current.findIndex((layer) => String((layer as Layer & { id?: string }).id) === selLayer);
+    if (index < 0) return;
+    const target = direction === "front" ? Math.min(current.length - 1, index + 1) : Math.max(0, index - 1);
+    if (target === index) return;
+    checkpoint("layers");
+    const nextView = [...current];
+    const [layer] = nextView.splice(index, 1);
+    if (layer) nextView.splice(target, 0, layer);
+    setLayers((all) => {
+      const next = { ...all, [view]: nextView };
+      saveLS(LS_LAYERS, next);
+      return next;
+    });
+    setMenu(null);
+  };
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
-      if (el.tagName === "INPUT" || el.tagName === "SELECT" || e.ctrlKey || e.metaKey) return;
+      const typing = el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "TEXTAREA" || el.isContentEditable;
+      const modifier = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+
+      if (modifier && key === "c" && !typing) {
+        e.preventDefault();
+        copySelectedLayer();
+        return;
+      }
+      if (modifier && key === "v" && !typing) {
+        e.preventDefault();
+        pasteLayer();
+        return;
+      }
+      if (modifier && key === "x" && !typing) {
+        e.preventDefault();
+        cutSelectedLayer();
+        return;
+      }
+      if (!typing && (e.key === "Delete" || e.key === "Backspace")) {
+        if (selectedLayer()) {
+          e.preventDefault();
+          deleteSelectedLayer();
+        }
+        return;
+      }
+      if (typing || modifier) return;
       const t = TOOLS.find((x) => x.key === e.key.toUpperCase());
       if (t) setTool(t.k);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, [layers, view, selLayer]);
+
+  useEffect(() => {
+    const onContextMenu = (event: MouseEvent) => {
+      const target = event.target as Element | null;
+      if (!target?.closest("svg")) return;
+      event.preventDefault();
+      setMenu({ x: event.clientX, y: event.clientY });
+    };
+    const closeMenu = () => setMenu(null);
+    window.addEventListener("contextmenu", onContextMenu);
+    window.addEventListener("click", closeMenu);
+    return () => {
+      window.removeEventListener("contextmenu", onContextMenu);
+      window.removeEventListener("click", closeMenu);
+    };
   }, []);
+
+  useEffect(() => {
+    if (!contextMenuHostRef.current) {
+      const host = document.createElement("div");
+      host.setAttribute("data-moldecore-context-menu", "true");
+      document.body.appendChild(host);
+      contextMenuHostRef.current = host;
+      contextMenuRootRef.current = createRoot(host);
+    }
+    contextMenuRootRef.current?.render(
+      menu ? (
+        <CanvasContextMenu
+          x={menu.x}
+          y={menu.y}
+          disabled={!selectedLayer()}
+          onCut={cutSelectedLayer}
+          onCopy={copySelectedLayer}
+          onPaste={pasteLayer}
+          onDelete={deleteSelectedLayer}
+          onBringForward={() => moveSelectedLayer("front")}
+          onSendBackward={() => moveSelectedLayer("back")}
+          onPowerClip={() => {
+            setPcEdit(true);
+            setMenu(null);
+          }}
+        />
+      ) : null,
+    );
+  }, [menu, layers, view, selLayer]);
 
   // Carregar do armazenamento local
   useEffect(() => {
