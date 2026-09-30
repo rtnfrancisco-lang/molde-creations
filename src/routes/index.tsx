@@ -120,6 +120,8 @@ const SIZES_BY_GARMENT: Record<ClothingType, readonly SizeOption[]> = {
 
 const sizesForGarment = (clothingType: ClothingType): readonly SizeOption[] => SIZES_BY_GARMENT[clothingType];
 const sizeIdsForGarment = (clothingType: ClothingType): readonly Size[] => sizesForGarment(clothingType).map((option) => option.id);
+/* Lista completa de tamanhos (todas as peças). */
+const SIZES: readonly Size[] = ["PP", "P", "M", "G", "GG", "XG", "XG2"];
 
 const FIELDS: { key: Field; label: string; group: string }[] = [
   { key: "bodyHeight", label: "Altura do Corpo", group: "Corpo" },
