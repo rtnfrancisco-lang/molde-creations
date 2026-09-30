@@ -330,7 +330,7 @@ const ProfileDock = ({
   onSelect: (name: string) => void;
   onCreate: () => void;
   onDelete: () => void;
-}) => (() => {
+}) => {
   const [open, setOpen] = useState(true);
 
   return (
@@ -387,7 +387,8 @@ const ProfileDock = ({
       Cada perfil mantém tabelas independentes para peças adultas, infantis e Baby Look.
     </p>
   </section>
-);
+  );
+};
 
 const saveLS = (k: string, v: unknown) => {
   try {
