@@ -34,6 +34,13 @@ import {
   FileText,
   Eye,
   EyeOff,
+  Type,
+  Bold,
+  Italic,
+  Underline,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
 } from "lucide-react";
 import {
   buildPath,
@@ -95,7 +102,20 @@ type Styles = Record<View, PartStyle>;
 const NO_ART: Artworks = { frente: null, costas: null, mangaEsq: null, mangaDir: null };
 const NO_STYLE: PartStyle = { stroke: null, fill: null };
 const DEFAULT_STYLES: Styles = { frente: NO_STYLE, costas: NO_STYLE, mangaEsq: NO_STYLE, mangaDir: NO_STYLE };
-type Tool = "selecao" | "forma" | "caneta" | "zoom" | "fita";
+type Tool = "selecao" | "forma" | "caneta" | "zoom" | "fita" | "texto";
+type TextElement = {
+  id: string;
+  text: string;
+  x: number;
+  y: number;
+  fontFamily: string;
+  fontSize: number;
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  align: "left" | "center" | "right";
+  color: string;
+};
 type ClothingType = "Camiseta" | "Moletom" | "Regata" | "Manga Longa" | "Camisa Infantil" | "Camisa Baby Look";
 type SizeOption = { id: Size; label: string };
 
@@ -256,6 +276,7 @@ const TOOLS: { k: Tool; label: string; icon: typeof Ruler; key: string }[] = [
   { k: "caneta", label: "Ferramenta Caneta", icon: PenTool, key: "P" },
   { k: "zoom", label: "Ferramenta Zoom", icon: ZoomIn, key: "Z" },
   { k: "fita", label: "Fita Métrica Digital", icon: Ruler, key: "M" },
+  { k: "texto", label: "Ferramenta Texto", icon: Type, key: "T" },
 ];
 
 const TOOL_HINTS: Record<Tool, string> = {
@@ -264,6 +285,7 @@ const TOOL_HINTS: Record<Tool, string> = {
   caneta: "Clique para criar nós · clique e arraste para curvas · clique no 1º nó ou Enter fecha · Esc cancela",
   zoom: "Clique para aproximar · Alt+clique afasta · arraste para mover a vista · roda do mouse também dá zoom",
   fita: "Clique em dois pontos para medir a distância real em cm",
+  texto: "Clique no canvas para inserir texto · arraste o texto para reposicionar",
 };
 
 const LS_GRADING = "moldecore.tabelaMedidas";
@@ -503,6 +525,103 @@ function CanvasContextMenu({
   );
 }
 
+const TEXT_FONTS = ["Arial", "Impact", "Montserrat", "Bebas Neue", "Roboto", "Comic Sans MS"];
+
+type TextWorkspaceProps = {
+  tool: Tool;
+};
+
+function TextWorkspace({ tool }: TextWorkspaceProps) {
+  const [texts, setTexts] = useState<TextElement[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [drag, setDrag] = useState<{ id: string; dx: number; dy: number } | null>(null);
+
+  const selected = texts.find((item) => item.id === selectedId) ?? null;
+  const updateSelected = (patch: Partial<TextElement>) => {
+    if (!selectedId) return;
+    setTexts((items) => items.map((item) => (item.id === selectedId ? { ...item, ...patch } : item)));
+  };
+
+  useEffect(() => {
+    const onCanvasPointerDown = (event: PointerEvent) => {
+      if (tool !== "texto") return;
+      const target = event.target as HTMLElement;
+      if (target.closest("[data-text-workspace]") || !target.closest("svg")) return;
+      const id = `texto-${Date.now()}`;
+      const item: TextElement = {
+        id,
+        text: "Texto",
+        x: event.clientX,
+        y: event.clientY,
+        fontFamily: "Arial",
+        fontSize: 24,
+        bold: false,
+        italic: false,
+        underline: false,
+        align: "left",
+        color: "#20242b",
+      };
+      setTexts((items) => [...items, item]);
+      setSelectedId(id);
+      setEditingId(id);
+      setDraft(item.text);
+      event.preventDefault();
+    };
+    document.addEventListener("pointerdown", onCanvasPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onCanvasPointerDown, true);
+  }, [tool]);
+
+  useEffect(() => {
+    if (!drag) return;
+    const move = (event: PointerEvent) => {
+      setTexts((items) => items.map((item) => (item.id === drag.id ? { ...item, x: event.clientX - drag.dx, y: event.clientY - drag.dy } : item)));
+    };
+    const stop = () => setDrag(null);
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", stop, { once: true });
+    return () => {
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", stop);
+    };
+  }, [drag]);
+
+  const finishEditing = () => {
+    if (!editingId) return;
+    setTexts((items) => items.map((item) => (item.id === editingId ? { ...item, text: draft || "Texto" } : item)));
+    setEditingId(null);
+  };
+
+  return (
+    <div data-text-workspace className="pointer-events-none fixed inset-0 z-[80]">
+      {(tool === "texto" || selected) && (
+        <div className="pointer-events-auto fixed left-16 right-20 top-14 flex min-h-12 items-center gap-2 border-b border-line bg-panel px-3 py-2 shadow-md">
+          <span className="mr-1 text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground">Texto</span>
+          <select value={selected?.fontFamily ?? "Arial"} onChange={(event) => updateSelected({ fontFamily: event.target.value })} className="h-8 rounded-md border border-input bg-panel2 px-2 text-xs text-foreground">
+            {TEXT_FONTS.map((font) => <option key={font} value={font}>{font}</option>)}
+          </select>
+          <input type="number" min="1" value={selected?.fontSize ?? 24} onChange={(event) => updateSelected({ fontSize: Number(event.target.value) || 1 })} className="h-8 w-16 rounded-md border border-input bg-panel2 px-2 text-xs text-foreground" aria-label="Tamanho da fonte" />
+          <button type="button" title="Negrito" onClick={() => updateSelected({ bold: !selected?.bold })} className={`grid size-8 place-items-center rounded-md border border-line ${selected?.bold ? "bg-cyan/20 text-cyan" : "text-muted-foreground"}`}><Bold className="size-4" /></button>
+          <button type="button" title="Itálico" onClick={() => updateSelected({ italic: !selected?.italic })} className={`grid size-8 place-items-center rounded-md border border-line ${selected?.italic ? "bg-cyan/20 text-cyan" : "text-muted-foreground"}`}><Italic className="size-4" /></button>
+          <button type="button" title="Sublinhado" onClick={() => updateSelected({ underline: !selected?.underline })} className={`grid size-8 place-items-center rounded-md border border-line ${selected?.underline ? "bg-cyan/20 text-cyan" : "text-muted-foreground"}`}><Underline className="size-4" /></button>
+          <div className="ml-1 flex rounded-md border border-line bg-panel2 p-0.5">
+            <button type="button" title="Alinhar à esquerda" onClick={() => updateSelected({ align: "left" })} className={`grid size-7 place-items-center rounded ${selected?.align === "left" ? "bg-cyan/20 text-cyan" : "text-muted-foreground"}`}><AlignLeft className="size-4" /></button>
+            <button type="button" title="Centralizar" onClick={() => updateSelected({ align: "center" })} className={`grid size-7 place-items-center rounded ${selected?.align === "center" ? "bg-cyan/20 text-cyan" : "text-muted-foreground"}`}><AlignCenter className="size-4" /></button>
+            <button type="button" title="Alinhar à direita" onClick={() => updateSelected({ align: "right" })} className={`grid size-7 place-items-center rounded ${selected?.align === "right" ? "bg-cyan/20 text-cyan" : "text-muted-foreground"}`}><AlignRight className="size-4" /></button>
+          </div>
+          {selected && <input type="color" value={selected.color} onChange={(event) => updateSelected({ color: event.target.value })} title="Cor do texto" className="size-8 cursor-pointer rounded border border-line bg-panel2 p-0.5" />}
+        </div>
+      )}
+      {texts.map((item) => (
+        <div key={item.id} className={`pointer-events-auto fixed cursor-move select-none rounded-sm px-1 ${selectedId === item.id ? "outline outline-1 outline-cyan/70" : ""}`} style={{ left: item.x, top: item.y, color: item.color, fontFamily: item.fontFamily, fontSize: `${item.fontSize}pt`, fontWeight: item.bold ? 700 : 400, fontStyle: item.italic ? "italic" : "normal", textDecoration: item.underline ? "underline" : "none", textAlign: item.align, transform: item.align === "center" ? "translateX(-50%)" : item.align === "right" ? "translateX(-100%)" : undefined }} onPointerDown={(event) => { event.stopPropagation(); setSelectedId(item.id); setDrag({ id: item.id, dx: event.clientX - item.x, dy: event.clientY - item.y }); }} onDoubleClick={() => { setEditingId(item.id); setDraft(item.text); }}>
+          {editingId === item.id ? <input autoFocus value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={finishEditing} onKeyDown={(event) => { if (event.key === "Enter") finishEditing(); }} className="min-w-24 border border-cyan bg-background px-1 text-foreground outline-none" style={{ font: "inherit", textAlign: item.align }} /> : item.text}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Index() {
   const [clothingType, setClothingType] = useState<ClothingType>("Camiseta");
   const tamanhosExibidos =
@@ -551,6 +670,17 @@ function Index() {
   const [hideTech, setHideTech] = useState(false);
   const [cropRect, setCropRect] = useState(true);
   const [exporting, setExporting] = useState(false);
+
+  useEffect(() => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    root.render(<TextWorkspace tool={tool} />);
+    return () => {
+      root.unmount();
+      host.remove();
+    };
+  }, [tool]);
 
   const selectedLayer = () => {
     if (!selLayer) return null;
