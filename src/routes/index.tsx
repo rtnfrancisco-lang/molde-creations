@@ -103,15 +103,12 @@ const SIZES_BY_GARMENT: Record<ClothingType, readonly SizeOption[]> = {
   Moletom: ["PP", "P", "M", "G", "GG", "XG"].map((id) => ({ id: id as Size, label: id })),
   Regata: ["PP", "P", "M", "G", "GG", "XG"].map((id) => ({ id: id as Size, label: id })),
   "Manga Longa": ["PP", "P", "M", "G", "GG", "XG"].map((id) => ({ id: id as Size, label: id })),
-  "Camisa Infantil": [
-    { id: "PP", label: "2ANOS" },
-    { id: "P", label: "4ANOS" },
-    { id: "M", label: "6ANOS" },
-    { id: "G", label: "8ANOS" },
-    { id: "GG", label: "10ANOS" },
-    { id: "XG", label: "12ANOS" },
-    { id: "XG2", label: "14ANOS" },
-  ],
+  "Camisa Infantil": ["2ANOS", "4ANOS", "6ANOS", "8ANOS", "10ANOS", "12ANOS", "14ANOS"].map(
+    (label, index) => ({
+      id: (["PP", "P", "M", "G", "GG", "XG", "XG2"] as Size[])[index]!,
+      label,
+    }),
+  ),
   "Camisa Baby Look": ["PP", "P", "M", "G", "GG", "XG"].map((id) => ({
     id: id as Size,
     label: `BL ${id}`,
