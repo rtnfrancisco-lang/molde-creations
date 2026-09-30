@@ -581,9 +581,9 @@ function Index() {
     if (!source) return;
     const pasted = structuredClone(source) as Layer & Record<string, unknown>;
     const sourceId = String((pasted as Layer & { id?: string }).id ?? "camada");
-    (pasted as Record<string, unknown>).id = `${sourceId}-copia-${Date.now()}`;
-    if (typeof pasted.x === "number") pasted.x += 10;
-    if (typeof pasted.y === "number") pasted.y += 10;
+    (pasted as Record<string, unknown>)["id"] = `${sourceId}-copia-${Date.now()}`;
+    if (typeof pasted["x"] === "number") pasted["x"] += 10;
+    if (typeof pasted["y"] === "number") pasted["y"] += 10;
     if (typeof pasted.cx === "number") pasted.cx += 10;
     if (typeof pasted.cy === "number") pasted.cy += 10;
     checkpoint("layers");
