@@ -317,6 +317,10 @@ const PLOTTER_MARGIN = 2; // margem de reserva do quadro de mídia (usada só se
 
 function Index() {
   const [clothingType, setClothingType] = useState<ClothingType>("Camiseta");
+  const tamanhosExibidos =
+    clothingType === "Camisa Infantil"
+      ? ["2ANOS", "4ANOS", "6ANOS", "8ANOS", "10ANOS", "12ANOS", "14ANOS"]
+      : ["PP", "P", "M", "G", "GG", "XG"];
   const [table, setTable] = useState<Grading>(DEFAULT_TABLE);
   const [mother, setMother] = useState<Size>("M");
   const [artworks, setArtworks] = useState<Artworks>(NO_ART);
