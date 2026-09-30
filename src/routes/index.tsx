@@ -299,7 +299,11 @@ const LS_ACTIVE_PROFILE = "moldecore.perfilGradeAtivo";
 const DEFAULT_PROFILE_NAME = "Padrão MoldeCore";
 
 type ProfileTables = Record<ClothingType, Grading>;
-type GradeProfile = { name: string; tables: ProfileTables };
+type GradeProfile = {
+  name: string;
+  tables: ProfileTables;
+  variations?: Record<string, string>;
+};
 
 const cloneGrading = (grading: Grading): Grading =>
   Object.fromEntries(
@@ -346,14 +350,59 @@ const ProfileDock = ({
   onSelect,
   onCreate,
   onDelete,
+  onSave,
 }: {
   profiles: GradeProfile[];
   activeProfile: string;
   onSelect: (name: string) => void;
   onCreate: () => void;
   onDelete: () => void;
+  onSave?: (profileName: string, variationName: string) => void;
 }) => {
   const [open, setOpen] = useState(true);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveTarget, setSaveTarget] = useState(activeProfile);
+  const [newProfileName, setNewProfileName] = useState("");
+  const [variationName, setVariationName] = useState("");
+
+  useEffect(() => {
+    setSaveTarget(activeProfile);
+  }, [activeProfile]);
+
+  const submitSave = () => {
+    const targetName = saveTarget === "__new__" ? newProfileName.trim() : saveTarget;
+    if (!targetName) return;
+
+    if (saveTarget === "__new__") {
+      onCreate();
+    }
+
+    const nextProfiles = profiles.map((profile) => {
+      if (profile.name !== targetName) return profile;
+      return {
+        ...profile,
+        variations: {
+          ...(profile.variations ?? {}),
+          ...(variationName.trim() ? { [variationName.trim()]: new Date().toISOString() } : {}),
+        },
+      };
+    });
+
+    if (saveTarget !== "__new__") {
+      saveGradeProfiles(nextProfiles);
+      onSelect(targetName);
+    }
+
+    onSave?.(targetName, variationName.trim());
+    window.dispatchEvent(
+      new CustomEvent("moldecore:save-grade-profile", {
+        detail: { profileName: targetName, variationName: variationName.trim() },
+      }),
+    );
+    setSaveOpen(false);
+    setNewProfileName("");
+    setVariationName("");
+  };
 
   if (!open) {
     return (
@@ -374,7 +423,7 @@ const ProfileDock = ({
   }
 
   return (
-    <section className="flex h-full min-h-0 w-80 shrink-0 flex-col overflow-hidden border-l border-line bg-panel p-3 transition-all duration-200">
+    <section className="relative flex h-full min-h-0 w-80 shrink-0 flex-col overflow-hidden border-l border-line bg-panel p-3 transition-all duration-200">
       <div className="mb-2 flex items-center justify-between gap-2">
         <button
           type="button"
@@ -412,21 +461,92 @@ const ProfileDock = ({
           </button>
         </div>
       </div>
-      <select
-        value={activeProfile}
-        onChange={(event) => onSelect(event.target.value)}
-        aria-label="Perfil de Grade do Cliente"
-        className="h-9 w-full rounded-md border border-input bg-panel2 px-3 text-sm text-foreground outline-none focus:border-cyan/60 focus:ring-1 focus:ring-cyan/30"
-      >
-        {profiles.map((profile) => (
-          <option key={profile.name} value={profile.name}>
-            {profile.name}
-          </option>
-        ))}
-      </select>
+
+      <div className="flex items-center gap-2">
+        <select
+          value={activeProfile}
+          onChange={(event) => onSelect(event.target.value)}
+          aria-label="Perfil de Grade do Cliente"
+          className="h-9 min-w-0 flex-1 rounded-md border border-input bg-panel2 px-3 text-sm text-foreground outline-none focus:border-cyan/60 focus:ring-1 focus:ring-cyan/30"
+        >
+          {profiles.map((profile) => (
+            <option key={profile.name} value={profile.name}>
+              {profile.name}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => {
+            setSaveTarget(activeProfile);
+            setSaveOpen(true);
+          }}
+          className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md border border-cyan/50 bg-cyan/10 px-3 text-sm font-medium text-cyan transition-colors hover:bg-cyan/20"
+        >
+          <Save className="size-4" />
+          Salvar
+        </button>
+      </div>
+
       <p className="mt-2 text-[10px] leading-snug text-faint">
         Cada perfil mantém tabelas independentes para peças adultas, infantis e Baby Look.
       </p>
+
+      {saveOpen && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/80 p-3 backdrop-blur-sm">
+          <div className="w-full rounded-lg border border-line bg-panel p-4 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-mono uppercase tracking-[0.16em] text-cyan">Salvar medidas</p>
+                <h3 className="mt-1 text-base font-semibold text-foreground">Em qual Perfil de Cliente deseja salvar estas medidas?</h3>
+              </div>
+              <button type="button" onClick={() => setSaveOpen(false)} aria-label="Fechar" className="text-muted-foreground hover:text-foreground">
+                <X className="size-4" />
+              </button>
+            </div>
+
+            <label className="mb-1.5 block text-[10px] font-mono uppercase tracking-[0.12em] text-muted-foreground">Perfil de destino</label>
+            <select
+              value={saveTarget}
+              onChange={(event) => setSaveTarget(event.target.value)}
+              className="h-9 w-full rounded-md border border-input bg-panel2 px-3 text-sm text-foreground outline-none focus:border-cyan/60 focus:ring-1 focus:ring-cyan/30"
+            >
+              {profiles.map((profile) => (
+                <option key={profile.name} value={profile.name}>{profile.name} — atualizar</option>
+              ))}
+              <option value="__new__">Criar Novo Perfil</option>
+            </select>
+
+            {saveTarget === "__new__" && (
+              <div className="mt-3">
+                <label className="mb-1.5 block text-[10px] font-mono uppercase tracking-[0.12em] text-muted-foreground">Nome do Perfil Geral do Cliente</label>
+                <input
+                  autoFocus
+                  value={newProfileName}
+                  onChange={(event) => setNewProfileName(event.target.value)}
+                  placeholder="Ex.: Grade do Paulo"
+                  className="h-9 w-full rounded-md border border-input bg-panel2 px-3 text-sm text-foreground outline-none placeholder:text-faint focus:border-cyan/60 focus:ring-1 focus:ring-cyan/30"
+                />
+              </div>
+            )}
+
+            <div className="mt-3">
+              <label className="mb-1.5 block text-[10px] font-mono uppercase tracking-[0.12em] text-muted-foreground">Nome específico da variação (opcional)</label>
+              <input
+                value={variationName}
+                onChange={(event) => setVariationName(event.target.value)}
+                placeholder="Ex.: Grade inverno 2025"
+                className="h-9 w-full rounded-md border border-input bg-panel2 px-3 text-sm text-foreground outline-none placeholder:text-faint focus:border-cyan/60 focus:ring-1 focus:ring-cyan/30"
+              />
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => setSaveOpen(false)} className="h-9 rounded-md border border-line px-3 text-sm text-muted-foreground hover:bg-panel2 hover:text-foreground">Cancelar</button>
+              <button type="button" onClick={submitSave} disabled={saveTarget === "__new__" && !newProfileName.trim()} className="h-9 rounded-md bg-cyan px-4 text-sm font-semibold text-primary-foreground hover:bg-cyan/90 disabled:opacity-50">Salvar perfil</button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 };
