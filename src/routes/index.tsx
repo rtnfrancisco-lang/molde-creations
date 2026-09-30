@@ -18,6 +18,7 @@ import {
   Redo2,
   Palette,
   PanelRightClose,
+  ChevronRight,
   X,
   Crop,
   MousePointer2,
@@ -329,9 +330,21 @@ const ProfileDock = ({
   onSelect: (name: string) => void;
   onCreate: () => void;
   onDelete: () => void;
-}) => (
-  <section className="fixed right-4 top-20 z-40 w-80 rounded-lg border border-line bg-panel p-3 shadow-xl">
+}) => (() => {
+  const [open, setOpen] = useState(true);
+
+  return (
+  <section className={open ? "fixed right-16 top-20 z-40 w-80 overflow-hidden rounded-lg border border-line bg-panel p-3 shadow-xl transition-all duration-200" : "fixed right-16 top-20 z-40 h-12 w-12 overflow-hidden rounded-lg border border-line bg-panel p-2 shadow-xl transition-all duration-200"}>
     <div className="mb-2 flex items-center justify-between gap-2">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        title={open ? "Recolher configurações" : "Abrir configurações"}
+        aria-label={open ? "Recolher configurações" : "Abrir configurações"}
+        className="grid size-8 shrink-0 place-items-center rounded-md border border-line bg-panel2 text-muted-foreground transition-colors hover:bg-cyan/10 hover:text-cyan"
+      >
+        {open ? <PanelRightClose className="size-4" /> : <ChevronRight className="size-4" />}
+      </button>
       <div>
         <p className="text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">Tabela de Tamanhos</p>
         <h2 className="text-sm font-semibold text-foreground">Perfil de Grade do Cliente</h2>
@@ -397,6 +410,8 @@ const fmt = (n: number) => n.toFixed(1).replace(".", ",");
    O motor de offset devolve só M/L (polilinha), então os pares de números são
    lidos na ordem em que aparecem. Serve para o quadro de mídia colar exatamente
    na Linha Azul de Sangria, sem margem nem padding. */
+})()
+
 const pathBounds = (d: string): { minX: number; minY: number; maxX: number; maxY: number } | null => {
   const nums = d.match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi);
   if (!nums || nums.length < 4) return null;
@@ -2959,7 +2974,7 @@ function PaletteDock({
       <button
         onClick={() => setOpen(true)}
         aria-label="Abrir paleta de cores"
-        className="w-8 shrink-0 bg-panel border-l border-line flex flex-col items-center gap-2 pt-3 text-muted-foreground hover:text-cyan"
+        className="fixed right-0 top-0 z-50 flex h-screen w-10 shrink-0 flex-col items-center gap-2 border-l border-line bg-panel pt-3 text-muted-foreground shadow-lg transition-colors hover:text-cyan"
       >
         <Palette className="size-4" />
         <span className="[writing-mode:vertical-rl] text-[10px] font-mono uppercase tracking-[0.2em]">Paleta</span>
@@ -2967,24 +2982,24 @@ function PaletteDock({
     );
 
   return (
-    <div className="w-44 shrink-0 bg-panel border-l border-line flex flex-col">
-      <div className="h-12 shrink-0 border-b border-line flex items-center justify-between px-3">
+    <div className="fixed right-0 top-0 z-50 flex h-screen w-14 shrink-0 flex-col border-l border-line bg-panel shadow-lg">
+      <div className="flex h-10 shrink-0 items-center justify-between border-b border-line px-2">
         <span className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-          <Palette className="size-3.5 text-cyan" /> Paleta
+          <Palette className="size-3.5 text-cyan" />
         </span>
         <button onClick={() => setOpen(false)} aria-label="Recolher paleta" className="text-muted-foreground hover:text-cyan">
           <PanelRightClose className="size-3.5" />
         </button>
       </div>
-      <div className="p-3 space-y-3 overflow-y-auto">
-        <div className="grid grid-cols-2 bg-panel2 border border-line rounded-md p-0.5 text-[10px] font-mono">
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-1.5">
+        <div className="grid grid-cols-2 rounded-md border border-line bg-panel2 p-0.5 text-[9px] font-mono">
           {(["rgb", "cmyk"] as const).map((m) => (
             <button
               key={m}
               onClick={() => setMode(m)}
               className={"py-1 rounded " + (mode === m ? "bg-cyan text-primary-foreground font-semibold" : "text-muted-foreground")}
             >
-              Paleta {m.toUpperCase()}
+              {m.toUpperCase()}
             </button>
           ))}
         </div>
@@ -3017,7 +3032,7 @@ function PaletteDock({
           ))}
         </div>
 
-        <div className="grid grid-cols-5 gap-1" onMouseLeave={() => setInfo(null)}>
+        <div className="grid grid-cols-2 gap-1" onMouseLeave={() => setInfo(null)}>
           <button
             onClick={() => onApply(target, null)}
             onContextMenu={(e) => {
@@ -3026,7 +3041,7 @@ function PaletteDock({
             }}
             onMouseEnter={() => setInfo({ hex: "", label: "Sem cor" })}
             aria-label="Sem cor"
-            className="aspect-square rounded-sm border border-line grid place-items-center text-destructive hover:ring-1 hover:ring-cyan"
+            className="grid aspect-square place-items-center rounded-sm border border-line text-destructive hover:ring-1 hover:ring-cyan"
           >
             <X className="size-3" />
           </button>
@@ -3040,7 +3055,7 @@ function PaletteDock({
               }}
               onMouseEnter={() => setInfo(s)}
               aria-label={s.label}
-              className="aspect-square rounded-sm border border-line hover:ring-1 hover:ring-cyan hover:scale-110 transition-transform"
+              className="aspect-square min-h-5 min-w-5 rounded-sm border border-line transition-transform hover:scale-110 hover:ring-1 hover:ring-cyan"
               style={{ background: s.hex }}
             />
           ))}
