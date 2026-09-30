@@ -78,7 +78,7 @@ export const Route = createFileRoute("/")({
 
 type Field = "bodyHeight" | "bodyWidth" | "sleeveHeight" | "sleeveWidth";
 type Measurements = Record<Field, number>;
-const SIZES = ["PP", "P", "M", "G", "GG", "XG"] as const;
+const SIZES = ["PP", "P", "M", "G", "GG", "XG", "XG2"] as const;
 type Size = (typeof SIZES)[number];
 type Grading = Record<Size, Measurements>;
 type View = "frente" | "costas" | "mangaEsq" | "mangaDir";
@@ -118,6 +118,7 @@ const DEFAULT_TABLE: Grading = {
   G: d(74, 54, 23, 21),
   GG: d(76, 56, 24, 22),
   XG: d(78, 58, 25, 23),
+  XG2: d(80, 60, 26, 24),
 };
 
 /* ================= Tabelas pré-definidas por tipo de peça (Molde Mãe = M) ================= */
@@ -129,6 +130,7 @@ const INFANTIL_TABLE: Grading = {
   G: d(56, 41, 17.5, 15),
   GG: d(61, 44, 19, 16),
   XG: d(65, 47, 20.5, 17),
+  XG2: d(69, 50, 22, 18),
 };
 
 const BABY_LOOK_TABLE: Grading = {
@@ -138,6 +140,7 @@ const BABY_LOOK_TABLE: Grading = {
   G: d(62, 46, 16, 16.5),
   GG: d(64, 49, 17, 17.5),
   XG: d(66, 52, 18, 18.5),
+  XG2: d(68, 55, 19, 19.5),
 };
 
 const NEW_CLOTHING_TYPES: ClothingType[] = ["Camisa Infantil", "Camisa Baby Look"];
@@ -157,6 +160,7 @@ const INFANTIL_AGE_MAP: Record<Size, string> = {
   G: "8ANOS",
   GG: "10ANOS",
   XG: "12ANOS",
+  XG2: "14ANOS",
 };
 
 /* Rótulo do tamanho de acordo com o tipo de peça:
@@ -164,9 +168,9 @@ const INFANTIL_AGE_MAP: Record<Size, string> = {
    - Camisa Infantil: idade correspondente (ex.: 2ANOS, 12ANOS)
    - Demais: o próprio tamanho (PP, P, M, ...) */
 const sizeLabel = (clothingType: ClothingType, size: Size): string => {
-  if (clothingType === "Camisa Baby Look") return `BL ${size}`;
+  if (clothingType === "Camisa Baby Look") return `BL ${size === "XG2" ? "XG" : size}`;
   if (clothingType === "Camisa Infantil") return INFANTIL_AGE_MAP[size];
-  return size;
+  return size === "XG2" ? "XG" : size;
 };
 
 /* Molde Mãe padrão de cada tipo de peça.
