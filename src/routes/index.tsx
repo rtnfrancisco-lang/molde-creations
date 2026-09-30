@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createRoot, type Root, createPortal } from "react-dom/client";
+import { createRoot, type Root } from "react-dom/client";
+import { createPortal } from "react-dom";
 import {
   ChevronDown,
   Plus,
@@ -801,7 +802,7 @@ function TextWorkspace({ tool, view, svgPoint, bounds }: TextWorkspaceProps) {
         ) : (
           <text
             key={item.id} x={item.x} y={item.y + fontSize} fill={item.color}
-            style={textStyle} textAnchor={{ left: "start", center: "middle", right: "end" }[item.align]}
+            style={textStyle} textAnchor={item.align === "left" ? "start" : item.align === "center" ? "middle" : "end"}
             className={tool === "selecao" || tool === "texto" ? "cursor-move" : "pointer-events-none"}
             onPointerDown={(event) => {
               if (tool !== "selecao" && tool !== "texto") return;
