@@ -32,6 +32,18 @@ const alignmentTransform: Record<TextAlign, string> = {
   right: "translateX(-100%)",
 };
 
+function placeCaretAtEnd(element: HTMLDivElement) {
+  element.focus();
+  const selection = window.getSelection();
+  if (!selection) return;
+
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  range.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
 export function DirectTextEditor({
   value,
   x,
@@ -47,17 +59,19 @@ export function DirectTextEditor({
 }: DirectTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const committedRef = useRef(false);
+  const initializedRef = useRef(false);
 
   useEffect(() => {
-    if (!autoFocus || !editorRef.current) return;
-    editorRef.current.focus();
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(editorRef.current);
-    range.collapse(false);
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-  }, [autoFocus]);
+    const editor = editorRef.current;
+    if (!editor || initializedRef.current) return;
+
+    initializedRef.current = true;
+    editor.textContent = value;
+
+    if (autoFocus) {
+      placeCaretAtEnd(editor);
+    }
+  }, [autoFocus, value]);
 
   const commit = () => {
     if (committedRef.current) return;
@@ -69,6 +83,17 @@ export function DirectTextEditor({
   const cancel = () => {
     committedRef.current = true;
     onCancel?.();
+  };
+
+  const handleInput = (event: React.FormEvent<HTMLDivElement>) => {
+    const editor = event.currentTarget;
+    const nextValue = editor.textContent ?? "";
+    onChange(nextValue);
+
+    requestAnimationFrame(() => {
+      if (!editor.isConnected) return;
+      placeCaretAtEnd(editor);
+    });
   };
 
   return (
@@ -102,7 +127,7 @@ export function DirectTextEditor({
           textAlign: style.align,
           lineHeight: 1.15,
         }}
-        onInput={(event) => onChange(event.currentTarget.textContent ?? "")}
+        onInput={handleInput}
         onBlur={commit}
         onKeyDown={(event) => {
           if (event.key === "Escape") {
@@ -115,9 +140,7 @@ export function DirectTextEditor({
             event.currentTarget.blur();
           }
         }}
-      >
-        {value}
-      </div>
+      />
     </div>
   );
 }
