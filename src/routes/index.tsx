@@ -692,6 +692,41 @@ function TextWorkspace({ tool }: TextWorkspaceProps) {
     });
   };
 
+  useEffect(() => {
+    if (previousToolRef.current === tool) return;
+
+    const wasTextTool = previousToolRef.current === "texto";
+    const isSelectionTool = tool === "selecao";
+    const value = activeTextValueRef.current.trim();
+    const activeId = editingIdRef.current;
+
+    if (wasTextTool && isSelectionTool && value && activeId) {
+      updateTexts((items) => {
+        const current = items.find((item) => item.id === activeId);
+        const nextText: TextElement = {
+          id: activeId,
+          text: value,
+          x: current?.x ?? selected?.x ?? 0,
+          y: current?.y ?? selected?.y ?? 0,
+          fontFamily: current?.fontFamily ?? selected?.fontFamily ?? "Arial",
+          fontSize: current?.fontSize ?? selected?.fontSize ?? 24,
+          bold: current?.bold ?? selected?.bold ?? false,
+          italic: current?.italic ?? selected?.italic ?? false,
+          underline: current?.underline ?? selected?.underline ?? false,
+          align: current?.align ?? selected?.align ?? "left",
+          color: current?.color ?? selected?.color ?? "#ffffff",
+        };
+
+        const exists = items.some((item) => item.id === activeId);
+        return exists
+          ? items.map((item) => (item.id === activeId ? nextText : item))
+          : [...items, nextText];
+      });
+    }
+
+    previousToolRef.current = tool;
+  }, [selected, tool]);
+
   const updateSelected = (patch: Partial<TextElement>) => {
     if (!selectedId) return;
     updateTexts((items) => items.map((item) => (item.id === selectedId ? { ...item, ...patch } : item)));
