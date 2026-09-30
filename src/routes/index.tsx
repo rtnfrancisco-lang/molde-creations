@@ -19,6 +19,9 @@ import {
   Redo2,
   Palette,
   PanelRightClose,
+  PanelRightOpen,
+  PanelLeftClose,
+  PanelLeftOpen,
   ChevronRight,
   X,
   Crop,
@@ -297,6 +300,7 @@ const LS_STYLES = "moldecore.cores";
 const LS_SHAPES = "moldecore.formas";
 const LS_LAYERS = "moldecore.camadas";
 const LS_PROFILES = "moldecore.perfisGrades";
+const LS_SIDEBARS = "moldecore.barrasLaterais";
 const LS_ACTIVE_PROFILE = "moldecore.perfilGradeAtivo";
 const DEFAULT_PROFILE_NAME = "Padrão MoldeCore";
 
@@ -883,6 +887,7 @@ function Index() {
   const [savedMsg, setSavedMsg] = useState("");
   const [tool, setTool] = useState<Tool>("forma");
   const [fitSignal, setFitSignal] = useState(0);
+  const [sidebars, setSidebars] = useState({ left: true, right: true });
   const [showSeam, setShowSeam] = useState(true);
   const [showBleed, setShowBleed] = useState(true);
   const [showSafety, setShowSafety] = useState(true);
@@ -1068,10 +1073,19 @@ function Index() {
       if (s) setShapes({ ...DEFAULT_SHAPES, ...JSON.parse(s) });
       const ly = localStorage.getItem(LS_LAYERS);
       if (ly) setLayers({ ...NO_LAYERS, ...JSON.parse(ly) });
+      const sb = localStorage.getItem(LS_SIDEBARS);
+      if (sb) setSidebars((cur) => ({ ...cur, ...JSON.parse(sb) }));
     } catch {
       /* ignora dados corrompidos */
     }
   }, []);
+
+  const toggleSidebar = (side: "left" | "right") =>
+    setSidebars((cur) => {
+      const next = { ...cur, [side]: !cur[side] };
+      saveLS(LS_SIDEBARS, next);
+      return next;
+    });
 
   /* ---------- Histórico (Desfazer / Refazer) ---------- */
   type Snap = { table: Grading; shapes: Shapes; artworks: Artworks; styles: Styles; layers: Layers };
@@ -1732,6 +1746,13 @@ function Index() {
   return (
     <div className="min-h-screen w-full bg-background text-foreground font-display antialiased flex">
       {/* ============ SIDEBAR ============ */}
+      <div
+        className={
+          "shrink-0 flex overflow-hidden transition-[width] duration-300 ease-in-out " +
+          (sidebars.left ? "w-64" : "w-0")
+        }
+        inert={!sidebars.left}
+      >
       <aside className="w-64 shrink-0 bg-panel border-r border-line flex flex-col">
         <div className="px-5 pt-6 pb-5 border-b border-line">
           <div className="flex items-center gap-3">
@@ -1993,11 +2014,17 @@ function Index() {
           </div>
         </div>
       </aside>
+      </div>
 
       {/* ============ PRINCIPAL ============ */}
       <main className="flex-1 min-w-0 flex flex-col">
         <header className="h-16 shrink-0 border-b border-line bg-panel flex items-center justify-between px-6 gap-4">
           <div className="flex items-center gap-3 min-w-0">
+            <SidebarToggle
+              label={sidebars.left ? "Recolher barra lateral esquerda" : "Mostrar barra lateral esquerda"}
+              Icon={sidebars.left ? PanelLeftClose : PanelLeftOpen}
+              onClick={() => toggleSidebar("left")}
+            />
             <span className="text-[10px] font-mono uppercase tracking-[0.18em] text-faint">Área de Trabalho</span>
             <span className="text-faint">/</span>
             <span className="text-sm font-medium text-foreground truncate">{clothingType} — Sublimação</span>
@@ -2038,6 +2065,11 @@ function Index() {
               </button>
             ))}
           </div>
+          <SidebarToggle
+            label={sidebars.right ? "Recolher barra lateral direita" : "Mostrar barra lateral direita"}
+            Icon={sidebars.right ? PanelRightClose : PanelRightOpen}
+            onClick={() => toggleSidebar("right")}
+          />
           </div>
         </header>
 
@@ -2280,8 +2312,6 @@ function Index() {
             </div>
           </section>
 
-          <PaletteDock target={colorTarget} onTarget={setColorTarget} onApply={applyColor} current={styles[view]} />
-
           {menu && (
             <div
               className="fixed z-50 min-w-56 rounded-md border border-line bg-panel2 py-1 shadow-lg text-xs"
@@ -2343,6 +2373,13 @@ function Index() {
           )}
 
           {/* ============ PAINEL DIREITO ============ */}
+          <div
+            className={
+              "shrink-0 flex justify-end overflow-hidden transition-[width] duration-300 ease-in-out " +
+              (sidebars.right ? "w-80" : "w-0")
+            }
+            inert={!sidebars.right}
+          >
           <aside className="w-80 shrink-0 bg-panel border-l border-line flex flex-col">
             <div className="grid grid-cols-2 border-b border-line">
               {(
@@ -2487,9 +2524,35 @@ function Index() {
               </>
             )}
           </aside>
+          </div>
         </div>
       </main>
+
+      {/* Coluna própria no layout: a paleta não cobre mais o painel direito nem o cabeçalho. */}
+      <PaletteDock target={colorTarget} onTarget={setColorTarget} onApply={applyColor} current={styles[view]} />
     </div>
+  );
+}
+
+function SidebarToggle({
+  label,
+  Icon,
+  onClick,
+}: {
+  label: string;
+  Icon: typeof PanelLeftClose;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className="grid size-8 shrink-0 place-items-center rounded-md border border-transparent text-muted-foreground transition-colors hover:border-line hover:bg-panel2 hover:text-cyan"
+    >
+      <Icon className="size-4" />
+    </button>
   );
 }
 
@@ -3319,7 +3382,7 @@ function PaletteDock({
       <button
         onClick={() => setOpen(true)}
         aria-label="Abrir paleta de cores"
-        className="fixed right-0 top-0 z-50 flex h-screen w-10 shrink-0 flex-col items-center gap-2 border-l border-line bg-panel pt-3 text-muted-foreground shadow-lg transition-colors hover:text-cyan"
+        className="sticky top-0 z-30 flex h-screen w-10 shrink-0 flex-col items-center gap-2 border-l border-line bg-panel pt-3 text-muted-foreground shadow-lg transition-colors hover:text-cyan"
       >
         <Palette className="size-4" />
         <span className="[writing-mode:vertical-rl] text-[10px] font-mono uppercase tracking-[0.2em]">Paleta</span>
@@ -3327,7 +3390,7 @@ function PaletteDock({
     );
 
   return (
-    <div className="fixed right-0 top-0 z-50 flex h-screen w-14 shrink-0 flex-col border-l border-line bg-panel shadow-lg">
+    <div className="sticky top-0 z-30 flex h-screen w-14 shrink-0 flex-col border-l border-line bg-panel shadow-lg">
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-line px-2">
         <span className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
           <Palette className="size-3.5 text-cyan" />
