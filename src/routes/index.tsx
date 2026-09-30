@@ -22,6 +22,8 @@ import {
   PanelRightOpen,
   PanelLeftClose,
   PanelLeftOpen,
+  Lock,
+  LockOpen,
   ChevronRight,
   X,
   Crop,
@@ -285,7 +287,7 @@ const TOOLS: { k: Tool; label: string; icon: typeof Ruler; key: string }[] = [
 ];
 
 const TOOL_HINTS: Record<Tool, string> = {
-  selecao: "Arraste o contorno ou a estampa para mover · arraste a alça do canto para escalar",
+  selecao: "Clique em um objeto para selecionar · arraste as alças para redimensionar · o cadeado trava a proporção",
   forma: "Arraste nós e alças · duplo clique adiciona nó · Alt+clique remove · Shift+clique alterna reta/curva",
   caneta: "Clique para criar nós · clique e arraste para curvas · clique no 1º nó ou Enter fecha · Esc cancela",
   zoom: "Clique para aproximar · Alt+clique afasta · arraste para mover a vista · roda do mouse também dá zoom",
@@ -573,6 +575,7 @@ const LIBRARY = [
 ];
 
 const fmt = (n: number) => n.toFixed(1).replace(".", ",");
+const round1 = (n: number) => Math.round(n * 10) / 10;
 
 /* Limites absolutos (X_min, X_max, Y_min, Y_max) de um traçado "d".
    O motor de offset devolve só M/L (polilinha), então os pares de números são
@@ -938,7 +941,7 @@ function Index() {
       saveLS(LS_LAYERS, next);
       return next;
     });
-    setSelLayer(String((pasted as Layer & { id?: string }).id));
+    selectLayer(String((pasted as Layer & { id?: string }).id));
     setMenu(null);
   };
 
@@ -1231,10 +1234,12 @@ function Index() {
     };
   }, [profiles, activeProfile, clothingType]);
 
-  const updateTable = (sz: Size, key: Field, v: number) => {
-    checkpoint(`table:${sz}:${key}`);
+  const updateTable = (sz: Size, key: Field, v: number) => updateMeasures(sz, { [key]: v }, `table:${sz}:${key}`);
+
+  const updateMeasures = (sz: Size, patch: Partial<Measurements>, key = `table:${sz}`) => {
+    checkpoint(key);
     setTable((t) => {
-      const next = { ...t, [sz]: { ...t[sz], [key]: v } };
+      const next = { ...t, [sz]: { ...t[sz], ...patch } };
       setProfiles((currentProfiles) => {
         const nextProfiles = currentProfiles.map((profile) =>
           profile.name === activeProfile
@@ -1304,10 +1309,34 @@ function Index() {
   const artView: View = view;
   const art = artworks[view];
 
+  /* ---------- Ferramenta Seleção: objeto ativo e propriedades ---------- */
+  const [selPart, setSelPart] = useState<"peca" | "estampa" | null>(null);
+  const [lockRatio, setLockRatio] = useState(true);
+
   useEffect(() => {
     setPcEdit(false);
     setSelLayer(null);
+    setSelPart(null);
   }, [view]);
+
+  const selectLayer = (id: string | null) => {
+    setSelLayer(id);
+    if (id) setSelPart(null);
+  };
+  const selectPart = (p: "peca" | "estampa" | null) => {
+    setSelPart(p);
+    if (p) setSelLayer(null);
+  };
+  const isBodyView = view === "frente" || view === "costas";
+  const pieceW = isBodyView ? graded[size].bodyWidth : graded[size].sleeveWidth;
+  const pieceH = isBodyView ? graded[size].bodyHeight : graded[size].sleeveHeight;
+  /* Frente e costas compartilham as medidas do corpo: redimensionar uma atualiza a outra. */
+  const setPieceDims = (w: number, h: number) =>
+    updateMeasures(
+      size,
+      isBodyView ? { bodyWidth: round1(w), bodyHeight: round1(h) } : { sleeveWidth: round1(w), sleeveHeight: round1(h) },
+      `resize:${size}:${isBodyView ? "corpo" : "manga"}`,
+    );
 
   /* ---------- Camadas / Objetos importados ---------- */
   const curLayers = layers[view];
@@ -1338,7 +1367,7 @@ function Index() {
     };
     const add = (l: Layer) => {
       setViewLayers([...snapRef.current.layers[view], l], "import:" + id);
-      setSelLayer(id);
+      selectLayer(id);
       setSize(mother);
       setTool("selecao");
       flash(`${file.name} importado`);
@@ -1509,6 +1538,33 @@ function Index() {
   };
 
   const setArt = (a: Artwork | null) => updateArtworks({ ...artworks, [view]: a });
+
+  /* Objeto ativo da Ferramenta Seleção, com dimensões em cm reais para a barra de propriedades. */
+  const pieceSpan = (() => {
+    const ns = shapes[view];
+    const xs = ns.map((n) => n.x);
+    const ys = ns.map((n) => n.y);
+    return { x: Math.max(1e-3, Math.max(...xs) - Math.min(...xs)), y: Math.max(1e-3, Math.max(...ys) - Math.min(...ys)) };
+  })();
+  const boxInfo = <T extends BoxObject>(o: T, label: string, apply: (next: T) => void): SelectionInfo => {
+    const w = o.w * pieceW;
+    return { label, w, h: w * o.ratio, set: (nw, nh) => apply({ ...o, w: nw / pieceW, ratio: nh / nw }) };
+  };
+  const selInfo: SelectionInfo | null =
+    tool !== "selecao"
+      ? null
+      : selObj
+        ? boxInfo(selObj, selObj.name, (next) => setViewLayers(curLayers.map((l) => (l.id === next.id ? next : l)), `resize:${next.id}`))
+        : selPart === "estampa" && art && size === mother
+          ? boxInfo(art, "Estampa", setArt)
+          : selPart === "peca"
+            ? {
+                label: `Molde · ${partLabel(view)}`,
+                w: pieceSpan.x * pieceW,
+                h: pieceSpan.y * pieceH,
+                set: (nw, nh) => setPieceDims(nw / pieceSpan.x, nh / pieceSpan.y),
+              }
+            : null;
   const pcApply = () => {
     if (art) setArt({ ...art, clipped: true });
     setPcEdit(false);
@@ -2219,12 +2275,19 @@ function Index() {
                   onMenu={(x, y) => setMenu({ x, y })}
                   layers={curLayers}
                   selLayer={selLayer}
-                  onSelLayer={setSelLayer}
+                  onSelLayer={selectLayer}
                   onLayersChange={(arr) => setViewLayers(arr)}
                   showSeam={showSeam}
                   showBleed={showBleed}
                   showSafety={showSafety}
+                  selPart={selPart}
+                  onSelPart={selectPart}
+                  lockRatio={lockRatio}
+                  onPieceDims={setPieceDims}
                 />
+                {selInfo && (
+                  <SelectionPropsBar info={selInfo} locked={lockRatio} onToggleLock={() => setLockRatio((v) => !v)} />
+                )}
                 {/* Painel de camadas */}
                 <div className="absolute top-3 right-3 w-60 rounded-md border border-line bg-panel shadow-lg text-xs z-10">
                   <button
@@ -2248,13 +2311,13 @@ function Index() {
                           <div
                             key={l.id}
                             onClick={() => {
-                              setSelLayer(l.id);
+                              selectLayer(l.id);
                               if (tool !== "forma") setTool("selecao");
                             }}
                             onContextMenu={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              setSelLayer(l.id);
+                              selectLayer(l.id);
                               setMenu({ x: e.clientX, y: e.clientY });
                             }}
                             className={
@@ -2534,6 +2597,73 @@ function Index() {
   );
 }
 
+type SelectionInfo = { label: string; w: number; h: number; set: (w: number, h: number) => void };
+
+/* Barra de propriedades da Ferramenta Seleção: largura, altura e cadeado de proporção. */
+function SelectionPropsBar({ info, locked, onToggleLock }: { info: SelectionInfo; locked: boolean; onToggleLock: () => void }) {
+  const LockIcon = locked ? Lock : LockOpen;
+  const setW = (w: number) => info.set(w, locked ? (w * info.h) / info.w : info.h);
+  const setH = (h: number) => info.set(locked ? (h * info.w) / info.h : info.w, h);
+  return (
+    <div className="absolute top-3 left-3 z-10 flex items-center gap-2 rounded-md border border-line bg-panel px-3 py-2 shadow-lg text-xs">
+      <span className="max-w-40 truncate font-medium text-foreground" title={info.label}>
+        {info.label}
+      </span>
+      <span className="h-5 w-px bg-line" />
+      <DimField label="L" title="Largura (cm)" value={info.w} onCommit={setW} />
+      <button
+        type="button"
+        onClick={onToggleLock}
+        aria-pressed={locked}
+        aria-label={locked ? "Proporção travada" : "Proporção livre"}
+        title={locked ? "Proporção travada: largura e altura mudam juntas" : "Proporção livre: largura e altura independentes"}
+        className={
+          "grid size-7 place-items-center rounded-md border transition-colors " +
+          (locked ? "border-cyan/40 bg-cyan/10 text-cyan" : "border-line text-muted-foreground hover:text-foreground")
+        }
+      >
+        <LockIcon className="size-3.5" />
+      </button>
+      <DimField label="A" title="Altura (cm)" value={info.h} onCommit={setH} />
+    </div>
+  );
+}
+
+function DimField({ label, title, value, onCommit }: { label: string; title: string; value: number; onCommit: (v: number) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft === null) return;
+    const v = Number(draft.replace(",", "."));
+    setDraft(null);
+    if (Number.isFinite(v) && v >= MIN_SIZE_CM && Math.abs(v - value) > 1e-6) onCommit(v);
+  };
+  return (
+    <label className="flex items-center gap-1.5" title={title}>
+      <span className="font-mono text-[10px] text-faint">{label}</span>
+      <input
+        inputMode="decimal"
+        aria-label={title}
+        value={draft ?? fmt(value)}
+        onFocus={(e) => {
+          setDraft(fmt(value));
+          e.currentTarget.select();
+        }}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Escape") {
+            setDraft(null);
+            requestAnimationFrame(() => (e.target as HTMLInputElement).blur());
+          }
+        }}
+        className="h-7 w-16 rounded-md border border-line bg-panel2 px-2 text-right font-mono text-xs text-foreground focus:border-cyan focus:outline-none"
+      />
+      <span className="font-mono text-[10px] text-faint">cm</span>
+    </label>
+  );
+}
+
 function SidebarToggle({
   label,
   Icon,
@@ -2559,18 +2689,35 @@ function SidebarToggle({
 /* ================= Canvas SVG ================= */
 
 type Pt = { x: number; y: number };
+type HandleDir = -1 | 0 | 1;
+/* Camadas e estampas: centro normalizado, largura relativa à peça, proporção altura/largura e rotação. */
+type BoxObject = { cx: number; cy: number; w: number; ratio: number; rot?: number };
+/* As 8 alças da caixa de seleção (cantos e meios das bordas), como no CorelDRAW. */
+const HANDLES: { hx: HandleDir; hy: HandleDir }[] = [
+  { hx: -1, hy: -1 }, { hx: 0, hy: -1 }, { hx: 1, hy: -1 },
+  { hx: -1, hy: 0 }, { hx: 1, hy: 0 },
+  { hx: -1, hy: 1 }, { hx: 0, hy: 1 }, { hx: 1, hy: 1 },
+];
+const handleCursor = (hx: HandleDir, hy: HandleDir) =>
+  !hx ? "cursor-ns-resize" : !hy ? "cursor-ew-resize" : hx === hy ? "cursor-nwse-resize" : "cursor-nesw-resize";
+const MIN_SIZE_CM = 0.5;
+
+/* Com o cadeado fechado, um único fator vale para os dois eixos: o do eixo que a alça
+   controla ou, nos cantos, o que mais mudou. */
+const lockFactor = (fx: number, fy: number, hx: HandleDir, hy: HandleDir) =>
+  hx && hy ? (Math.abs(fx - 1) >= Math.abs(fy - 1) ? fx : fy) : hx ? fx : fy;
+
 type Drag =
   | { k: "node"; i: number }
   | { k: "hOut"; i: number }
   | { k: "hIn"; i: number }
   | { k: "pen"; i: number }
   | { k: "art"; start: Pt; orig: Artwork }
-  | { k: "artScale"; orig: Artwork }
   | { k: "move"; start: Pt; orig: Node[] }
-  | { k: "scale"; start: Pt; orig: Node[]; box: { x0: number; y0: number } }
+  | { k: "pscale"; hx: HandleDir; hy: HandleDir; W: number; H: number }
+  | { k: "bscale"; target: "layer" | "art"; hx: HandleDir; hy: HandleDir; orig: BoxObject }
   | { k: "pan"; sx: number; sy: number; orig: Pt; alt: boolean; at: Pt }
   | { k: "lmove"; start: Pt; orig: Layer }
-  | { k: "lscale"; orig: Layer }
   | { k: "lrot"; orig: Layer }
   | { k: "lnode"; id: string; pi: number; si: number; i: number; which: "n" | "hIn" | "hOut" };
 
@@ -2597,8 +2744,17 @@ function PatternCanvas({
   showBleed = true,
   showSafety = true,
   clothingType,
+  selPart,
+  onSelPart,
+  lockRatio,
+  onPieceDims,
 }: {
   clothingType: ClothingType;
+  selPart: "peca" | "estampa" | null;
+  onSelPart: (p: "peca" | "estampa" | null) => void;
+  lockRatio: boolean;
+  /** Novas medidas-base (cm) da vista ativa: alimentam a tabela, as cotas e as linhas técnicas. */
+  onPieceDims: (w: number, h: number) => void;
   view: View;
   size: Size;
   graded: Record<Size, Measurements>;
@@ -2669,6 +2825,51 @@ function PatternCanvas({
     return { lx, ly, u: lx / aw + 0.5, v: ly / ah + 0.5 };
   };
   const setLayer = (l: Layer) => onLayersChange(layers.map((x) => (x.id === l.id ? l : x)));
+
+  /* Redimensiona uma caixa (camada ou estampa) mantendo fixa a alça oposta, no referencial girado do objeto. */
+  const resizeBox = <T extends BoxObject>(o: T, hx: HandleDir, hy: HandleDir, p: Pt): T => {
+    const aw = o.w * W;
+    const ah = aw * o.ratio;
+    const c = toSvg({ x: o.cx, y: o.cy });
+    const r = ((o.rot ?? 0) * Math.PI) / 180;
+    const dx = p.x - c.x;
+    const dy = p.y - c.y;
+    const lx = dx * Math.cos(r) + dy * Math.sin(r);
+    const ly = -dx * Math.sin(r) + dy * Math.cos(r);
+    const ax = (-hx * aw) / 2;
+    const ay = (-hy * ah) / 2;
+    let nw = hx ? Math.max(MIN_SIZE_CM, hx * (lx - ax)) : aw;
+    let nh = hy ? Math.max(MIN_SIZE_CM, hy * (ly - ay)) : ah;
+    if (lockRatio) {
+      const f = lockFactor(nw / aw, nh / ah, hx, hy);
+      nw = Math.max(MIN_SIZE_CM, aw * f);
+      nh = nw * o.ratio;
+    }
+    const cl = { x: ax + (hx * nw) / 2, y: ay + (hy * nh) / 2 };
+    const gc = { x: c.x + cl.x * Math.cos(r) - cl.y * Math.sin(r), y: c.y + cl.x * Math.sin(r) + cl.y * Math.cos(r) };
+    const n = toNorm(gc);
+    return { ...o, cx: n.x, cy: n.y, w: nw / W, ratio: nh / nw };
+  };
+
+  /* A peça é ancorada no eixo central e na linha do ombro (y = 0): a alça define a nova medida-base. */
+  const resizePiece = (hx: HandleDir, hy: HandleDir, p: Pt, W0: number, H0: number) => {
+    const ex = hx < 0 ? box.x0 - 0.5 : box.x1 - 0.5;
+    const ey = hy < 0 ? box.y0 : box.y1;
+    let nW = W0;
+    let nH = H0;
+    const canX = hx !== 0 && Math.abs(ex) > 1e-3 && Math.sign(p.x) === Math.sign(ex);
+    const canY = hy !== 0 && Math.abs(ey) > 1e-3 && p.y > 0;
+    if (canX) nW = p.x / ex;
+    if (canY) nH = p.y / ey;
+    if (lockRatio) {
+      const f = lockFactor(nW / W0, nH / H0, canX ? hx : 0, canY ? hy : 0);
+      nW = W0 * f;
+      nH = H0 * f;
+    }
+    const minW = MIN_SIZE_CM / Math.max(1e-3, box.x1 - box.x0);
+    const minH = MIN_SIZE_CM / Math.max(1e-3, box.y1 - box.y0);
+    onPieceDims(Math.max(minW, nW), Math.max(minH, nH));
+  };
   const selL = layers.find((l) => l.id === selLayer) ?? null;
   const layerNodeMode = tool === "forma" && selL?.kind === "vetor" && !selL.hidden;
   const svgPoint = (e: { clientX: number; clientY: number }): Pt => {
@@ -2705,7 +2906,10 @@ function PatternCanvas({
 
   const onBgDown = (e: React.PointerEvent<SVGSVGElement>) => {
     const p = svgPoint(e);
-    if ((tool === "selecao" || tool === "forma") && e.button === 0) onSelLayer(null);
+    if ((tool === "selecao" || tool === "forma") && e.button === 0) {
+      onSelLayer(null);
+      onSelPart(null);
+    }
     if (tool === "zoom") {
       capture(e);
       setDrag({ k: "pan", sx: e.clientX, sy: e.clientY, orig: { x: zoom.px, y: zoom.py }, alt: e.altKey, at: p });
@@ -2736,17 +2940,18 @@ function PatternCanvas({
       case "art":
         onArtworkChange({ ...drag.orig, cx: drag.orig.cx + n.x - drag.start.x, cy: drag.orig.cy + n.y - drag.start.y });
         break;
-      case "artScale":
-        onArtworkChange({ ...drag.orig, w: Math.max(0.03, Math.abs(n.x - drag.orig.cx) * 2) });
+      case "bscale": {
+        const next = resizeBox(drag.orig, drag.hx, drag.hy, p);
+        if (drag.target === "art") onArtworkChange(next as Artwork);
+        else setLayer(next as Layer);
+        break;
+      }
+      case "pscale":
+        resizePiece(drag.hx, drag.hy, p, drag.W, drag.H);
         break;
       case "lmove":
         setLayer({ ...drag.orig, cx: drag.orig.cx + n.x - drag.start.x, cy: drag.orig.cy + n.y - drag.start.y });
         break;
-      case "lscale": {
-        const { lx } = toLocal(drag.orig, p);
-        setLayer({ ...drag.orig, w: Math.max(0.02, (2 * Math.abs(lx)) / W) });
-        break;
-      }
       case "lrot": {
         const { c } = lg(drag.orig);
         let a = (Math.atan2(p.x - c.x, -(p.y - c.y)) * 180) / Math.PI;
@@ -2809,20 +3014,6 @@ function PatternCanvas({
         const dx = n.x - drag.start.x;
         const dy = n.y - drag.start.y;
         setNodes(drag.orig.map((q) => ({ ...q, x: q.x + dx, y: q.y + dy })));
-        break;
-      }
-      case "scale": {
-        const b = drag.box;
-        const sx = Math.max(0.05, (n.x - b.x0) / (drag.start.x - b.x0 || 1));
-        const sy = Math.max(0.05, (n.y - b.y0) / (drag.start.y - b.y0 || 1));
-        setNodes(
-          drag.orig.map((q) => {
-            const r: Node = { ...q, x: b.x0 + (q.x - b.x0) * sx, y: b.y0 + (q.y - b.y0) * sy };
-            if (q.hIn) r.hIn = { x: q.hIn.x * sx, y: q.hIn.y * sy };
-            if (q.hOut) r.hOut = { x: q.hOut.x * sx, y: q.hOut.y * sy };
-            return r;
-          }),
-        );
         break;
       }
       case "pan": {
@@ -2907,6 +3098,27 @@ function PatternCanvas({
   const tapeEnd = tape.b ?? (tape.a ? hover : null);
   const sw = { strokeWidth: 1.5, vectorEffect: "non-scaling-stroke" as const };
 
+  /* Caixa de seleção com 8 alças, em coordenadas locais centradas no objeto. */
+  const selectionBox = (
+    aw: number,
+    ah: number,
+    color: "amber" | "cyan",
+    onHandle: (e: React.PointerEvent, hx: HandleDir, hy: HandleDir) => void,
+    skip?: (hx: HandleDir, hy: HandleDir) => boolean,
+  ) => (
+    <>
+      <rect x={-aw / 2} y={-ah / 2} width={aw} height={ah} className={`fill-none stroke-${color} pointer-events-none`} strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
+      {HANDLES.filter(({ hx, hy }) => !skip?.(hx, hy)).map(({ hx, hy }) =>
+        square({ x: (hx * aw) / 2, y: (hy * ah) / 2 }, `h${hx}${hy}`, `fill-garment stroke-${color} ${handleCursor(hx, hy)}`, (e) => {
+          e.stopPropagation();
+          if (e.button !== 0) return;
+          capture(e);
+          onHandle(e, hx, hy);
+        }),
+      )}
+    </>
+  );
+
   const square = (p: Pt, key: string | number, cls: string, onDown?: (e: React.PointerEvent) => void) => (
     <rect
       key={key}
@@ -2968,7 +3180,8 @@ function PatternCanvas({
         onPointerDown={(e) => {
           if (tool !== "selecao") return;
           e.stopPropagation();
-          onSelLayer(null);
+          onSelPart("peca");
+          if (e.button !== 0) return;
           capture(e);
           setDrag({ k: "move", start: toNorm(svgPoint(e)), orig: nodes });
         }}
@@ -2992,9 +3205,12 @@ function PatternCanvas({
         };
         const down = (e: React.PointerEvent) => {
           e.stopPropagation();
+          onSelPart("estampa");
+          if (e.button !== 0) return;
           capture(e);
           setDrag({ k: "art", start: toNorm(svgPoint(e)), orig: artwork });
         };
+        const artSelected = movable && selPart === "estampa";
         return (
           <g>
             <clipPath id="outline-clip">
@@ -3014,17 +3230,12 @@ function PatternCanvas({
                 <image {...imgProps} style={{ pointerEvents: "none" }} />
               </g>
             )}
-            {movable && (
-              <>
-                <rect x={c.x - aw / 2} y={c.y - ah / 2} width={aw} height={ah} className="fill-none stroke-amber pointer-events-none" strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
-                {square({ x: c.x + aw / 2, y: c.y + ah / 2 }, "artScale", "fill-amber stroke-amber cursor-nwse-resize", (e) => {
-                  e.stopPropagation();
-                  capture(e);
-                  setDrag({ k: "artScale", orig: artwork });
-                })}
-              </>
+            {artSelected && (
+              <g transform={`translate(${c.x} ${c.y}) rotate(${artwork.rot ?? 0})`}>
+                {selectionBox(aw, ah, "amber", (_, hx, hy) => setDrag({ k: "bscale", target: "art", hx, hy, orig: artwork }))}
+              </g>
             )}
-            {(movable || !clipped) && (
+            {(artSelected || !clipped) && (
               <text x={c.x} y={c.y - ah / 2 - unit} textAnchor="middle" fontSize={unit * 1.2} className="fill-amber font-mono pointer-events-none">
                 {fmt(aw)} × {fmt(ah)} cm · {Math.round(artwork.w * 100)}% da largura{size !== mother ? ` · auto de ${mother}` : ""}
               </text>
@@ -3067,11 +3278,12 @@ function PatternCanvas({
                 </>
               )}
             </g>
-            {sel && (
+            {sel && tool !== "selecao" && (
               <rect x={-aw / 2} y={-ah / 2} width={aw} height={ah} className="fill-none stroke-amber pointer-events-none" strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
             )}
             {sel && tool === "selecao" && (
               <>
+                {selectionBox(aw, ah, "amber", (_, hx, hy) => setDrag({ k: "bscale", target: "layer", hx, hy, orig: l }))}
                 <line x1={0} y1={-ah / 2} x2={0} y2={-ah / 2 - unit * 3} className="stroke-amber pointer-events-none" strokeWidth={1} vectorEffect="non-scaling-stroke" />
                 <circle
                   cx={0}
@@ -3084,11 +3296,6 @@ function PatternCanvas({
                     setDrag({ k: "lrot", orig: l });
                   }}
                 />
-                {square({ x: aw / 2, y: ah / 2 }, "ls", "fill-amber stroke-amber cursor-nwse-resize", (e) => {
-                  e.stopPropagation();
-                  capture(e);
-                  setDrag({ k: "lscale", orig: l });
-                })}
                 <text x={0} y={ah / 2 + unit * 2.2} textAnchor="middle" fontSize={unit * 1.1} className="fill-amber font-mono pointer-events-none">
                   {fmt(aw)} × {fmt(ah)} cm{l.rot ? ` · ${fmt(l.rot)}°` : ""}
                 </text>
@@ -3226,18 +3433,19 @@ function PatternCanvas({
       </g>
 
       {/* Seleção: caixa + alça de escala */}
-      {tool === "selecao" && !selLayer && (() => {
+      {tool === "selecao" && selPart === "peca" && (() => {
         const a = toSvg({ x: box.x0, y: box.y0 });
         const b = toSvg({ x: box.x1, y: box.y1 });
         return (
-          <g>
-            <rect x={a.x} y={a.y} width={b.x - a.x} height={b.y - a.y} className="fill-none stroke-cyan/60 pointer-events-none" strokeWidth={1} strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />
-            {[a, { x: b.x, y: a.y }, { x: a.x, y: b.y }].map((p, i) => square(p, "c" + i, "fill-garment stroke-cyan/60"))}
-            {square(b, "scale", "fill-cyan stroke-cyan cursor-nwse-resize", (e) => {
-              e.stopPropagation();
-              capture(e);
-              setDrag({ k: "scale", start: toNorm(svgPoint(e)), orig: nodes, box: { x0: box.x0, y0: box.y0 } });
-            })}
+          <g transform={`translate(${(a.x + b.x) / 2} ${(a.y + b.y) / 2})`}>
+            {selectionBox(
+              b.x - a.x,
+              b.y - a.y,
+              "cyan",
+              (_, hx, hy) => setDrag({ k: "pscale", hx, hy, W, H }),
+              // A linha do ombro é a âncora da peça: a borda superior não muda a altura.
+              (hx, hy) => hx === 0 && hy === -1 && box.y0 < 1e-3,
+            )}
           </g>
         );
       })()}
