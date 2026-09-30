@@ -410,7 +410,6 @@ const fmt = (n: number) => n.toFixed(1).replace(".", ",");
    O motor de offset devolve só M/L (polilinha), então os pares de números são
    lidos na ordem em que aparecem. Serve para o quadro de mídia colar exatamente
    na Linha Azul de Sangria, sem margem nem padding. */
-})()
 
 const pathBounds = (d: string): { minX: number; minY: number; maxX: number; maxY: number } | null => {
   const nums = d.match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi);
