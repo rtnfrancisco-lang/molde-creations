@@ -19,6 +19,7 @@ type DirectTextEditorProps = {
   width?: number;
   minHeight?: number;
   scale?: number;
+  embedded?: boolean;
   style: DirectTextEditorStyle;
   autoFocus?: boolean;
   onChange: (value: string) => void;
@@ -51,6 +52,7 @@ export function DirectTextEditor({
   width = 420,
   minHeight = 32,
   scale = 1,
+  embedded = false,
   style,
   autoFocus = true,
   onChange,
@@ -98,7 +100,7 @@ export function DirectTextEditor({
 
   return (
     <div
-      className="pointer-events-auto absolute z-20"
+      className={embedded ? "pointer-events-auto relative" : "pointer-events-auto absolute z-20"}
       style={{
         left: x,
         top: y,
