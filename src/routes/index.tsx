@@ -60,6 +60,7 @@ import {
   SAFETY_OFFSET_CM,
   TECHNICAL_OFFSET_OPTIONS,
 } from "@/lib/vector-offset";
+import { DirectTextEditor } from "@/components/DirectTextEditor";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -795,36 +796,65 @@ function TextWorkspace({ tool }: TextWorkspaceProps) {
           {selected && <input type="color" value={selected.color} onChange={(event) => updateSelected({ color: event.target.value })} title="Cor do texto" className="size-8 cursor-pointer rounded border border-line bg-panel2 p-0.5" />}
         </div>
       )}
-      {texts.map((item) => (
-        <div key={item.id} className={`pointer-events-auto fixed cursor-move select-none rounded-sm px-1 ${selectedId === item.id ? "outline outline-1 outline-cyan/70" : ""}`} style={{ left: item.x, top: item.y, color: item.color, fontFamily: item.fontFamily, fontSize: `${item.fontSize}pt`, fontWeight: item.bold ? 700 : 400, fontStyle: item.italic ? "italic" : "normal", textDecoration: item.underline ? "underline" : "none", textAlign: item.align, transform: item.align === "center" ? "translateX(-50%)" : item.align === "right" ? "translateX(-100%)" : undefined }} onPointerDown={(event) => { event.stopPropagation(); setSelectedId(item.id); if (editingId !== item.id) setDrag({ id: item.id, dx: event.clientX - item.x, dy: event.clientY - item.y }); }} onDoubleClick={(event) => { event.stopPropagation(); beginEditing(item.id, item.text); }}>
-          {editingId === item.id ? (
-            <div
-              contentEditable
-              suppressContentEditableWarning
-              role="textbox"
-              aria-label="Editar texto no canvas"
-              spellCheck={false}
-              autoFocus
-              className="min-w-24 whitespace-pre-wrap border border-cyan bg-transparent px-1 text-foreground outline-none caret-cyan selection:bg-cyan/20"
-              style={{ font: "inherit", color: item.color, textAlign: item.align }}
-              onInput={(event) => updateTextValue(item.id, event.currentTarget.textContent ?? "")}
-              onBlur={() => commitText(item.id)}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") {
-                  event.preventDefault();
-                  commitText(item.id);
-                }
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  commitText(item.id);
-                }
-              }}
-            >
-              {activeTextValue}
-            </div>
-          ) : item.text}
-        </div>
-      ))}
+      {texts.map((item) =>
+        editingId === item.id ? (
+          <DirectTextEditor
+            key={item.id}
+            value={activeTextValue}
+            x={item.x}
+            y={item.y}
+            style={{
+              fontFamily: item.fontFamily,
+              fontSize: item.fontSize,
+              bold: item.bold,
+              italic: item.italic,
+              underline: item.underline,
+              align: item.align,
+              color: item.color,
+            }}
+            autoFocus
+            onChange={(value) => updateTextValue(item.id, value)}
+            onCommit={(value) => {
+              updateTextValue(item.id, value);
+              commitText(item.id);
+            }}
+            onCancel={() => commitText(item.id)}
+          />
+        ) : (
+          <div
+            key={item.id}
+            className={`pointer-events-auto fixed cursor-move select-none rounded-sm px-1 ${selectedId === item.id ? "outline outline-1 outline-cyan/70" : ""}`}
+            style={{
+              left: item.x,
+              top: item.y,
+              color: item.color,
+              fontFamily: item.fontFamily,
+              fontSize: `${item.fontSize}pt`,
+              fontWeight: item.bold ? 700 : 400,
+              fontStyle: item.italic ? "italic" : "normal",
+              textDecoration: item.underline ? "underline" : "none",
+              textAlign: item.align,
+              transform:
+                item.align === "center"
+                  ? "translateX(-50%)"
+                  : item.align === "right"
+                    ? "translateX(-100%)"
+                    : undefined,
+            }}
+            onPointerDown={(event) => {
+              event.stopPropagation();
+              setSelectedId(item.id);
+              setDrag({ id: item.id, dx: event.clientX - item.x, dy: event.clientY - item.y });
+            }}
+            onDoubleClick={(event) => {
+              event.stopPropagation();
+              beginEditing(item.id, item.text);
+            }}
+          >
+            {item.text}
+          </div>
+        ),
+      )}
     </div>
   );
 }
