@@ -355,60 +355,79 @@ const ProfileDock = ({
 }) => {
   const [open, setOpen] = useState(true);
 
-  return (
-  <section className={open ? "fixed right-16 top-20 z-40 w-80 overflow-hidden rounded-lg border border-line bg-panel p-3 shadow-xl transition-all duration-200" : "fixed right-16 top-20 z-40 h-12 w-12 overflow-hidden rounded-lg border border-line bg-panel p-2 shadow-xl transition-all duration-200"}>
-    <div className="mb-2 flex items-center justify-between gap-2">
+  if (!open) {
+    return (
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
-        title={open ? "Recolher configurações" : "Abrir configurações"}
-        aria-label={open ? "Recolher configurações" : "Abrir configurações"}
-        className="grid size-8 shrink-0 place-items-center rounded-md border border-line bg-panel2 text-muted-foreground transition-colors hover:bg-cyan/10 hover:text-cyan"
+        onClick={() => setOpen(true)}
+        title="Abrir configurações de grade"
+        aria-label="Abrir configurações de grade"
+        aria-expanded={false}
+        className="fixed right-14 top-1/2 z-40 flex -translate-y-1/2 flex-col items-center gap-2 rounded-l-md border border-r-0 border-line bg-panel px-2 py-3 text-muted-foreground shadow-xl transition-colors hover:bg-cyan/10 hover:text-cyan"
       >
-        {open ? <PanelRightClose className="size-4" /> : <ChevronRight className="size-4" />}
+        <ChevronRight className="size-4" />
+        <span className="[writing-mode:vertical-rl] text-[10px] font-mono uppercase tracking-[0.14em]">
+          Configurações de Grade
+        </span>
       </button>
-      <div>
-        <p className="text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">Tabela de Tamanhos</p>
-        <h2 className="text-sm font-semibold text-foreground">Perfil de Grade do Cliente</h2>
-      </div>
-      <div className="flex items-center gap-1">
+    );
+  }
+
+  return (
+    <section className="fixed right-16 top-20 z-40 w-80 overflow-hidden rounded-lg border border-line bg-panel p-3 shadow-xl transition-all duration-200">
+      <div className="mb-2 flex items-center justify-between gap-2">
         <button
           type="button"
-          onClick={onCreate}
-          title="Novo Perfil"
-          aria-label="Novo Perfil"
-          className="grid size-8 place-items-center rounded-md border border-line bg-panel2 text-cyan transition-colors hover:bg-cyan/10"
+          onClick={() => setOpen(false)}
+          title="Recolher configurações de grade"
+          aria-label="Recolher configurações de grade"
+          aria-expanded={true}
+          className="grid size-8 shrink-0 place-items-center rounded-md border border-line bg-panel2 text-muted-foreground transition-colors hover:bg-cyan/10 hover:text-cyan"
         >
-          <Plus className="size-4" />
+          <PanelRightClose className="size-4" />
         </button>
-        <button
-          type="button"
-          onClick={onDelete}
-          title="Excluir perfil ativo"
-          aria-label="Excluir perfil ativo"
-          disabled={profiles.length <= 1 || activeProfile === DEFAULT_PROFILE_NAME}
-          className="grid size-8 place-items-center rounded-md border border-line bg-panel2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-40"
-        >
-          <Trash2 className="size-4" />
-        </button>
+        <div className="min-w-0">
+          <p className="text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">Tabela de Tamanhos</p>
+          <h2 className="text-sm font-semibold text-foreground">Perfil de Grade do Cliente</h2>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={onCreate}
+            title="Novo Perfil"
+            aria-label="Novo Perfil"
+            className="grid size-8 place-items-center rounded-md border border-line bg-panel2 text-cyan transition-colors hover:bg-cyan/10"
+          >
+            <Plus className="size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            title="Excluir perfil ativo"
+            aria-label="Excluir perfil ativo"
+            disabled={profiles.length <= 1 || activeProfile === DEFAULT_PROFILE_NAME}
+            className="grid size-8 place-items-center rounded-md border border-line bg-panel2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-40"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        </div>
       </div>
-    </div>
-    <select
-      value={activeProfile}
-      onChange={(event) => onSelect(event.target.value)}
-      aria-label="Perfil de Grade do Cliente"
-      className="h-9 w-full rounded-md border border-input bg-panel2 px-3 text-sm text-foreground outline-none focus:border-cyan/60 focus:ring-1 focus:ring-cyan/30"
-    >
-      {profiles.map((profile) => (
-        <option key={profile.name} value={profile.name}>
-          {profile.name}
-        </option>
-      ))}
-    </select>
-    <p className="mt-2 text-[10px] leading-snug text-faint">
-      Cada perfil mantém tabelas independentes para peças adultas, infantis e Baby Look.
-    </p>
-  </section>
+      <select
+        value={activeProfile}
+        onChange={(event) => onSelect(event.target.value)}
+        aria-label="Perfil de Grade do Cliente"
+        className="h-9 w-full rounded-md border border-input bg-panel2 px-3 text-sm text-foreground outline-none focus:border-cyan/60 focus:ring-1 focus:ring-cyan/30"
+      >
+        {profiles.map((profile) => (
+          <option key={profile.name} value={profile.name}>
+            {profile.name}
+          </option>
+        ))}
+      </select>
+      <p className="mt-2 text-[10px] leading-snug text-faint">
+        Cada perfil mantém tabelas independentes para peças adultas, infantis e Baby Look.
+      </p>
+    </section>
   );
 };
 
