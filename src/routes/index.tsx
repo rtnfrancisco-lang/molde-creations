@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import { createRoot, type Root, createPortal } from "react-dom/client";
 import {
   ChevronDown,
   Plus,
@@ -669,151 +669,100 @@ const TEXT_FONTS = ["Arial", "Impact", "Montserrat", "Bebas Neue", "Roboto", "Co
 
 type TextWorkspaceProps = {
   tool: Tool;
+  view: View;
+  svgPoint: (event: { clientX: number; clientY: number }) => { x: number; y: number };
+  bounds: { x: number; y: number; width: number; height: number };
 };
 
-function TextWorkspace({ tool }: TextWorkspaceProps) {
-  const [texts, setTexts] = useState<TextElement[]>([]);
+const TEXT_STORAGE = "moldecore.textos";
+const EMPTY_TEXTS: Record<View, TextElement[]> = { frente: [], costas: [], mangaEsq: [], mangaDir: [] };
+
+function TextWorkspace({ tool, view, svgPoint, bounds }: TextWorkspaceProps) {
+  const [byView, setByView] = useState<Record<View, TextElement[]>>(EMPTY_TEXTS);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeTextValue, setActiveTextValue] = useState("");
   const [drag, setDrag] = useState<{ id: string; dx: number; dy: number } | null>(null);
-  const textsRef = useRef<TextElement[]>([]);
+  const textsRef = useRef<Record<View, TextElement[]>>(EMPTY_TEXTS);
   const editingIdRef = useRef<string | null>(null);
   const activeTextValueRef = useRef("");
   const previousToolRef = useRef<Tool>(tool);
-
+  const texts = byView[view];
   const selected = texts.find((item) => item.id === selectedId) ?? null;
 
-  const updateTexts = (updater: (items: TextElement[]) => TextElement[]) => {
-    setTexts((items) => {
-      const next = updater(items);
-      textsRef.current = next;
-      return next;
-    });
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(TEXT_STORAGE) ?? "null");
+      if (stored && typeof stored === "object") {
+        const restored = { ...EMPTY_TEXTS, ...stored };
+        textsRef.current = restored;
+        setByView(restored);
+      }
+    } catch { /* Dados locais inválidos não impedem o desenho. */ }
+  }, []);
+
+  const updateTexts = (target: View, updater: (items: TextElement[]) => TextElement[]) => {
+    const next = { ...textsRef.current, [target]: updater(textsRef.current[target]) };
+    textsRef.current = next;
+    setByView(next);
+    localStorage.setItem(TEXT_STORAGE, JSON.stringify(next));
   };
 
+  const commitText = () => {
+    const id = editingIdRef.current;
+    if (!id) return;
+    const value = activeTextValueRef.current.replace(/\u00a0/g, " ");
+    updateTexts(view, (items) => items
+      .map((item) => item.id === id ? { ...item, text: value } : item)
+      .filter((item) => item.text.trim().length > 0));
+    editingIdRef.current = null;
+    setEditingId(null);
+    if (!value.trim()) setSelectedId(null);
+  };
+
+  // Persist the active text before switching to the selection tool (or any other tool).
   useEffect(() => {
-    if (previousToolRef.current === tool) return;
-
-    const wasTextTool = previousToolRef.current === "texto";
-    const isSelectionTool = tool === "selecao";
-    const value = activeTextValueRef.current.trim();
-    const activeId = editingIdRef.current;
-
-    if (wasTextTool && isSelectionTool && value && activeId) {
-      updateTexts((items) => {
-        const current = items.find((item) => item.id === activeId);
-        const nextText: TextElement = {
-          id: activeId,
-          text: value,
-          x: current?.x ?? selected?.x ?? 0,
-          y: current?.y ?? selected?.y ?? 0,
-          fontFamily: current?.fontFamily ?? selected?.fontFamily ?? "Arial",
-          fontSize: current?.fontSize ?? selected?.fontSize ?? 24,
-          bold: current?.bold ?? selected?.bold ?? false,
-          italic: current?.italic ?? selected?.italic ?? false,
-          underline: current?.underline ?? selected?.underline ?? false,
-          align: current?.align ?? selected?.align ?? "left",
-          color: current?.color ?? selected?.color ?? "#ffffff",
-        };
-
-        const exists = items.some((item) => item.id === activeId);
-        return exists
-          ? items.map((item) => (item.id === activeId ? nextText : item))
-          : [...items, nextText];
-      });
-    }
-
+    if (previousToolRef.current === "texto" && tool !== "texto") commitText();
     previousToolRef.current = tool;
-  }, [selected, tool]);
+  }, [tool]);
+
+  useEffect(() => {
+    commitText();
+    setSelectedId(null);
+  }, [view]);
 
   const updateSelected = (patch: Partial<TextElement>) => {
     if (!selectedId) return;
-    updateTexts((items) => items.map((item) => (item.id === selectedId ? { ...item, ...patch } : item)));
+    updateTexts(view, (items) => items.map((item) => item.id === selectedId ? { ...item, ...patch } : item));
   };
 
-  const commitText = (id = editingIdRef.current, value = activeTextValueRef.current) => {
-    if (!id) return;
-    const normalizedValue = value.replace(/\\u00a0/g, " ");
-    const nextItems = normalizedValue.length > 0
-      ? textsRef.current.map((item) => (item.id === id ? { ...item, text: normalizedValue } : item))
-      : textsRef.current.filter((item) => item.id !== id);
-    textsRef.current = nextItems;
-    setTexts(nextItems);
-    if (selectedId === id && normalizedValue.length === 0) setSelectedId(null);
-    editingIdRef.current = null;
-    setEditingId(null);
-    activeTextValueRef.current = normalizedValue;
-    setActiveTextValue(normalizedValue);
+  const startEditing = (item: TextElement) => {
+    editingIdRef.current = item.id;
+    activeTextValueRef.current = item.text;
+    setEditingId(item.id);
+    setActiveTextValue(item.text);
+    setSelectedId(item.id);
   };
 
-  const beginEditing = (id: string, value: string) => {
-    editingIdRef.current = id;
-    activeTextValueRef.current = value;
-    setEditingId(id);
-    setActiveTextValue(value);
-  };
-
-  const updateTextValue = (id: string, value: string) => {
-    activeTextValueRef.current = value;
-    setActiveTextValue(value);
-    updateTexts((items) => items.map((item) => (item.id === id ? { ...item, text: value } : item)));
-  };
-
-  useEffect(() => {
-    textsRef.current = texts;
-  }, [texts]);
-
-  useEffect(() => {
-    if (previousToolRef.current === "texto" && tool !== "texto") {
-      const editingId = editingIdRef.current;
-      const currentValue = activeTextValueRef.current;
-
-      if (editingId) {
-        updateTexts((items) =>
-          items
-            .map((item) => (item.id === editingId ? { ...item, text: currentValue } : item))
-            .filter((item) => item.text.trim().length > 0),
-        );
-        commitText(editingId);
-      }
-    }
-
-    previousToolRef.current = tool;
-  }, [tool]);
-
-  useEffect(() => {
-    const onCanvasPointerDown = (event: PointerEvent) => {
-      if (tool !== "texto") return;
-      const target = event.target as HTMLElement;
-      if (target.closest("[data-text-workspace]") || !target.closest("svg")) return;
-      const id = `texto-${Date.now()}`;
-      const item: TextElement = {
-        id,
-        text: "",
-        x: event.clientX,
-        y: event.clientY,
-        fontFamily: "Arial",
-        fontSize: 24,
-        bold: false,
-        italic: false,
-        underline: false,
-        align: "left",
-        color: "#20242b",
-      };
-      updateTexts((items) => [...items, item]);
-      setSelectedId(id);
-      beginEditing(id, "");
-      event.preventDefault();
+  const addText = (event: React.PointerEvent<SVGRectElement>) => {
+    if (tool !== "texto" || event.button !== 0) return;
+    event.stopPropagation();
+    const point = svgPoint(event);
+    const item: TextElement = {
+      id: crypto.randomUUID(), text: "", x: point.x, y: point.y,
+      fontFamily: "Arial", fontSize: 24, bold: false, italic: false,
+      underline: false, align: "left", color: "#20242b",
     };
-    document.addEventListener("pointerdown", onCanvasPointerDown, true);
-    return () => document.removeEventListener("pointerdown", onCanvasPointerDown, true);
-  }, [tool]);
+    updateTexts(view, (items) => [...items, item]);
+    startEditing(item);
+  };
 
   useEffect(() => {
     if (!drag) return;
     const move = (event: PointerEvent) => {
-      updateTexts((items) => items.map((item) => (item.id === drag.id ? { ...item, x: event.clientX - drag.dx, y: event.clientY - drag.dy } : item)));
+      const point = svgPoint(event);
+      updateTexts(view, (items) => items.map((item) => item.id === drag.id
+        ? { ...item, x: point.x - drag.dx, y: point.y - drag.dy } : item));
     };
     const stop = () => setDrag(null);
     document.addEventListener("pointermove", move);
@@ -822,88 +771,70 @@ function TextWorkspace({ tool }: TextWorkspaceProps) {
       document.removeEventListener("pointermove", move);
       document.removeEventListener("pointerup", stop);
     };
-  }, [drag]);
+  }, [drag, view, svgPoint]);
 
   return (
-    <div data-text-workspace className="pointer-events-none fixed inset-0 z-[80]">
-      {(tool === "texto" || selected) && (
-        <div className="pointer-events-auto fixed left-16 right-20 top-14 flex min-h-12 items-center gap-2 border-b border-line bg-panel px-3 py-2 shadow-md">
-          <span className="mr-1 text-[10px] font-mono uppercase tracking-[0.14em] text-muted-foreground">Texto</span>
+    <g data-text-workspace>
+      {tool === "texto" && <rect {...bounds} fill="transparent" onPointerDown={addText} />}
+      {texts.map((item) => {
+        const fontSize = item.fontSize / 10;
+        const textStyle = {
+          fontFamily: item.fontFamily, fontSize, fontWeight: item.bold ? 700 : 400,
+          fontStyle: item.italic ? "italic" : "normal",
+          textDecoration: item.underline ? "underline" : "none",
+        } as const;
+        return editingId === item.id ? (
+          <foreignObject key={item.id} x={item.x} y={item.y} width={Math.max(30, bounds.width / 2)} height={Math.max(8, bounds.height / 4)} style={{ overflow: "visible" }}>
+            <DirectTextEditor
+              embedded value={activeTextValue} x={0} y={0} width={Math.max(30, bounds.width / 2)}
+              style={{ fontFamily: item.fontFamily, fontSize, bold: item.bold, italic: item.italic,
+                underline: item.underline, align: item.align, color: item.color }}
+              onChange={(value) => {
+                activeTextValueRef.current = value;
+                setActiveTextValue(value);
+                updateTexts(view, (items) => items.map((current) => current.id === item.id ? { ...current, text: value } : current));
+              }}
+              onCommit={(value) => { activeTextValueRef.current = value; commitText(); }}
+              onCancel={commitText}
+            />
+          </foreignObject>
+        ) : (
+          <text
+            key={item.id} x={item.x} y={item.y + fontSize} fill={item.color}
+            style={textStyle} textAnchor={{ left: "start", center: "middle", right: "end" }[item.align]}
+            className={tool === "selecao" || tool === "texto" ? "cursor-move" : "pointer-events-none"}
+            onPointerDown={(event) => {
+              if (tool !== "selecao" && tool !== "texto") return;
+              event.stopPropagation();
+              setSelectedId(item.id);
+              const point = svgPoint(event);
+              setDrag({ id: item.id, dx: point.x - item.x, dy: point.y - item.y });
+            }}
+            onDoubleClick={(event) => { event.stopPropagation(); startEditing(item); }}
+          >
+            {item.text.split("\n").map((line, index) =>
+              <tspan key={index} x={item.x} dy={index ? fontSize * 1.15 : 0}>{line || " "}</tspan>)}
+          </text>
+        );
+      })}
+      {typeof document !== "undefined" && (tool === "texto" || selected) && createPortal(
+        <div className="fixed z-[80] left-16 right-20 top-14 flex min-h-12 items-center gap-2 border-b border-line bg-panel px-3 py-2 shadow-md">
+          <span className="mr-1 text-[10px] font-mono uppercase text-muted-foreground">Texto</span>
           <select value={selected?.fontFamily ?? "Arial"} onChange={(event) => updateSelected({ fontFamily: event.target.value })} className="h-8 rounded-md border border-input bg-panel2 px-2 text-xs text-foreground">
             {TEXT_FONTS.map((font) => <option key={font} value={font}>{font}</option>)}
           </select>
           <input type="number" min="1" value={selected?.fontSize ?? 24} onChange={(event) => updateSelected({ fontSize: Number(event.target.value) || 1 })} className="h-8 w-16 rounded-md border border-input bg-panel2 px-2 text-xs text-foreground" aria-label="Tamanho da fonte" />
-          <button type="button" title="Negrito" onClick={() => updateSelected({ bold: !selected?.bold })} className={`grid size-8 place-items-center rounded-md border border-line ${selected?.bold ? "bg-cyan/20 text-cyan" : "text-muted-foreground"}`}><Bold className="size-4" /></button>
-          <button type="button" title="Itálico" onClick={() => updateSelected({ italic: !selected?.italic })} className={`grid size-8 place-items-center rounded-md border border-line ${selected?.italic ? "bg-cyan/20 text-cyan" : "text-muted-foreground"}`}><Italic className="size-4" /></button>
-          <button type="button" title="Sublinhado" onClick={() => updateSelected({ underline: !selected?.underline })} className={`grid size-8 place-items-center rounded-md border border-line ${selected?.underline ? "bg-cyan/20 text-cyan" : "text-muted-foreground"}`}><Underline className="size-4" /></button>
+          <button type="button" title="Negrito" onClick={() => updateSelected({ bold: !selected?.bold })} className="grid size-8 place-items-center rounded-md border border-line"><Bold className="size-4" /></button>
+          <button type="button" title="Itálico" onClick={() => updateSelected({ italic: !selected?.italic })} className="grid size-8 place-items-center rounded-md border border-line"><Italic className="size-4" /></button>
+          <button type="button" title="Sublinhado" onClick={() => updateSelected({ underline: !selected?.underline })} className="grid size-8 place-items-center rounded-md border border-line"><Underline className="size-4" /></button>
           <div className="ml-1 flex rounded-md border border-line bg-panel2 p-0.5">
-            <button type="button" title="Alinhar à esquerda" onClick={() => updateSelected({ align: "left" })} className={`grid size-7 place-items-center rounded ${selected?.align === "left" ? "bg-cyan/20 text-cyan" : "text-muted-foreground"}`}><AlignLeft className="size-4" /></button>
-            <button type="button" title="Centralizar" onClick={() => updateSelected({ align: "center" })} className={`grid size-7 place-items-center rounded ${selected?.align === "center" ? "bg-cyan/20 text-cyan" : "text-muted-foreground"}`}><AlignCenter className="size-4" /></button>
-            <button type="button" title="Alinhar à direita" onClick={() => updateSelected({ align: "right" })} className={`grid size-7 place-items-center rounded ${selected?.align === "right" ? "bg-cyan/20 text-cyan" : "text-muted-foreground"}`}><AlignRight className="size-4" /></button>
+            <button type="button" title="Alinhar à esquerda" onClick={() => updateSelected({ align: "left" })}><AlignLeft className="size-4" /></button>
+            <button type="button" title="Centralizar" onClick={() => updateSelected({ align: "center" })}><AlignCenter className="size-4" /></button>
+            <button type="button" title="Alinhar à direita" onClick={() => updateSelected({ align: "right" })}><AlignRight className="size-4" /></button>
           </div>
           {selected && <input type="color" value={selected.color} onChange={(event) => updateSelected({ color: event.target.value })} title="Cor do texto" className="size-8 cursor-pointer rounded border border-line bg-panel2 p-0.5" />}
-        </div>
-      )}
-      {texts.map((item) =>
-        editingId === item.id ? (
-          <DirectTextEditor
-            key={item.id}
-            value={activeTextValue}
-            x={item.x}
-            y={item.y}
-            style={{
-              fontFamily: item.fontFamily,
-              fontSize: item.fontSize,
-              bold: item.bold,
-              italic: item.italic,
-              underline: item.underline,
-              align: item.align,
-              color: item.color,
-            }}
-            autoFocus
-            onChange={(value) => updateTextValue(item.id, value)}
-            onCommit={(value) => {
-              updateTextValue(item.id, value);
-              commitText(item.id);
-            }}
-            onCancel={() => commitText(item.id)}
-          />
-        ) : (
-          <div
-            key={item.id}
-            className={`pointer-events-auto fixed cursor-move select-none rounded-sm px-1 ${selectedId === item.id ? "outline outline-1 outline-cyan/70" : ""}`}
-            style={{
-              left: item.x,
-              top: item.y,
-              color: item.color,
-              fontFamily: item.fontFamily,
-              fontSize: `${item.fontSize}pt`,
-              fontWeight: item.bold ? 700 : 400,
-              fontStyle: item.italic ? "italic" : "normal",
-              textDecoration: item.underline ? "underline" : "none",
-              textAlign: item.align,
-              transform:
-                item.align === "center"
-                  ? "translateX(-50%)"
-                  : item.align === "right"
-                    ? "translateX(-100%)"
-                    : undefined,
-            }}
-            onPointerDown={(event) => {
-              event.stopPropagation();
-              setSelectedId(item.id);
-              setDrag({ id: item.id, dx: event.clientX - item.x, dy: event.clientY - item.y });
-            }}
-            onDoubleClick={(event) => {
-              event.stopPropagation();
-              beginEditing(item.id, item.text);
-            }}
-          >
-            {item.text}
-          </div>
-        ),
-      )}
-    </div>
+        </div>, document.body)}
+    </g>
   );
 }
 
@@ -956,16 +887,6 @@ function Index() {
   const [cropRect, setCropRect] = useState(true);
   const [exporting, setExporting] = useState(false);
 
-  useEffect(() => {
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-    root.render(<TextWorkspace tool={tool} />);
-    return () => {
-      root.unmount();
-      host.remove();
-    };
-  }, [tool]);
 
   const selectedLayer = () => {
     if (!selLayer) return null;
@@ -2912,7 +2833,7 @@ function PatternCanvas({
   const title = { frente: "FRENTE", costas: "COSTAS", mangaEsq: "MANGA ESQUERDA", mangaDir: "MANGA DIREITA" }[view];
   const showNodes = (tool === "forma" && !layerNodeMode) || tool === "caneta";
   const nodesInteractive = tool === "forma" || (tool === "caneta" && !draft);
-  const cursor = { selecao: "cursor-default", forma: "cursor-crosshair", caneta: "cursor-crosshair", zoom: "cursor-zoom-in", fita: "cursor-crosshair" }[tool];
+  const cursor = { selecao: "cursor-default", forma: "cursor-crosshair", caneta: "cursor-crosshair", zoom: "cursor-zoom-in", fita: "cursor-crosshair", texto: "cursor-text" }[tool];
   const tapeEnd = tape.b ?? (tape.a ? hover : null);
   const sw = { strokeWidth: 1.5, vectorEffect: "non-scaling-stroke" as const };
 
@@ -3311,6 +3232,8 @@ function PatternCanvas({
           })}
         </g>
       )}
+
+      <TextWorkspace tool={tool} view={view} svgPoint={svgPoint} bounds={{ x: vx, y: vy, width: vw, height: vh }} />
 
       {/* Fita métrica */}
       {tape.a && tapeEnd && (
