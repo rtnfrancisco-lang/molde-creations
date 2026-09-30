@@ -78,8 +78,7 @@ export const Route = createFileRoute("/")({
 
 type Field = "bodyHeight" | "bodyWidth" | "sleeveHeight" | "sleeveWidth";
 type Measurements = Record<Field, number>;
-const SIZES = ["PP", "P", "M", "G", "GG", "XG", "XG2"] as const;
-type Size = (typeof SIZES)[number];
+type Size = "PP" | "P" | "M" | "G" | "GG" | "XG" | "XG2";
 type Grading = Record<Size, Measurements>;
 type View = "frente" | "costas" | "mangaEsq" | "mangaDir";
 type Node = { x: number; y: number; smooth: boolean; hIn?: { x: number; y: number }; hOut?: { x: number; y: number } };
@@ -96,6 +95,31 @@ const NO_STYLE: PartStyle = { stroke: null, fill: null };
 const DEFAULT_STYLES: Styles = { frente: NO_STYLE, costas: NO_STYLE, mangaEsq: NO_STYLE, mangaDir: NO_STYLE };
 type Tool = "selecao" | "forma" | "caneta" | "zoom" | "fita";
 type ClothingType = "Camiseta" | "Moletom" | "Regata" | "Manga Longa" | "Camisa Infantil" | "Camisa Baby Look";
+type SizeOption = { id: Size; label: string };
+
+/* Fonte única de verdade dos tamanhos disponíveis e dos rótulos exibidos. */
+const SIZES_BY_GARMENT: Record<ClothingType, readonly SizeOption[]> = {
+  Camiseta: ["PP", "P", "M", "G", "GG", "XG"].map((id) => ({ id: id as Size, label: id })),
+  Moletom: ["PP", "P", "M", "G", "GG", "XG"].map((id) => ({ id: id as Size, label: id })),
+  Regata: ["PP", "P", "M", "G", "GG", "XG"].map((id) => ({ id: id as Size, label: id })),
+  "Manga Longa": ["PP", "P", "M", "G", "GG", "XG"].map((id) => ({ id: id as Size, label: id })),
+  "Camisa Infantil": [
+    { id: "PP", label: "2ANOS" },
+    { id: "P", label: "4ANOS" },
+    { id: "M", label: "6ANOS" },
+    { id: "G", label: "8ANOS" },
+    { id: "GG", label: "10ANOS" },
+    { id: "XG", label: "12ANOS" },
+    { id: "XG2", label: "14ANOS" },
+  ],
+  "Camisa Baby Look": ["PP", "P", "M", "G", "GG", "XG"].map((id) => ({
+    id: id as Size,
+    label: `BL ${id}`,
+  })),
+};
+
+const sizesForGarment = (clothingType: ClothingType): readonly SizeOption[] => SIZES_BY_GARMENT[clothingType];
+const sizeIdsForGarment = (clothingType: ClothingType): readonly Size[] => sizesForGarment(clothingType).map((option) => option.id);
 
 const FIELDS: { key: Field; label: string; group: string }[] = [
   { key: "bodyHeight", label: "Altura do Corpo", group: "Corpo" },
@@ -152,29 +176,13 @@ const PRESET_TABLES: Partial<Record<ClothingType, Grading>> = {
 
 /* ===== Nomenclatura dinâmica de tamanho / rótulo técnico ===== */
 
-/* Mapa de idades usado apenas para "Camisa Infantil" */
-const INFANTIL_AGE_MAP: Record<Size, string> = {
-  PP: "2ANOS",
-  P: "4ANOS",
-  M: "6ANOS",
-  G: "8ANOS",
-  GG: "10ANOS",
-  XG: "12ANOS",
-  XG2: "14ANOS",
-};
-
-/* Rótulo do tamanho de acordo com o tipo de peça:
-   - Camisa Baby Look: "BL " + tamanho (ex.: BL PP, BL M)
-   - Camisa Infantil: idade correspondente (ex.: 2ANOS, 12ANOS)
-   - Demais: o próprio tamanho (PP, P, M, ...) */
-const sizeLabel = (clothingType: ClothingType, size: Size): string => {
-  if (clothingType === "Camisa Baby Look") return `BL ${size === "XG2" ? "XG" : size}`;
-  if (clothingType === "Camisa Infantil") return INFANTIL_AGE_MAP[size];
-  return size === "XG2" ? "XG" : size;
-};
+/* Rótulo sempre derivado da configuração do tipo de peça. */
+const sizeLabel = (clothingType: ClothingType, size: Size): string =>
+  sizesForGarment(clothingType).find((option) => option.id === size)?.label ?? size;
 
 /* Molde Mãe padrão de cada tipo de peça.
-   Na Camisa Infantil o "M" corresponde ao 6ANOS, que é a numeração padrão da grade infantil. */
+   Na grade infantil, o id interno M é a âncora estável correspondente ao tamanho 6ANOS.
+   Isso preserva referências existentes de estampas sem alterar sua posição. */
 const DEFAULT_MOTHER: Record<ClothingType, Size> = {
   Camiseta: "M",
   Moletom: "M",
@@ -491,20 +499,23 @@ function Index() {
     setTimeout(() => setSavedMsg(""), 2500);
   };
 
-  /* Troca o tipo de peça e, quando existe, injeta a tabela de medidas pré-definida.
-     O Molde Mãe volta para o padrão do tipo (na Camisa Infantil o M é exibido como 6ANOS). */
+  /* Troca o tipo de peça usando a mesma configuração da barra de tamanhos.
+     Ao entrar na grade infantil, o molde mãe e o tamanho selecionado ficam em 6ANOS. */
   const changeClothingType = (t: ClothingType) => {
     setClothingType(t);
     const preset = PRESET_TABLES[t];
     if (!preset) return;
     checkpoint("tipoPeca:" + t);
-    const dm = DEFAULT_MOTHER[t];
+    const availableIds = sizeIdsForGarment(t);
+    const defaultMother = DEFAULT_MOTHER[t];
+    const nextSize = availableIds.includes(size) ? size : defaultMother;
+    const nextMother = availableIds.includes(defaultMother) ? defaultMother : availableIds[0]!;
     setTable(preset);
     localStorage.setItem(LS_GRADING, JSON.stringify(preset));
-    setMother(dm);
-    setSize(dm);
-    localStorage.setItem(LS_MOTHER, dm);
-    setSavedMsg(`Tabela de medidas de ${t} carregada · Molde Mãe: ${sizeLabel(t, dm)}`);
+    setMother(nextMother);
+    setSize(nextSize);
+    localStorage.setItem(LS_MOTHER, nextMother);
+    setSavedMsg(`Tabela de medidas de ${t} carregada · Molde Mãe: ${sizeLabel(t, nextMother)}`);
     setTimeout(() => setSavedMsg(""), 3500);
   };
 
