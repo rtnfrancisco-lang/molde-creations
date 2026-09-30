@@ -321,6 +321,12 @@ function Index() {
     clothingType === "Camisa Infantil"
       ? ["2ANOS", "4ANOS", "6ANOS", "8ANOS", "10ANOS", "12ANOS", "14ANOS"]
       : ["PP", "P", "M", "G", "GG", "XG"];
+  /* Botões da barra de TAMANHO: cada rótulo de tamanhosExibidos com o seu id
+     interno (na grade infantil, 6ANOS corresponde ao id M). Assim a barra só
+     mostra os tamanhos que realmente existem na peça selecionada. */
+  const visibleSizeOptions = sizesForGarment(clothingType).filter(
+    (o) => tamanhosExibidos.includes(o.label) || tamanhosExibidos.includes(o.id),
+  );
   const [table, setTable] = useState<Grading>(DEFAULT_TABLE);
   const [mother, setMother] = useState<Size>("M");
   const [artworks, setArtworks] = useState<Artworks>(NO_ART);
@@ -1201,17 +1207,17 @@ function Index() {
           </div>
           <div className="flex items-center gap-1 bg-panel2 border border-line rounded-md p-1">
             <span className="text-[10px] font-mono uppercase tracking-wider text-faint px-2">Tamanho</span>
-            {SIZES.map((s) => (
+            {visibleSizeOptions.map((o) => (
               <button
-                key={s}
-                onClick={() => setSize(s)}
+                key={o.id}
+                onClick={() => setSize(o.id)}
                 className={
                   "px-2 py-1 rounded text-xs font-mono font-semibold transition-colors " +
-                  (s === size ? "bg-cyan text-primary-foreground" : "text-muted-foreground hover:text-foreground")
+                  (o.id === size ? "bg-cyan text-primary-foreground" : "text-muted-foreground hover:text-foreground")
                 }
               >
-                {s}
-                {s === mother && <Crown className="inline size-2.5 ml-0.5 -mt-0.5" />}
+                {o.label}
+                {o.id === mother && <Crown className="inline size-2.5 ml-0.5 -mt-0.5" />}
               </button>
             ))}
           </div>
