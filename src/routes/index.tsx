@@ -686,6 +686,7 @@ function TextWorkspace({ tool, view, svgPoint, bounds }: TextWorkspaceProps) {
   const [drag, setDrag] = useState<{ id: string; dx: number; dy: number } | null>(null);
   const textsRef = useRef<Record<View, TextElement[]>>(EMPTY_TEXTS);
   const editingIdRef = useRef<string | null>(null);
+  const editingViewRef = useRef<View>(view);
   const activeTextValueRef = useRef("");
   const previousToolRef = useRef<Tool>(tool);
   const texts = byView[view];
@@ -713,7 +714,8 @@ function TextWorkspace({ tool, view, svgPoint, bounds }: TextWorkspaceProps) {
     const id = editingIdRef.current;
     if (!id) return;
     const value = activeTextValueRef.current.replace(/\u00a0/g, " ");
-    updateTexts(view, (items) => items
+    // O texto pertence à vista em que foi criado, mesmo que a vista já tenha mudado.
+    updateTexts(editingViewRef.current, (items) => items
       .map((item) => item.id === id ? { ...item, text: value } : item)
       .filter((item) => item.text.trim().length > 0));
     editingIdRef.current = null;
@@ -739,6 +741,7 @@ function TextWorkspace({ tool, view, svgPoint, bounds }: TextWorkspaceProps) {
 
   const startEditing = (item: TextElement) => {
     editingIdRef.current = item.id;
+    editingViewRef.current = view;
     activeTextValueRef.current = item.text;
     setEditingId(item.id);
     setActiveTextValue(item.text);
@@ -748,6 +751,7 @@ function TextWorkspace({ tool, view, svgPoint, bounds }: TextWorkspaceProps) {
   const addText = (event: React.PointerEvent<SVGRectElement>) => {
     if (tool !== "texto" || event.button !== 0) return;
     event.stopPropagation();
+    event.preventDefault();
     const point = svgPoint(event);
     const item: TextElement = {
       id: crypto.randomUUID(), text: "", x: point.x, y: point.y,
@@ -1124,6 +1128,8 @@ function Index() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey)) return;
+      const el = e.target as HTMLElement;
+      if (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable) return;
       const k = e.key.toLowerCase();
       if (k === "z" && !e.shiftKey) {
         e.preventDefault();

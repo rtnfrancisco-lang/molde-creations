@@ -68,17 +68,23 @@ export function DirectTextEditor({
     if (!editor || initializedRef.current) return;
 
     initializedRef.current = true;
-    editor.textContent = value;
+    editor.innerText = value;
 
-    if (autoFocus) {
-      placeCaretAtEnd(editor);
-    }
+    if (!autoFocus) return;
+    // Foca depois do clique que criou o editor: o mousedown padrão do navegador
+    // tiraria o foco na mesma hora e o texto vazio seria descartado.
+    requestAnimationFrame(() => {
+      if (editor.isConnected) placeCaretAtEnd(editor);
+    });
   }, [autoFocus, value]);
+
+  // innerText preserva as quebras de linha (Shift+Enter); textContent as descarta.
+  const readValue = (editor: HTMLDivElement) => editor.innerText.replace(/\n$/, "");
 
   const commit = () => {
     if (committedRef.current) return;
     committedRef.current = true;
-    const nextValue = editorRef.current?.textContent ?? value;
+    const nextValue = editorRef.current ? readValue(editorRef.current) : value;
     onCommit(nextValue);
   };
 
@@ -88,14 +94,7 @@ export function DirectTextEditor({
   };
 
   const handleInput = (event: React.FormEvent<HTMLDivElement>) => {
-    const editor = event.currentTarget;
-    const nextValue = editor.textContent ?? "";
-    onChange(nextValue);
-
-    requestAnimationFrame(() => {
-      if (!editor.isConnected) return;
-      placeCaretAtEnd(editor);
-    });
+    onChange(readValue(event.currentTarget));
   };
 
   return (
@@ -118,7 +117,7 @@ export function DirectTextEditor({
         role="textbox"
         aria-label="Texto no canvas"
         spellCheck={false}
-        className="min-h-8 w-full whitespace-pre-wrap break-words border-0 bg-transparent p-0 outline-none caret-cyan selection:bg-cyan/20"
+        className="min-h-8 w-full select-text whitespace-pre-wrap break-words border-0 bg-transparent p-0 outline-none caret-cyan selection:bg-cyan/20"
         style={{
           color: style.color,
           fontFamily: style.fontFamily,
