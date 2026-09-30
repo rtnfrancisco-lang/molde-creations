@@ -330,7 +330,7 @@ const ProfileDock = ({
   onSelect: (name: string) => void;
   onCreate: () => void;
   onDelete: () => void;
-}) => (() => {
+}) => {
   const [open, setOpen] = useState(true);
 
   return (
@@ -387,7 +387,8 @@ const ProfileDock = ({
       Cada perfil mantém tabelas independentes para peças adultas, infantis e Baby Look.
     </p>
   </section>
-);
+  );
+};
 
 const saveLS = (k: string, v: unknown) => {
   try {
@@ -410,7 +411,6 @@ const fmt = (n: number) => n.toFixed(1).replace(".", ",");
    O motor de offset devolve só M/L (polilinha), então os pares de números são
    lidos na ordem em que aparecem. Serve para o quadro de mídia colar exatamente
    na Linha Azul de Sangria, sem margem nem padding. */
-})()
 
 const pathBounds = (d: string): { minX: number; minY: number; maxX: number; maxY: number } | null => {
   const nums = d.match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi);
@@ -581,9 +581,9 @@ function Index() {
     if (!source) return;
     const pasted = structuredClone(source) as Layer & Record<string, unknown>;
     const sourceId = String((pasted as Layer & { id?: string }).id ?? "camada");
-    (pasted as Record<string, unknown>).id = `${sourceId}-copia-${Date.now()}`;
-    if (typeof pasted.x === "number") pasted.x += 10;
-    if (typeof pasted.y === "number") pasted.y += 10;
+    (pasted as Record<string, unknown>)["id"] = `${sourceId}-copia-${Date.now()}`;
+    if (typeof pasted["x"] === "number") pasted["x"] += 10;
+    if (typeof pasted["y"] === "number") pasted["y"] += 10;
     if (typeof pasted.cx === "number") pasted.cx += 10;
     if (typeof pasted.cy === "number") pasted.cy += 10;
     checkpoint("layers");
