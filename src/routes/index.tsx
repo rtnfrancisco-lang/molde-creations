@@ -730,7 +730,20 @@ function TextWorkspace({ tool }: TextWorkspaceProps) {
   }, [texts]);
 
   useEffect(() => {
-    if (previousToolRef.current === "texto" && tool !== "texto") commitText();
+    if (previousToolRef.current === "texto" && tool !== "texto") {
+      const editingId = editingIdRef.current;
+      const currentValue = activeTextValueRef.current;
+
+      if (editingId) {
+        updateTexts((items) =>
+          items
+            .map((item) => (item.id === editingId ? { ...item, text: currentValue } : item))
+            .filter((item) => item.text.trim().length > 0),
+        );
+        commitText(editingId);
+      }
+    }
+
     previousToolRef.current = tool;
   }, [tool]);
 

@@ -104,7 +104,7 @@ export function DirectTextEditor({
         top: y,
         width,
         minHeight,
-        transform: alignmentTransform[style.align],
+        transform: `${alignmentTransform[style.align]} scale(${scale})`,
         transformOrigin: "top left",
       }}
       onPointerDown={(event) => event.stopPropagation()}
@@ -120,7 +120,7 @@ export function DirectTextEditor({
         style={{
           color: style.color,
           fontFamily: style.fontFamily,
-          fontSize: style.fontSize * scale,
+          fontSize: style.fontSize,
           fontWeight: style.bold ? 700 : 400,
           fontStyle: style.italic ? "italic" : "normal",
           textDecoration: style.underline ? "underline" : "none",
