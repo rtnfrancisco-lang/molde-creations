@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import {
   ChevronDown,
   Plus,
@@ -270,6 +271,111 @@ const LS_ART = "moldecore.estampas";
 const LS_STYLES = "moldecore.cores";
 const LS_SHAPES = "moldecore.formas";
 const LS_LAYERS = "moldecore.camadas";
+const LS_PROFILES = "moldecore.perfisGrades";
+const LS_ACTIVE_PROFILE = "moldecore.perfilGradeAtivo";
+const DEFAULT_PROFILE_NAME = "Padrão MoldeCore";
+
+type ProfileTables = Record<ClothingType, Grading>;
+type GradeProfile = { name: string; tables: ProfileTables };
+
+const cloneGrading = (grading: Grading): Grading =>
+  Object.fromEntries(
+    Object.entries(grading).map(([size, measurements]) => [size, { ...measurements }]),
+  ) as Grading;
+
+const defaultTablesForProfiles = (): ProfileTables => ({
+  Camiseta: cloneGrading(DEFAULT_TABLE),
+  Moletom: cloneGrading(DEFAULT_TABLE),
+  Regata: cloneGrading(DEFAULT_TABLE),
+  "Manga Longa": cloneGrading(DEFAULT_TABLE),
+  "Camisa Infantil": cloneGrading(INFANTIL_TABLE),
+  "Camisa Baby Look": cloneGrading(BABY_LOOK_TABLE),
+});
+
+const readGradeProfiles = (): GradeProfile[] => {
+  try {
+    const raw = localStorage.getItem(LS_PROFILES);
+    if (!raw) return [{ name: DEFAULT_PROFILE_NAME, tables: defaultTablesForProfiles() }];
+    const parsed = JSON.parse(raw) as GradeProfile[];
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      return [{ name: DEFAULT_PROFILE_NAME, tables: defaultTablesForProfiles() }];
+    }
+    return parsed.map((profile) => ({
+      name: profile.name,
+      tables: { ...defaultTablesForProfiles(), ...profile.tables },
+    }));
+  } catch {
+    return [{ name: DEFAULT_PROFILE_NAME, tables: defaultTablesForProfiles() }];
+  }
+};
+
+const saveGradeProfiles = (profiles: GradeProfile[]) => {
+  try {
+    localStorage.setItem(LS_PROFILES, JSON.stringify(profiles));
+  } catch {
+    /* O armazenamento local pode estar indisponível ou cheio. */
+  }
+};
+
+const ProfileDock = ({
+  profiles,
+  activeProfile,
+  onSelect,
+  onCreate,
+  onDelete,
+}: {
+  profiles: GradeProfile[];
+  activeProfile: string;
+  onSelect: (name: string) => void;
+  onCreate: () => void;
+  onDelete: () => void;
+}) => (
+  <section className="fixed right-4 top-20 z-40 w-80 rounded-lg border border-line bg-panel p-3 shadow-xl">
+    <div className="mb-2 flex items-center justify-between gap-2">
+      <div>
+        <p className="text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">Tabela de Tamanhos</p>
+        <h2 className="text-sm font-semibold text-foreground">Perfil de Grade do Cliente</h2>
+      </div>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={onCreate}
+          title="Novo Perfil"
+          aria-label="Novo Perfil"
+          className="grid size-8 place-items-center rounded-md border border-line bg-panel2 text-cyan transition-colors hover:bg-cyan/10"
+        >
+          <Plus className="size-4" />
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          title="Excluir perfil ativo"
+          aria-label="Excluir perfil ativo"
+          disabled={profiles.length <= 1 || activeProfile === DEFAULT_PROFILE_NAME}
+          className="grid size-8 place-items-center rounded-md border border-line bg-panel2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-40"
+        >
+          <Trash2 className="size-4" />
+        </button>
+      </div>
+    </div>
+    <select
+      value={activeProfile}
+      onChange={(event) => onSelect(event.target.value)}
+      aria-label="Perfil de Grade do Cliente"
+      className="h-9 w-full rounded-md border border-input bg-panel2 px-3 text-sm text-foreground outline-none focus:border-cyan/60 focus:ring-1 focus:ring-cyan/30"
+    >
+      {profiles.map((profile) => (
+        <option key={profile.name} value={profile.name}>
+          {profile.name}
+        </option>
+      ))}
+    </select>
+    <p className="mt-2 text-[10px] leading-snug text-faint">
+      Cada perfil mantém tabelas independentes para peças adultas, infantis e Baby Look.
+    </p>
+  </section>
+);
+
 const saveLS = (k: string, v: unknown) => {
   try {
     localStorage.setItem(k, JSON.stringify(v));
@@ -328,6 +434,10 @@ function Index() {
     (o) => tamanhosExibidos.includes(o.label) || tamanhosExibidos.includes(o.id),
   );
   const [table, setTable] = useState<Grading>(DEFAULT_TABLE);
+  const [profiles, setProfiles] = useState<GradeProfile[]>(() => [{ name: DEFAULT_PROFILE_NAME, tables: defaultTablesForProfiles() }]);
+  const [activeProfile, setActiveProfile] = useState(DEFAULT_PROFILE_NAME);
+  const profileRootRef = useRef<Root | null>(null);
+  const profileHostRef = useRef<HTMLDivElement | null>(null);
   const [mother, setMother] = useState<Size>("M");
   const [artworks, setArtworks] = useState<Artworks>(NO_ART);
   const [layers, setLayers] = useState<Layers>(NO_LAYERS);
@@ -477,10 +587,82 @@ function Index() {
 
   const graded = table;
 
+  useEffect(() => {
+    const storedProfiles = readGradeProfiles();
+    const storedActive = localStorage.getItem(LS_ACTIVE_PROFILE) ?? DEFAULT_PROFILE_NAME;
+    const selected = storedProfiles.find((profile) => profile.name === storedActive) ?? storedProfiles[0]!;
+    setProfiles(storedProfiles);
+    setActiveProfile(selected.name);
+    setTable(cloneGrading(selected.tables[clothingType] ?? DEFAULT_TABLE));
+  }, []);
+
+  useEffect(() => {
+    if (!profileHostRef.current) {
+      const host = document.createElement("div");
+      host.setAttribute("data-moldecore-profile-dock", "true");
+      document.body.appendChild(host);
+      profileHostRef.current = host;
+      profileRootRef.current = createRoot(host);
+    }
+    profileRootRef.current?.render(
+      <ProfileDock
+        profiles={profiles}
+        activeProfile={activeProfile}
+        onSelect={(name) => {
+          const selected = profiles.find((profile) => profile.name === name);
+          if (!selected) return;
+          setActiveProfile(name);
+          localStorage.setItem(LS_ACTIVE_PROFILE, name);
+          setTable(cloneGrading(selected.tables[clothingType] ?? DEFAULT_TABLE));
+          setSavedMsg(`Perfil ${name} carregado`);
+          setTimeout(() => setSavedMsg(""), 2500);
+        }}
+        onCreate={() => {
+          const name = window.prompt("Nome do Perfil do Cliente (ex: Grade do Paulo)");
+          const normalized = name?.trim();
+          if (!normalized || profiles.some((profile) => profile.name.toLowerCase() === normalized.toLowerCase())) return;
+          const nextProfile = { name: normalized, tables: defaultTablesForProfiles() };
+          const nextProfiles = [...profiles, nextProfile];
+          setProfiles(nextProfiles);
+          setActiveProfile(normalized);
+          setTable(cloneGrading(nextProfile.tables[clothingType]));
+          saveGradeProfiles(nextProfiles);
+          localStorage.setItem(LS_ACTIVE_PROFILE, normalized);
+        }}
+        onDelete={() => {
+          if (profiles.length <= 1 || activeProfile === DEFAULT_PROFILE_NAME) return;
+          if (!window.confirm(`Excluir o perfil ${activeProfile}?`)) return;
+          const nextProfiles = profiles.filter((profile) => profile.name !== activeProfile);
+          const nextActive = nextProfiles[0]!;
+          setProfiles(nextProfiles);
+          setActiveProfile(nextActive.name);
+          setTable(cloneGrading(nextActive.tables[clothingType]));
+          saveGradeProfiles(nextProfiles);
+          localStorage.setItem(LS_ACTIVE_PROFILE, nextActive.name);
+        }}
+      />,
+    );
+    return () => {
+      profileRootRef.current?.unmount();
+      profileRootRef.current = null;
+      profileHostRef.current?.remove();
+      profileHostRef.current = null;
+    };
+  }, [profiles, activeProfile, clothingType]);
+
   const updateTable = (sz: Size, key: Field, v: number) => {
     checkpoint(`table:${sz}:${key}`);
     setTable((t) => {
       const next = { ...t, [sz]: { ...t[sz], [key]: v } };
+      setProfiles((currentProfiles) => {
+        const nextProfiles = currentProfiles.map((profile) =>
+          profile.name === activeProfile
+            ? { ...profile, tables: { ...profile.tables, [clothingType]: cloneGrading(next) } }
+            : profile,
+        );
+        saveGradeProfiles(nextProfiles);
+        return nextProfiles;
+      });
       localStorage.setItem(LS_GRADING, JSON.stringify(next));
       return next;
     });
@@ -503,8 +685,16 @@ function Index() {
   };
 
   const saveGrading = () => {
+    const nextProfiles = profiles.map((profile) =>
+      profile.name === activeProfile
+        ? { ...profile, tables: { ...profile.tables, [clothingType]: cloneGrading(table) } }
+        : profile,
+    );
+    setProfiles(nextProfiles);
+    saveGradeProfiles(nextProfiles);
     localStorage.setItem(LS_GRADING, JSON.stringify(table));
-    setSavedMsg("Tabela salva neste navegador");
+    localStorage.setItem(LS_ACTIVE_PROFILE, activeProfile);
+    setSavedMsg(`Perfil ${activeProfile} salvo neste navegador`);
     setTimeout(() => setSavedMsg(""), 2500);
   };
 
@@ -512,7 +702,9 @@ function Index() {
      Ao entrar na grade infantil, o molde mãe e o tamanho selecionado ficam em 6ANOS. */
   const changeClothingType = (t: ClothingType) => {
     setClothingType(t);
-    const preset = PRESET_TABLES[t];
+    const selectedProfile = profiles.find((profile) => profile.name === activeProfile);
+    const profileTable = selectedProfile?.tables[t];
+    const preset = profileTable ?? PRESET_TABLES[t];
     if (!preset) return;
     checkpoint("tipoPeca:" + t);
     const availableIds = sizeIdsForGarment(t);
