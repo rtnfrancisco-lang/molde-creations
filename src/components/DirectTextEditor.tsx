@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type FormEvent } from "react";
 
 type TextAlign = "left" | "center" | "right";
 
@@ -62,6 +62,33 @@ export function DirectTextEditor({
   const editorRef = useRef<HTMLDivElement>(null);
   const committedRef = useRef(false);
   const initializedRef = useRef(false);
+  const latestValueRef = useRef(value);
+  const onChangeRef = useRef(onChange);
+  const onCommitRef = useRef(onCommit);
+  const onCancelRef = useRef(onCancel);
+
+  useEffect(() => {
+    latestValueRef.current = value;
+  }, [value]);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+    onCommitRef.current = onCommit;
+    onCancelRef.current = onCancel;
+  }, [onChange, onCommit, onCancel]);
+
+  // Garante que uma edição pendente não seja perdida quando a ferramenta muda
+  // e o editor é removido antes que o navegador dispare o blur.
+  useEffect(() => {
+    return () => {
+      if (committedRef.current) return;
+
+      const editor = editorRef.current;
+      const nextValue = editor ? readValue(editor) : latestValueRef.current;
+      committedRef.current = true;
+      onCommitRef.current(nextValue);
+    };
+  }, []);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -69,8 +96,10 @@ export function DirectTextEditor({
 
     initializedRef.current = true;
     editor.innerText = value;
+    latestValueRef.current = value;
 
     if (!autoFocus) return;
+
     // Foca depois do clique que criou o editor: o mousedown padrão do navegador
     // tiraria o foco na mesma hora e o texto vazio seria descartado.
     requestAnimationFrame(() => {
@@ -83,18 +112,23 @@ export function DirectTextEditor({
 
   const commit = () => {
     if (committedRef.current) return;
+
     committedRef.current = true;
-    const nextValue = editorRef.current ? readValue(editorRef.current) : value;
-    onCommit(nextValue);
+    const editor = editorRef.current;
+    const nextValue = editor ? readValue(editor) : latestValueRef.current;
+    latestValueRef.current = nextValue;
+    onCommitRef.current(nextValue);
   };
 
   const cancel = () => {
     committedRef.current = true;
-    onCancel?.();
+    onCancelRef.current?.();
   };
 
-  const handleInput = (event: React.FormEvent<HTMLDivElement>) => {
-    onChange(readValue(event.currentTarget));
+  const handleInput = (event: FormEvent<HTMLDivElement>) => {
+    const nextValue = readValue(event.currentTarget);
+    latestValueRef.current = nextValue;
+    onChangeRef.current(nextValue);
   };
 
   return (
@@ -134,7 +168,9 @@ export function DirectTextEditor({
           if (event.key === "Escape") {
             event.preventDefault();
             cancel();
+            return;
           }
+
           if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
             commit();
