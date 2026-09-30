@@ -355,7 +355,17 @@ function Index() {
   useEffect(() => {
     try {
       const g = localStorage.getItem(LS_GRADING);
-      if (g) setTable(JSON.parse(g) as Grading);
+      if (g) {
+        const saved = JSON.parse(g) as Partial<Grading> | null;
+        const merged = { ...DEFAULT_TABLE } as Grading;
+        if (saved && typeof saved === "object") {
+          for (const s of SIZES) {
+            const row = (saved as Record<string, unknown>)[s];
+            if (row && typeof row === "object") merged[s] = { ...DEFAULT_TABLE[s], ...(row as object) };
+          }
+        }
+        setTable(merged);
+      }
       const mm = localStorage.getItem(LS_MOTHER) as Size | null;
       if (mm && SIZES.includes(mm)) setMother(mm);
       const a = localStorage.getItem(LS_ART);
