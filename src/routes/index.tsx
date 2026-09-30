@@ -674,14 +674,64 @@ function TextWorkspace({ tool }: TextWorkspaceProps) {
   const [texts, setTexts] = useState<TextElement[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
+  const [activeTextValue, setActiveTextValue] = useState("");
   const [drag, setDrag] = useState<{ id: string; dx: number; dy: number } | null>(null);
+  const textsRef = useRef<TextElement[]>([]);
+  const editingIdRef = useRef<string | null>(null);
+  const activeTextValueRef = useRef("");
+  const previousToolRef = useRef<Tool>(tool);
 
   const selected = texts.find((item) => item.id === selectedId) ?? null;
+
+  const updateTexts = (updater: (items: TextElement[]) => TextElement[]) => {
+    setTexts((items) => {
+      const next = updater(items);
+      textsRef.current = next;
+      return next;
+    });
+  };
+
   const updateSelected = (patch: Partial<TextElement>) => {
     if (!selectedId) return;
-    setTexts((items) => items.map((item) => (item.id === selectedId ? { ...item, ...patch } : item)));
+    updateTexts((items) => items.map((item) => (item.id === selectedId ? { ...item, ...patch } : item)));
   };
+
+  const commitText = (id = editingIdRef.current, value = activeTextValueRef.current) => {
+    if (!id) return;
+    const normalizedValue = value.replace(/\\u00a0/g, " ");
+    const nextItems = normalizedValue.length > 0
+      ? textsRef.current.map((item) => (item.id === id ? { ...item, text: normalizedValue } : item))
+      : textsRef.current.filter((item) => item.id !== id);
+    textsRef.current = nextItems;
+    setTexts(nextItems);
+    if (selectedId === id && normalizedValue.length === 0) setSelectedId(null);
+    editingIdRef.current = null;
+    setEditingId(null);
+    activeTextValueRef.current = normalizedValue;
+    setActiveTextValue(normalizedValue);
+  };
+
+  const beginEditing = (id: string, value: string) => {
+    editingIdRef.current = id;
+    activeTextValueRef.current = value;
+    setEditingId(id);
+    setActiveTextValue(value);
+  };
+
+  const updateTextValue = (id: string, value: string) => {
+    activeTextValueRef.current = value;
+    setActiveTextValue(value);
+    updateTexts((items) => items.map((item) => (item.id === id ? { ...item, text: value } : item)));
+  };
+
+  useEffect(() => {
+    textsRef.current = texts;
+  }, [texts]);
+
+  useEffect(() => {
+    if (previousToolRef.current === "texto" && tool !== "texto") commitText();
+    previousToolRef.current = tool;
+  }, [tool]);
 
   useEffect(() => {
     const onCanvasPointerDown = (event: PointerEvent) => {
@@ -691,7 +741,7 @@ function TextWorkspace({ tool }: TextWorkspaceProps) {
       const id = `texto-${Date.now()}`;
       const item: TextElement = {
         id,
-        text: "Texto",
+        text: "",
         x: event.clientX,
         y: event.clientY,
         fontFamily: "Arial",
@@ -702,10 +752,9 @@ function TextWorkspace({ tool }: TextWorkspaceProps) {
         align: "left",
         color: "#20242b",
       };
-      setTexts((items) => [...items, item]);
+      updateTexts((items) => [...items, item]);
       setSelectedId(id);
-      setEditingId(id);
-      setDraft(item.text);
+      beginEditing(id, "");
       event.preventDefault();
     };
     document.addEventListener("pointerdown", onCanvasPointerDown, true);
@@ -715,7 +764,7 @@ function TextWorkspace({ tool }: TextWorkspaceProps) {
   useEffect(() => {
     if (!drag) return;
     const move = (event: PointerEvent) => {
-      setTexts((items) => items.map((item) => (item.id === drag.id ? { ...item, x: event.clientX - drag.dx, y: event.clientY - drag.dy } : item)));
+      updateTexts((items) => items.map((item) => (item.id === drag.id ? { ...item, x: event.clientX - drag.dx, y: event.clientY - drag.dy } : item)));
     };
     const stop = () => setDrag(null);
     document.addEventListener("pointermove", move);
@@ -725,12 +774,6 @@ function TextWorkspace({ tool }: TextWorkspaceProps) {
       document.removeEventListener("pointerup", stop);
     };
   }, [drag]);
-
-  const finishEditing = () => {
-    if (!editingId) return;
-    setTexts((items) => items.map((item) => (item.id === editingId ? { ...item, text: draft || "Texto" } : item)));
-    setEditingId(null);
-  };
 
   return (
     <div data-text-workspace className="pointer-events-none fixed inset-0 z-[80]">
@@ -753,8 +796,33 @@ function TextWorkspace({ tool }: TextWorkspaceProps) {
         </div>
       )}
       {texts.map((item) => (
-        <div key={item.id} className={`pointer-events-auto fixed cursor-move select-none rounded-sm px-1 ${selectedId === item.id ? "outline outline-1 outline-cyan/70" : ""}`} style={{ left: item.x, top: item.y, color: item.color, fontFamily: item.fontFamily, fontSize: `${item.fontSize}pt`, fontWeight: item.bold ? 700 : 400, fontStyle: item.italic ? "italic" : "normal", textDecoration: item.underline ? "underline" : "none", textAlign: item.align, transform: item.align === "center" ? "translateX(-50%)" : item.align === "right" ? "translateX(-100%)" : undefined }} onPointerDown={(event) => { event.stopPropagation(); setSelectedId(item.id); setDrag({ id: item.id, dx: event.clientX - item.x, dy: event.clientY - item.y }); }} onDoubleClick={() => { setEditingId(item.id); setDraft(item.text); }}>
-          {editingId === item.id ? <input autoFocus value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={finishEditing} onKeyDown={(event) => { if (event.key === "Enter") finishEditing(); }} className="min-w-24 border border-cyan bg-background px-1 text-foreground outline-none" style={{ font: "inherit", textAlign: item.align }} /> : item.text}
+        <div key={item.id} className={`pointer-events-auto fixed cursor-move select-none rounded-sm px-1 ${selectedId === item.id ? "outline outline-1 outline-cyan/70" : ""}`} style={{ left: item.x, top: item.y, color: item.color, fontFamily: item.fontFamily, fontSize: `${item.fontSize}pt`, fontWeight: item.bold ? 700 : 400, fontStyle: item.italic ? "italic" : "normal", textDecoration: item.underline ? "underline" : "none", textAlign: item.align, transform: item.align === "center" ? "translateX(-50%)" : item.align === "right" ? "translateX(-100%)" : undefined }} onPointerDown={(event) => { event.stopPropagation(); setSelectedId(item.id); if (editingId !== item.id) setDrag({ id: item.id, dx: event.clientX - item.x, dy: event.clientY - item.y }); }} onDoubleClick={(event) => { event.stopPropagation(); beginEditing(item.id, item.text); }}>
+          {editingId === item.id ? (
+            <div
+              contentEditable
+              suppressContentEditableWarning
+              role="textbox"
+              aria-label="Editar texto no canvas"
+              spellCheck={false}
+              autoFocus
+              className="min-w-24 whitespace-pre-wrap border border-cyan bg-transparent px-1 text-foreground outline-none caret-cyan selection:bg-cyan/20"
+              style={{ font: "inherit", color: item.color, textAlign: item.align }}
+              onInput={(event) => updateTextValue(item.id, event.currentTarget.textContent ?? "")}
+              onBlur={() => commitText(item.id)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  commitText(item.id);
+                }
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  commitText(item.id);
+                }
+              }}
+            >
+              {activeTextValue}
+            </div>
+          ) : item.text}
         </div>
       ))}
     </div>
