@@ -1,0 +1,3 @@
+- [ ] Manter textos no desenho ao trocar para Seleção, sem recriar o editor.
+- [ ] Renderizar texto digitado e salvo no SVG para acompanhar o zoom.
+- [ ] Conferir criação, troca de ferramenta e zoom na prévia.
