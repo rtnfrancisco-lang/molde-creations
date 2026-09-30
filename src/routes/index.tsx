@@ -743,10 +743,18 @@ function Index() {
     setTimeout(() => setImportMsg(""), 3500);
   };
 
-  const onImport = async (file: File) => {
+  const onImport = async (file: File, dropPosition?: { x: number; y: number }) => {
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
     const id = crypto.randomUUID();
-    const base = { id, name: file.name, cx: 0.5, cy: 0.4, w: 0.4, rot: 0 };
+    const position = dropPosition ?? { x: 0.5, y: 0.4 };
+    const base = {
+      id,
+      name: file.name,
+      cx: Math.max(0, Math.min(1, position.x)),
+      cy: Math.max(0, Math.min(1, position.y)),
+      w: 0.4,
+      rot: 0,
+    };
     const add = (l: Layer) => {
       setViewLayers([...snapRef.current.layers[view], l], "import:" + id);
       setSelLayer(id);
@@ -774,6 +782,56 @@ function Index() {
       flash("Não foi possível ler " + file.name);
     }
   };
+
+  useEffect(() => {
+    const canvasSvgAt = (event: DragEvent): SVGSVGElement | null => {
+      const candidates: Element[] = [];
+      if (event.target instanceof Element) {
+        const svg = event.target.closest("svg");
+        if (svg) candidates.push(svg);
+      }
+      if (event.clientX >= 0 && event.clientY >= 0) {
+        candidates.push(...document.elementsFromPoint(event.clientX, event.clientY));
+      }
+      return (
+        candidates.find((element): element is SVGSVGElement => {
+          if (!(element instanceof SVGSVGElement)) return false;
+          const rect = element.getBoundingClientRect();
+          return rect.width >= 300 && rect.height >= 200;
+        }) ?? null
+      );
+    };
+
+    const onCanvasDragOver = (event: DragEvent) => {
+      if (!event.dataTransfer?.types.includes("Files")) return;
+      if (!canvasSvgAt(event)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+    };
+
+    const onCanvasDrop = (event: DragEvent) => {
+      if (!event.dataTransfer?.files.length) return;
+      const svg = canvasSvgAt(event);
+      if (!svg) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const rect = svg.getBoundingClientRect();
+      const position = {
+        x: (event.clientX - rect.left) / Math.max(rect.width, 1),
+        y: (event.clientY - rect.top) / Math.max(rect.height, 1),
+      };
+      Array.from(event.dataTransfer.files).forEach((file) => {
+        void onImport(file, position);
+      });
+    };
+
+    window.addEventListener("dragover", onCanvasDragOver, true);
+    window.addEventListener("drop", onCanvasDrop, true);
+    return () => {
+      window.removeEventListener("dragover", onCanvasDragOver, true);
+      window.removeEventListener("drop", onCanvasDrop, true);
+    };
+  }, [onImport]);
 
   const reorder = (id: string, dir: "front" | "back" | "up" | "down") => {
     const arr = [...curLayers];
