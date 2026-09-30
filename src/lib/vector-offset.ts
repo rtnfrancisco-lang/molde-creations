@@ -1,3 +1,5 @@
+import ClipperLib from "clipper-lib";
+
 /* ============================================================================
    MoldeCore · Offset vetorial real (Path Offset / Contorno Paralelo)
    ---------------------------------------------------------------------------
@@ -831,53 +833,111 @@ const sizeOf = (figures: Figure[]): number => {
   return Math.max(1e-6, Math.hypot(maxX - minX, maxY - minY));
 };
 
+const CLIPPER_SCALE = 1000;
+const DENSE_STEP_CM = 0.15;
+
+const clipperPathArea = (path: any[]): number => {
+  let area = 0;
+  for (let i = 0; i < path.length; i++) {
+    const a = path[i];
+    const b = path[(i + 1) % path.length];
+    area += a.X * b.Y - b.X * a.Y;
+  }
+  return area / 2;
+};
+
+const largestClipperPath = (paths: any[]): any[] | null => {
+  if (!paths.length) return null;
+  return paths.reduce((largest, current) =>
+    Math.abs(clipperPathArea(current)) > Math.abs(clipperPathArea(largest)) ? current : largest,
+  );
+};
+
+const densePoints = (samples: Sample[], closed: boolean): Vec[] => {
+  const points: Vec[] = [];
+  const count = closed ? samples.length : Math.max(0, samples.length - 1);
+  for (let i = 0; i < count; i++) {
+    const a = samples[i]!.p;
+    const b = samples[(i + 1) % samples.length]!.p;
+    const length = mag(sub(b, a));
+    const steps = Math.max(1, Math.ceil(length / DENSE_STEP_CM));
+    for (let step = 0; step < steps; step++) {
+      const t = step / steps;
+      const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+      const last = points[points.length - 1];
+      if (!last || mag(sub(last, p)) > 1e-9) points.push(p);
+    }
+  }
+  return points;
+};
+
+const toClipperPath = (points: Vec[]): any[] =>
+  points.map((p) => ({ X: Math.round(p.x * CLIPPER_SCALE), Y: Math.round(p.y * CLIPPER_SCALE) }));
+
+const fromClipperPath = (path: any[]): Vec[] =>
+  path.map((p) => ({ x: p.X / CLIPPER_SCALE, y: p.Y / CLIPPER_SCALE }));
+
+const clipperOffset = (paths: any[], deltaCm: number): any[] => {
+  if (!paths.length) return [];
+  const offset = new ClipperLib.ClipperOffset(2, 0.25 * CLIPPER_SCALE);
+  offset.AddPaths(
+    paths,
+    ClipperLib.JoinType.jtRound,
+    ClipperLib.EndType.etClosedPolygon,
+  );
+  const solution = new ClipperLib.Paths();
+  offset.Execute(solution, deltaCm * CLIPPER_SCALE);
+  return Array.from(solution);
+};
+
 /**
- * Devolve o "d" do contorno paralelo ao traçado informado.
- * Distância positiva = para fora (sangria); negativa = para dentro (segurança).
+ * Calcula o contorno paralelo com ClipperOffset em coordenadas inteiras.
+ * O contorno é densificado, simplificado com regra non-zero, deslocado com
+ * junções arredondadas e suavizado por um offset de abertura/fechamento.
  */
 export function offsetPathD(d: string, distance: number, options: OffsetOptions = {}): string {
   if (!d || !Number.isFinite(distance) || distance === 0) return d;
 
-  const join = options.join ?? "miter";
-  /* Limite de esquadria só existe no offset interno: o de fora fica sem
-     truncamento (Infinity), preservando os nós da linha Azul. */
-  const miterLimit = distance < 0 ? options.miterLimit ?? INWARD_MITER_LIMIT : Infinity;
-
   const figures = parseFigures(d);
-  if (!figures || figures.length === 0) return d;
-
-  /* Tolerância relativa ao tamanho do molde: vale igual se o traçado estiver em
-     centímetros, milímetros ou pixels de tela. */
+  if (!figures?.length) return d;
   const tol = options.tolerance ?? Math.max(sizeOf(figures) * 5e-5, 1e-9);
+  const candidates: any[] = [];
 
-  const built: BuiltFigure[] = [];
-  for (const f of figures) {
-    const b = buildSamples(f, tol, distance);
-    if (b.samples.length >= 2) built.push(b);
-  }
-  if (built.length === 0) return d;
+  for (const figure of figures) {
+    if (!figure.closed) continue;
+    const built = buildSamples(figure, tol, distance);
+    const dense = densePoints(built.samples, true);
+    if (dense.length < 3) continue;
 
-  /* Sentido do desenho define o que é "para fora" nesta peça. O contorno
-     principal manda: eventuais furos internos (sentido oposto) acompanham. */
-  const main = built.reduce((a, b) => (Math.abs(b.area) > Math.abs(a.area) ? b : a));
-  const outward = main.area >= 0 ? 1 : -1;
-  const k = outward * distance;
+    const source = toClipperPath(dense);
+    const simplified = ClipperLib.Clipper.SimplifyPolygon(
+      source,
+      ClipperLib.PolyFillType.pftNonZero,
+    );
+    const simplifiedPaths = Array.from(simplified) as any[];
+    if (!simplifiedPaths.length) continue;
 
-  const parts: string[] = [];
-  for (const b of built) {
-    const raw = offsetPolyline(b.samples, k, join, b.closed, miterLimit);
-    /* Offset PARA FORA (azul) preserva cada vértice da bissetriz — não tem laço.
-       Offset PARA DENTRO (vermelho) pode cruzar em cantos estreitos como ombro e
-       decote: só nesse caso o traçado passa pela limpeza por anéis (descarta o
-       que saiu do molde e fica com o anel interno). */
-    const master = b.samples.map((s) => s.p);
-    const pts = distance < 0 && b.closed ? inwardRing(raw, master) : raw;
-    if (pts.length < 2) continue;
-    let s = `M ${fmt(pts[0]!.x)} ${fmt(pts[0]!.y)}`;
-    for (let i = 1; i < pts.length; i++) s += ` L ${fmt(pts[i]!.x)} ${fmt(pts[i]!.y)}`;
-    if (b.closed) s += " Z";
-    parts.push(s);
+    const firstOffset = clipperOffset(simplifiedPaths, distance);
+    if (firstOffset.length) candidates.push(...firstOffset);
   }
 
-  return parts.length ? parts.join(" ") : d;
+  if (!candidates.length) return d;
+
+  const smoothed: any[] = [];
+  for (const candidate of candidates) {
+    const opened = clipperOffset([candidate], -0.5);
+    const closed = clipperOffset(opened.length ? opened : [candidate], 0.5);
+    smoothed.push(...(closed.length ? closed : [candidate]));
+  }
+
+  const selected = largestClipperPath(smoothed.length ? smoothed : candidates);
+  if (!selected || selected.length < 3) return d;
+
+  const points = dedupeRing(fromClipperPath(selected));
+  if (points.length < 3) return d;
+  let result = `M ${fmt(points[0]!.x)} ${fmt(points[0]!.y)}`;
+  for (let i = 1; i < points.length; i++) {
+    result += ` L ${fmt(points[i]!.x)} ${fmt(points[i]!.y)}`;
+  }
+  return result + " Z";
 }
