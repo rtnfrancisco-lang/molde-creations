@@ -363,7 +363,7 @@ const ProfileDock = ({
         title="Abrir configurações de grade"
         aria-label="Abrir configurações de grade"
         aria-expanded={false}
-        className="fixed right-14 top-1/2 z-40 flex -translate-y-1/2 flex-col items-center gap-2 rounded-l-md border border-r-0 border-line bg-panel px-2 py-3 text-muted-foreground shadow-xl transition-colors hover:bg-cyan/10 hover:text-cyan"
+        className="fixed right-0 top-1/2 z-40 flex -translate-y-1/2 flex-col items-center gap-2 rounded-l-md border border-r-0 border-line bg-panel px-2 py-3 text-muted-foreground shadow-xl transition-colors hover:bg-cyan/10 hover:text-cyan"
       >
         <ChevronRight className="size-4" />
         <span className="[writing-mode:vertical-rl] text-[10px] font-mono uppercase tracking-[0.14em]">
@@ -374,7 +374,7 @@ const ProfileDock = ({
   }
 
   return (
-    <section className="fixed right-16 top-20 z-40 w-80 overflow-hidden rounded-lg border border-line bg-panel p-3 shadow-xl transition-all duration-200">
+    <section className="flex h-full min-h-0 w-80 shrink-0 flex-col overflow-hidden border-l border-line bg-panel p-3 transition-all duration-200">
       <div className="mb-2 flex items-center justify-between gap-2">
         <button
           type="button"
