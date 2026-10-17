@@ -925,6 +925,7 @@ function Index() {
   const contextMenuHostRef = useRef<HTMLDivElement | null>(null);
   const clipboardLayerRef = useRef<Layer | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const pcEditStartRef = useRef<() => void>(() => {});
   const [shapes, setShapes] = useState<Shapes>(DEFAULT_SHAPES);
   const [size, setSize] = useState<Size>("M");
   const [view, setView] = useState<View>("frente");
@@ -1647,6 +1648,7 @@ function Index() {
     setTool("selecao");
     setPcEdit(true);
   };
+  pcEditStartRef.current = pcEditStart;
   const pcExtract = () => {
     if (art) setArt({ ...art, clipped: false });
     setPcEdit(false);
