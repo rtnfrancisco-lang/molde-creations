@@ -717,10 +717,10 @@ function TextWorkspace({ tool, view, svgPoint, bounds }: TextWorkspaceProps) {
     localStorage.setItem(TEXT_STORAGE, JSON.stringify(next));
   };
 
-  const commitText = () => {
+  const commitText = (forId?: string, forValue?: string) => {
     const id = editingIdRef.current;
-    if (!id) return;
-    const value = activeTextValueRef.current.replace(/\u00a0/g, " ");
+    if (!id || (forId && forId !== id)) return;
+    const value = (forValue ?? activeTextValueRef.current).replace(/\u00a0/g, " ");
     // O texto pertence à vista em que foi criado, mesmo que a vista já tenha mudado.
     updateTexts(editingViewRef.current, (items) => items
       .map((item) => item.id === id ? { ...item, text: value } : item)
@@ -741,7 +741,15 @@ function TextWorkspace({ tool, view, svgPoint, bounds }: TextWorkspaceProps) {
     setSelectedId(null);
   }, [view]);
 
+  const [defaults, setDefaults] = useState<Omit<TextElement, "id" | "text" | "x" | "y">>({
+    fontFamily: "Arial", fontSize: 24, bold: false, italic: false,
+    underline: false, align: "left", color: "#20242b",
+  });
+  const current = selected ?? defaults;
+
   const updateSelected = (patch: Partial<TextElement>) => {
+    // Sem texto selecionado, o estilo vale para o próximo texto criado.
+    setDefaults((d) => ({ ...d, ...patch }));
     if (!selectedId) return;
     updateTexts(view, (items) => items.map((item) => item.id === selectedId ? { ...item, ...patch } : item));
   };
@@ -759,12 +767,10 @@ function TextWorkspace({ tool, view, svgPoint, bounds }: TextWorkspaceProps) {
     if (tool !== "texto" || event.button !== 0) return;
     event.stopPropagation();
     event.preventDefault();
+    // Salva o texto em edição antes de abrir outro (o preventDefault impede o blur).
+    commitText();
     const point = svgPoint(event);
-    const item: TextElement = {
-      id: crypto.randomUUID(), text: "", x: point.x, y: point.y,
-      fontFamily: "Arial", fontSize: 24, bold: false, italic: false,
-      underline: false, align: "left", color: "#20242b",
-    };
+    const item: TextElement = { id: crypto.randomUUID(), text: "", x: point.x, y: point.y, ...defaults };
     updateTexts(view, (items) => [...items, item]);
     startEditing(item);
   };
@@ -785,6 +791,23 @@ function TextWorkspace({ tool, view, svgPoint, bounds }: TextWorkspaceProps) {
     };
   }, [drag, view, svgPoint]);
 
+  // Delete/Backspace remove o texto selecionado (fora da edição e de campos).
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!selectedId || editingIdRef.current) return;
+      if (event.key !== "Delete" && event.key !== "Backspace") return;
+      const el = event.target as HTMLElement | null;
+      if (el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName))) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const id = selectedId;
+      updateTexts(view, (items) => items.filter((item) => item.id !== id));
+      setSelectedId(null);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [selectedId, view]);
+
   return (
     <g data-text-workspace>
       {tool === "texto" && <rect {...bounds} fill="transparent" onPointerDown={addText} />}
@@ -804,10 +827,10 @@ function TextWorkspace({ tool, view, svgPoint, bounds }: TextWorkspaceProps) {
               onChange={(value) => {
                 activeTextValueRef.current = value;
                 setActiveTextValue(value);
-                updateTexts(view, (items) => items.map((current) => current.id === item.id ? { ...current, text: value } : current));
+                updateTexts(editingViewRef.current, (items) => items.map((current) => current.id === item.id ? { ...current, text: value } : current));
               }}
-              onCommit={(value) => { activeTextValueRef.current = value; commitText(); }}
-              onCancel={commitText}
+              onCommit={(value) => commitText(item.id, value)}
+              onCancel={() => commitText(item.id)}
             />
           </foreignObject>
         ) : (
@@ -832,19 +855,19 @@ function TextWorkspace({ tool, view, svgPoint, bounds }: TextWorkspaceProps) {
       {typeof document !== "undefined" && (tool === "texto" || selected) && createPortal(
         <div className="fixed z-[80] left-16 right-20 top-14 flex min-h-12 items-center gap-2 border-b border-line bg-panel px-3 py-2 shadow-md">
           <span className="mr-1 text-[10px] font-mono uppercase text-muted-foreground">Texto</span>
-          <select value={selected?.fontFamily ?? "Arial"} onChange={(event) => updateSelected({ fontFamily: event.target.value })} className="h-8 rounded-md border border-input bg-panel2 px-2 text-xs text-foreground">
+          <select value={current.fontFamily} onChange={(event) => updateSelected({ fontFamily: event.target.value })} className="h-8 rounded-md border border-input bg-panel2 px-2 text-xs text-foreground">
             {TEXT_FONTS.map((font) => <option key={font} value={font}>{font}</option>)}
           </select>
-          <input type="number" min="1" value={selected?.fontSize ?? 24} onChange={(event) => updateSelected({ fontSize: Number(event.target.value) || 1 })} className="h-8 w-16 rounded-md border border-input bg-panel2 px-2 text-xs text-foreground" aria-label="Tamanho da fonte" />
-          <button type="button" title="Negrito" onClick={() => updateSelected({ bold: !selected?.bold })} className="grid size-8 place-items-center rounded-md border border-line"><Bold className="size-4" /></button>
-          <button type="button" title="Itálico" onClick={() => updateSelected({ italic: !selected?.italic })} className="grid size-8 place-items-center rounded-md border border-line"><Italic className="size-4" /></button>
-          <button type="button" title="Sublinhado" onClick={() => updateSelected({ underline: !selected?.underline })} className="grid size-8 place-items-center rounded-md border border-line"><Underline className="size-4" /></button>
+          <input type="number" min="1" value={current.fontSize} onChange={(event) => updateSelected({ fontSize: Number(event.target.value) || 1 })} className="h-8 w-16 rounded-md border border-input bg-panel2 px-2 text-xs text-foreground" aria-label="Tamanho da fonte" />
+          <button type="button" title="Negrito" onClick={() => updateSelected({ bold: !current.bold })} className="grid size-8 place-items-center rounded-md border border-line"><Bold className="size-4" /></button>
+          <button type="button" title="Itálico" onClick={() => updateSelected({ italic: !current.italic })} className="grid size-8 place-items-center rounded-md border border-line"><Italic className="size-4" /></button>
+          <button type="button" title="Sublinhado" onClick={() => updateSelected({ underline: !current.underline })} className="grid size-8 place-items-center rounded-md border border-line"><Underline className="size-4" /></button>
           <div className="ml-1 flex rounded-md border border-line bg-panel2 p-0.5">
             <button type="button" title="Alinhar à esquerda" onClick={() => updateSelected({ align: "left" })}><AlignLeft className="size-4" /></button>
             <button type="button" title="Centralizar" onClick={() => updateSelected({ align: "center" })}><AlignCenter className="size-4" /></button>
             <button type="button" title="Alinhar à direita" onClick={() => updateSelected({ align: "right" })}><AlignRight className="size-4" /></button>
           </div>
-          {selected && <input type="color" value={selected.color} onChange={(event) => updateSelected({ color: event.target.value })} title="Cor do texto" className="size-8 cursor-pointer rounded border border-line bg-panel2 p-0.5" />}
+          {<input type="color" value={current.color} onChange={(event) => updateSelected({ color: event.target.value })} title="Cor do texto" className="size-8 cursor-pointer rounded border border-line bg-panel2 p-0.5" />}
         </div>, document.body)}
     </g>
   );
