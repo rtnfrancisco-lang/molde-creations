@@ -723,6 +723,11 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
   const previousToolRef = useRef<Tool>(tool);
   const texts = byView[view];
   const selected = texts.find((item) => item.id === selectedId) ?? null;
+  // Painel de estilo encaixado no canto superior esquerdo da área do canvas.
+  const [panelHost, setPanelHost] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setPanelHost(document.getElementById("text-panel-host"));
+  }, []);
 
   const updateTexts = (target: View, updater: (items: TextElement[]) => TextElement[]) => {
     const next = { ...textsRef.current, [target]: updater(textsRef.current[target]) };
@@ -869,23 +874,37 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
           </text>
         );
       })}
-      {typeof document !== "undefined" && (tool === "texto" || selected) && createPortal(
-        <div className="fixed z-[80] left-16 right-20 top-14 flex min-h-12 items-center gap-2 border-b border-line bg-panel px-3 py-2 shadow-md">
-          <span className="mr-1 text-[10px] font-mono uppercase text-muted-foreground">Texto</span>
-          <select value={current.fontFamily} onChange={(event) => updateSelected({ fontFamily: event.target.value })} className="h-8 rounded-md border border-input bg-panel2 px-2 text-xs text-foreground">
+      {tool === "texto" && panelHost && createPortal(
+        <div
+          className="pointer-events-auto absolute left-3 top-3 z-20 w-64 space-y-2 rounded-md border border-line bg-panel p-3 text-xs shadow-lg"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-faint">Texto</div>
+          <select value={current.fontFamily} onChange={(event) => updateSelected({ fontFamily: event.target.value })} className="h-8 w-full rounded-md border border-input bg-panel2 px-2 text-xs text-foreground" aria-label="Fonte">
             {TEXT_FONTS.map((font) => <option key={font} value={font}>{font}</option>)}
           </select>
-          <input type="number" min="1" value={current.fontSize} onChange={(event) => updateSelected({ fontSize: Number(event.target.value) || 1 })} className="h-8 w-16 rounded-md border border-input bg-panel2 px-2 text-xs text-foreground" aria-label="Tamanho da fonte" />
-          <button type="button" title="Negrito" onClick={() => updateSelected({ bold: !current.bold })} className="grid size-8 place-items-center rounded-md border border-line"><Bold className="size-4" /></button>
-          <button type="button" title="Itálico" onClick={() => updateSelected({ italic: !current.italic })} className="grid size-8 place-items-center rounded-md border border-line"><Italic className="size-4" /></button>
-          <button type="button" title="Sublinhado" onClick={() => updateSelected({ underline: !current.underline })} className="grid size-8 place-items-center rounded-md border border-line"><Underline className="size-4" /></button>
-          <div className="ml-1 flex rounded-md border border-line bg-panel2 p-0.5">
-            <button type="button" title="Alinhar à esquerda" onClick={() => updateSelected({ align: "left" })}><AlignLeft className="size-4" /></button>
-            <button type="button" title="Centralizar" onClick={() => updateSelected({ align: "center" })}><AlignCenter className="size-4" /></button>
-            <button type="button" title="Alinhar à direita" onClick={() => updateSelected({ align: "right" })}><AlignRight className="size-4" /></button>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <input type="number" min="1" value={current.fontSize} onChange={(event) => updateSelected({ fontSize: Number(event.target.value) || 1 })} className="h-8 w-16 rounded-md border border-input bg-panel2 px-2 text-xs text-foreground" aria-label="Tamanho da fonte" />
+            {([
+              ["Negrito", Bold, current.bold, { bold: !current.bold }],
+              ["Itálico", Italic, current.italic, { italic: !current.italic }],
+              ["Sublinhado", Underline, current.underline, { underline: !current.underline }],
+            ] as const).map(([label, Icon, on, patch]) => (
+              <button key={label} type="button" title={label} aria-label={label} onMouseDown={(event) => event.preventDefault()} onClick={() => updateSelected(patch)} className={"grid size-8 place-items-center rounded-md border " + (on ? "border-primary text-primary" : "border-line text-foreground")}><Icon className="size-4" /></button>
+            ))}
+            <input type="color" value={current.color} onChange={(event) => updateSelected({ color: event.target.value })} title="Cor do texto" aria-label="Cor do texto" className="size-8 cursor-pointer rounded border border-line bg-panel2 p-0.5" />
           </div>
-          {<input type="color" value={current.color} onChange={(event) => updateSelected({ color: event.target.value })} title="Cor do texto" className="size-8 cursor-pointer rounded border border-line bg-panel2 p-0.5" />}
-        </div>, document.body)}
+          <div className="grid grid-cols-3 gap-1">
+            {([
+              ["left", "Alinhar à esquerda", AlignLeft],
+              ["center", "Centralizar", AlignCenter],
+              ["right", "Alinhar à direita", AlignRight],
+            ] as const).map(([align, label, Icon]) => (
+              <button key={align} type="button" title={label} aria-label={label} onMouseDown={(event) => event.preventDefault()} onClick={() => updateSelected({ align })} className={"grid h-8 place-items-center rounded-md border " + (current.align === align ? "border-primary text-primary" : "border-line text-foreground")}><Icon className="size-4" /></button>
+            ))}
+          </div>
+        </div>, panelHost)}
     </g>
   );
 }
@@ -2386,6 +2405,7 @@ function Index() {
                   onTextsChange={setTexts}
                   onCheckpoint={checkpoint}
                 />
+                <div id="text-panel-host" className="pointer-events-none absolute inset-0 z-20" />
                 {showPcEditor && art && (
                   <PowerClipEditor
                     art={art}
