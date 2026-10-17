@@ -1647,7 +1647,8 @@ function Index() {
         const x = (art.cx - 0.5) * W - aw / 2;
         const y = art.cy * H - ah / 2;
         const im = `<image href="${art.src}" x="${x}" y="${y}" width="${aw}" height="${ah}" transform="rotate(${art.rot ?? 0} ${x + aw / 2} ${y + ah / 2})" preserveAspectRatio="none"/>`;
-        img = `<clipPath id="c"><path d="${path}"/></clipPath>${art.clipped === false ? im : `<g clip-path="url(#c)">${im}</g>`}`;
+        const fb = pathBounds(offsetPathD(path, BLEED_OFFSET_CM, TECHNICAL_OFFSET_OPTIONS)) ?? { minX: -W / 2 - PLOTTER_MARGIN, minY: -PLOTTER_MARGIN, maxX: W / 2 + PLOTTER_MARGIN, maxY: H + PLOTTER_MARGIN };
+        img = `<clipPath id="c"><rect x="${fb.minX}" y="${fb.minY}" width="${fb.maxX - fb.minX}" height="${fb.maxY - fb.minY}"/></clipPath>${art.clipped === false ? im : `<g clip-path="url(#c)">${im}</g>`}`;
       }
       const objs = curLayers.map((l) => layerMarkup(l, W, H)).join("");
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W + 2}cm" height="${H + 2}cm" viewBox="${-W / 2 - 1} -1 ${W + 2} ${H + 2}"><path d="${path}" fill="${st.fill ?? "none"}"/>${img}${objs}<path d="${path}" fill="none" stroke="${st.stroke ?? "#000"}" stroke-width="0.05"/></svg>`;
@@ -1734,7 +1735,7 @@ function Index() {
     /* A janela de exportação é recortada exatamente nos limites do quadro. */
     const svg =
       `<svg xmlns="http://www.w3.org/2000/svg" width="${cmW.toFixed(3)}cm" height="${cmH.toFixed(3)}cm" viewBox="${x0.toFixed(3)} ${y0.toFixed(3)} ${cmW.toFixed(3)} ${cmH.toFixed(3)}">` +
-      `<defs><clipPath id="moldeClip"><path d="${path}"/></clipPath></defs>` +
+      `<defs><clipPath id="moldeClip"><rect x="${x0.toFixed(3)}" y="${y0.toFixed(3)}" width="${cmW.toFixed(3)}" height="${cmH.toFixed(3)}"/></clipPath></defs>` +
       body +
       img +
       objs +
@@ -2302,6 +2303,8 @@ function Index() {
                   fitSignal={fitSignal}
                   artwork={art}
                   onArtworkChange={setArt}
+                  onPowerClipArt={pcApply}
+                  onPowerClipLayer={layerToPowerClip}
                   mother={mother}
                   pcEdit={pcEdit}
                   partStyle={styles[view]}
@@ -2781,7 +2784,13 @@ function PatternCanvas({
   onSelPart,
   lockRatio,
   onPieceDims,
+  onPowerClipArt,
+  onPowerClipLayer,
 }: {
+  /** Clique no retângulo da Plotter com a estampa livre selecionada. */
+  onPowerClipArt: () => void;
+  /** Clique no retângulo da Plotter com um objeto importado selecionado. */
+  onPowerClipLayer: (id: string) => void;
   clothingType: ClothingType;
   selPart: "peca" | "estampa" | null;
   onSelPart: (p: "peca" | "estampa" | null) => void;
@@ -2816,6 +2825,7 @@ function PatternCanvas({
   const [zoom, setZoom] = useState({ k: 1, px: 0, py: 0 });
   const [tape, setTape] = useState<{ a: Pt | null; b: Pt | null }>({ a: null, b: null });
   const [hover, setHover] = useState<Pt | null>(null);
+  const [frameHover, setFrameHover] = useState(false);
 
   const isBody = view === "frente" || view === "costas";
   const dims = (g: Measurements) =>
@@ -2929,6 +2939,61 @@ function PatternCanvas({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
+
+  /* Retângulo da Plotter (mesma caixa da exportação: limites da Linha de Sangria).
+     É o destino/máscara do PowerClip. */
+  const frame = (() => {
+    const bb =
+      pathBounds(offsetPathD(buildPath(nodes, W, H), BLEED_OFFSET_CM, TECHNICAL_OFFSET_OPTIONS)) ?? {
+        minX: -W / 2 - PLOTTER_MARGIN,
+        minY: -PLOTTER_MARGIN,
+        maxX: W / 2 + PLOTTER_MARGIN,
+        maxY: H + PLOTTER_MARGIN,
+      };
+    return { x: bb.minX, y: bb.minY, w: Math.max(0.1, bb.maxX - bb.minX), h: Math.max(0.1, bb.maxY - bb.minY) };
+  })();
+  /* PowerClip armado: estampa livre selecionada ("art") ou imagem/vetor importado selecionado (id). */
+  const pcArmed: "art" | string | null =
+    tool !== "selecao"
+      ? null
+      : selPart === "estampa" && artwork && artwork.clipped === false && size === mother
+        ? "art"
+        : selL && !selL.hidden
+          ? selL.id
+          : null;
+  const pcIndicator = (() => {
+    if (!pcArmed) return null;
+    let from: Pt;
+    if (pcArmed === "art" && artwork) {
+      const c = toSvg({ x: artwork.cx, y: artwork.cy });
+      from = { x: c.x, y: c.y - (artwork.w * W * artwork.ratio) / 2 };
+    } else if (selL) {
+      const { c, ah } = lg(selL);
+      from = { x: c.x, y: c.y - ah / 2 };
+    } else return null;
+    const tx = Math.min(frame.x + frame.w, Math.max(frame.x, from.x));
+    const to = { x: tx, y: frame.y };
+    const sy = Math.min(from.y, frame.y) - unit * 8;
+    const head = unit * 1.6;
+    return (
+      <g className="pointer-events-none">
+        <path
+          d={`M ${from.x} ${from.y - unit} Q ${from.x} ${sy} ${(from.x + to.x) / 2} ${sy} T ${to.x} ${to.y - unit * 0.5}`}
+          className="fill-none stroke-primary"
+          strokeWidth={2}
+          strokeDasharray="6 4"
+          vectorEffect="non-scaling-stroke"
+        />
+        <path
+          d={`M ${to.x} ${to.y} l ${-head / 2} ${-head} l ${head} 0 Z`}
+          className="fill-primary"
+        />
+        <text x={(from.x + to.x) / 2} y={sy - unit} textAnchor="middle" fontSize={unit * 1.3} className="fill-primary font-mono font-bold">
+          Clique no retângulo para colocar esta arte dentro dele.
+        </text>
+      </g>
+    );
+  })();
 
   const box = {
     x0: Math.min(...nodes.map((n) => n.x)),
@@ -3226,7 +3291,9 @@ function PatternCanvas({
         const c = toSvg({ x: artwork.cx, y: artwork.cy });
         const clipped = artwork.clipped !== false;
         const editingNow = clipped && pcEdit && size === mother;
-        const movable = size === mother && tool === "selecao" && (!clipped || editingNow);
+        // Depois do PowerClip a arte continua selecionável/móvel; o recorte segue o retângulo.
+        const movable = size === mother && tool === "selecao";
+        const clipMovable = movable && clipped && !editingNow;
         const imgProps = {
           href: artwork.src,
           x: c.x - aw / 2,
@@ -3246,8 +3313,9 @@ function PatternCanvas({
         const artSelected = movable && selPart === "estampa";
         return (
           <g>
+            {/* PowerClip: a máscara é o retângulo da Plotter, nunca as linhas do molde. */}
             <clipPath id="outline-clip">
-              <path d={buildPath(nodes, W, H)} />
+              <rect x={frame.x} y={frame.y} width={frame.w} height={frame.h} />
             </clipPath>
             {(!clipped || editingNow) && (
               <image
@@ -3260,7 +3328,12 @@ function PatternCanvas({
             )}
             {clipped && (
               <g clipPath="url(#outline-clip)">
-                <image {...imgProps} style={{ pointerEvents: "none" }} />
+                <image
+                  {...imgProps}
+                  className={clipMovable ? "cursor-move" : ""}
+                  style={{ pointerEvents: clipMovable ? "all" : "none" }}
+                  onPointerDown={clipMovable ? down : undefined}
+                />
               </g>
             )}
             {artSelected && (
@@ -3415,19 +3488,7 @@ function PatternCanvas({
       {/* Quadro de Mídia do Plotter — retângulo externo automático em volta do molde */}
       <g className="pointer-events-none">
         {(() => {
-          /* Mesma caixa usada na exportação: limites absolutos da Linha Azul de
-             Sangria, sem margem, para o quadro colar no contorno do molde. */
-          const bb =
-            pathBounds(offsetPathD(buildPath(nodes, W, H), BLEED_OFFSET_CM, TECHNICAL_OFFSET_OPTIONS)) ?? {
-              minX: -W / 2 - PLOTTER_MARGIN,
-              minY: -PLOTTER_MARGIN,
-              maxX: W / 2 + PLOTTER_MARGIN,
-              maxY: H + PLOTTER_MARGIN,
-            };
-          const fx = bb.minX;
-          const fy = bb.minY;
-          const fw = Math.max(0.1, bb.maxX - bb.minX);
-          const fh = Math.max(0.1, bb.maxY - bb.minY);
+          const { x: fx, y: fy, w: fw, h: fh } = frame;
           return (
             <>
               <rect
@@ -3435,10 +3496,39 @@ function PatternCanvas({
                 y={fy}
                 width={fw}
                 height={fh}
-                className="fill-none stroke-ink"
-                strokeWidth={2}
+                className={"fill-none " + (pcArmed && frameHover ? "stroke-primary" : "stroke-ink")}
+                strokeWidth={pcArmed && frameHover ? 4 : 2}
                 vectorEffect="non-scaling-stroke"
               />
+              {pcArmed && (
+                <>
+                  {/* Área de clique do destino: só a borda do retângulo (as linhas do molde não disparam o PowerClip). */}
+                  <rect
+                    x={fx}
+                    y={fy}
+                    width={fw}
+                    height={fh}
+                    fill="none"
+                    stroke="transparent"
+                    strokeWidth={18}
+                    vectorEffect="non-scaling-stroke"
+                    className="cursor-copy"
+                    style={{ pointerEvents: "stroke" }}
+                    onPointerEnter={() => setFrameHover(true)}
+                    onPointerLeave={() => setFrameHover(false)}
+                    onPointerDown={(e) => {
+                      if (e.button !== 0) return;
+                      e.stopPropagation();
+                      setFrameHover(false);
+                      if (pcArmed === "art") {
+                        onPowerClipArt();
+                        onSelPart(null);
+                      } else onPowerClipLayer(pcArmed);
+                    }}
+                  />
+                  {pcIndicator}
+                </>
+              )}
               <text
                 x={fx + unit * 1.2}
                 y={fy + unit * 2.2}
