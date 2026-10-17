@@ -2949,6 +2949,7 @@ function PatternCanvas({
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
+  const freeRef = useRef<Pt[]>([]);
   const [draft, setDraft] = useState<Node[] | null>(null);
   const [zoom, setZoom] = useState({ k: 1, px: 0, py: 0 });
   const [tape, setTape] = useState<{ a: Pt | null; b: Pt | null }>({ a: null, b: null });
@@ -3169,6 +3170,7 @@ function PatternCanvas({
       }
       capture(e);
       if (drawOpts.penMode === "livre") {
+        freeRef.current = [p];
         setDrag({ k: "free", pts: [p], sx: e.clientX, sy: e.clientY });
         return;
       }
@@ -3263,8 +3265,12 @@ function PatternCanvas({
         );
         break;
       case "free": {
-        const l = drag.pts[drag.pts.length - 1]!;
-        if (Math.hypot(l.x - p.x, l.y - p.y) > unit * 0.1) setDrag({ ...drag, pts: [...drag.pts, p] });
+        const fp = freeRef.current;
+        const l = fp[fp.length - 1]!;
+        if (Math.hypot(l.x - p.x, l.y - p.y) > unit * 0.1) {
+          fp.push(p);
+          setDrag({ ...drag, pts: fp.slice() });
+        }
         break;
       }
       case "shape":
@@ -3296,12 +3302,13 @@ function PatternCanvas({
       setZoom((z) => ({ k: Math.min(12, Math.max(0.3, z.k * f)), px: at.x - bcx, py: at.y - bcy }));
     }
     if (drag?.k === "free") {
-      const moved = Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) >= 4 && drag.pts.length > 1;
+      const fpts = freeRef.current;
+      const moved = fpts.length > 2 || (fpts.length > 1 && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) >= 4);
       if (!moved) {
-        const n = toNorm(drag.pts[0]!);
+        const n = toNorm(fpts[0]!);
         setDraft([...(draft ?? []), { x: n.x, y: n.y, smooth: false }]);
       } else {
-        const simp = rdp(drag.pts, unit * 0.4);
+        const simp = rdp(fpts, unit * 0.4);
         if (draft && draft.length) {
           const add = simp.slice(1).map((q) => ({ ...toNorm(q), smooth: true }));
           setDraft([...draft, ...add]);
