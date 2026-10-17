@@ -25,7 +25,7 @@ export type PcArt = {
   opacity?: number;
   name?: string;
   init?: { cx: number; cy: number; w: number; ratio: number; rot: number };
-  pre?: { cx: number; cy: number; w: number; rot: number };
+  pre?: { cx: number; cy: number; w: number; rot: number } | undefined;
 };
 
 /** Transformação SVG da estampa: rotação e espelho em torno do próprio centro, sem alterar a geometria. */
