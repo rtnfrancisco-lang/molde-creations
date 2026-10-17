@@ -925,6 +925,7 @@ function Index() {
   const contextMenuHostRef = useRef<HTMLDivElement | null>(null);
   const clipboardLayerRef = useRef<Layer | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const pcEditStartRef = useRef<() => void>(() => {});
   const [shapes, setShapes] = useState<Shapes>(DEFAULT_SHAPES);
   const [size, setSize] = useState<Size>("M");
   const [view, setView] = useState<View>("frente");
@@ -1086,7 +1087,7 @@ function Index() {
           onBringForward={() => moveSelectedLayer("front")}
           onSendBackward={() => moveSelectedLayer("back")}
           onPowerClip={() => {
-            setPcEdit(true);
+            pcEditStartRef.current();
             setMenu(null);
           }}
         />
@@ -1647,6 +1648,7 @@ function Index() {
     setTool("selecao");
     setPcEdit(true);
   };
+  pcEditStartRef.current = pcEditStart;
   const pcExtract = () => {
     if (art) setArt({ ...art, clipped: false });
     setPcEdit(false);
@@ -1663,7 +1665,7 @@ function Index() {
     return { x: b.minX, y: b.minY, w: b.maxX - b.minX, h: b.maxY - b.minY };
   })();
   const pcFileBase = `MOLDE_${partLabel(view).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, "_")}_TAMANHO_${size}`;
-  const showPcEditor = tool === "selecao" && selPart === "estampa" && !!art && art.clipped !== false && !pcEdit && size === mother;
+  const showPcEditor = tool === "selecao" && !!art && art.clipped !== false && pcEdit && size === mother;
   const pcState = !art ? "none" : art.clipped === false ? "free" : pcEdit ? "editing" : "locked";
 
   const onUpload = (file: File) => {
@@ -2388,7 +2390,7 @@ function Index() {
                     fileBase={pcFileBase}
                     onChange={setArt}
                     onRemove={pcRemove}
-                    onClose={() => setSelPart(null)}
+                    onClose={() => setPcEdit(false)}
                   />
                 )}
                 {imgEditOpen && art && (
