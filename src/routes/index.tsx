@@ -1226,13 +1226,23 @@ function Index() {
         }}
       />,
     );
-    return () => {
-      profileRootRef.current?.unmount();
-      profileRootRef.current = null;
-      profileHostRef.current?.remove();
-      profileHostRef.current = null;
-    };
   }, [profiles, activeProfile, clothingType]);
+
+  // Desmonta as camadas flutuantes só ao sair da página, fora do ciclo de render.
+  useEffect(() => {
+    return () => {
+      const roots = [profileRootRef.current, contextMenuRootRef.current];
+      const hosts = [profileHostRef.current, contextMenuHostRef.current];
+      profileRootRef.current = null;
+      profileHostRef.current = null;
+      contextMenuRootRef.current = null;
+      contextMenuHostRef.current = null;
+      setTimeout(() => {
+        roots.forEach((root) => root?.unmount());
+        hosts.forEach((host) => host?.remove());
+      }, 0);
+    };
+  }, []);
 
   const updateTable = (sz: Size, key: Field, v: number) => updateMeasures(sz, { [key]: v }, `table:${sz}:${key}`);
 
