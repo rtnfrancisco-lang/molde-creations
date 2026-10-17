@@ -141,7 +141,7 @@ export function DirectTextEditor({
         left: x,
         top: y,
         width,
-        minHeight,
+        minHeight: embedded ? style.fontSize * 1.15 : minHeight,
         transform: `${alignmentTransform[style.align]} scale(${scale})`,
         transformOrigin: "top left",
       }}
@@ -154,7 +154,7 @@ export function DirectTextEditor({
         role="textbox"
         aria-label="Texto no canvas"
         spellCheck={false}
-        className="min-h-8 w-full select-text whitespace-pre-wrap break-words border-0 bg-transparent p-0 outline-none caret-cyan selection:bg-cyan/20"
+        className={`${embedded ? "" : "min-h-8 "}w-full select-text whitespace-pre-wrap break-words border-0 bg-transparent p-0 outline-none caret-cyan selection:bg-cyan/20`}
         style={{
           color: style.color,
           fontFamily: style.fontFamily,
