@@ -30,6 +30,7 @@ import {
   MousePointer2,
   Spline,
   PenTool,
+  Shapes as ShapesIcon,
   ZoomIn,
   Maximize,
   FileUp,
@@ -69,6 +70,8 @@ import {
 import { DirectTextEditor } from "@/components/DirectTextEditor";
 import { ImageEditorModal } from "@/components/ImageEditorModal";
 import { PowerClipEditor, artTransform, type PcArt } from "@/components/PowerClipEditor";
+import { DrawOptionsPanel } from "@/components/DrawOptionsPanel";
+import { DEFAULT_DRAW_OPTS, SHAPE_LABELS, dedupe, dragRect, layerFromCm, nextName, rdp, shapeNodes, type CmNode, type DrawOpts } from "@/lib/drawing";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -111,7 +114,7 @@ type Styles = Record<View, PartStyle>;
 const NO_ART: Artworks = { frente: null, costas: null, mangaEsq: null, mangaDir: null };
 const NO_STYLE: PartStyle = { stroke: null, fill: null };
 const DEFAULT_STYLES: Styles = { frente: NO_STYLE, costas: NO_STYLE, mangaEsq: NO_STYLE, mangaDir: NO_STYLE };
-type Tool = "selecao" | "forma" | "caneta" | "zoom" | "fita" | "texto";
+type Tool = "selecao" | "forma" | "caneta" | "formas" | "zoom" | "fita" | "texto";
 type TextElement = {
   id: string;
   text: string;
@@ -283,6 +286,7 @@ const TOOLS: { k: Tool; label: string; icon: typeof Ruler; key: string }[] = [
   { k: "selecao", label: "Ferramenta Seleção", icon: MousePointer2, key: "V" },
   { k: "forma", label: "Ferramenta Forma / Editar Nós", icon: Spline, key: "F" },
   { k: "caneta", label: "Ferramenta Caneta", icon: PenTool, key: "P" },
+  { k: "formas", label: "Ferramenta Formas", icon: ShapesIcon, key: "U" },
   { k: "zoom", label: "Ferramenta Zoom", icon: ZoomIn, key: "Z" },
   { k: "fita", label: "Fita Métrica Digital", icon: Ruler, key: "M" },
   { k: "texto", label: "Ferramenta Texto", icon: Type, key: "T" },
@@ -291,7 +295,8 @@ const TOOLS: { k: Tool; label: string; icon: typeof Ruler; key: string }[] = [
 const TOOL_HINTS: Record<Tool, string> = {
   selecao: "Clique em um objeto para selecionar · arraste as alças para redimensionar · o cadeado trava a proporção",
   forma: "Arraste nós e alças · duplo clique adiciona nó · Alt+clique remove · Shift+clique alterna reta/curva",
-  caneta: "Clique para criar nós · clique e arraste para curvas · clique no 1º nó ou Enter fecha · Esc cancela",
+  caneta: "Mão livre: arraste para desenhar · clique para pontos retos · clique no 1º ponto, Enter ou duplo clique finaliza · Esc cancela",
+  formas: "Escolha a forma · arraste no canvas · Shift proporcional · Alt a partir do centro",
   zoom: "Clique para aproximar · Alt+clique afasta · arraste para mover a vista · roda do mouse também dá zoom",
   fita: "Clique em dois pontos para medir a distância real em cm",
   texto: "Clique no canvas para inserir texto · arraste o texto para reposicionar",
@@ -952,6 +957,7 @@ function Index() {
   const [overlay, setOverlay] = useState(false);
   const [savedMsg, setSavedMsg] = useState("");
   const [tool, setTool] = useState<Tool>("forma");
+  const [drawOpts, setDrawOpts] = useState<DrawOpts>(DEFAULT_DRAW_OPTS);
   const [fitSignal, setFitSignal] = useState(0);
   const [sidebars, setSidebars] = useState({ left: true, right: true });
   const [showSeam, setShowSeam] = useState(true);
@@ -2394,6 +2400,7 @@ function Index() {
                   selLayer={selLayer}
                   onSelLayer={selectLayer}
                   onLayersChange={(arr) => setViewLayers(arr)}
+                  drawOpts={drawOpts}
                   showSeam={showSeam}
                   showBleed={showBleed}
                   showSafety={showSafety}
@@ -2406,6 +2413,7 @@ function Index() {
                   onCheckpoint={checkpoint}
                 />
                 <div id="text-panel-host" className="pointer-events-none absolute inset-0 z-20" />
+                {(tool === "caneta" || tool === "formas") && <DrawOptionsPanel mode={tool} opts={drawOpts} onChange={setDrawOpts} />}
                 {showPcEditor && art && (
                   <PowerClipEditor
                     art={art}
@@ -2855,6 +2863,8 @@ type Drag =
   | { k: "hOut"; i: number }
   | { k: "hIn"; i: number }
   | { k: "pen"; i: number }
+  | { k: "free"; pts: Pt[]; sx: number; sy: number }
+  | { k: "shape"; s: Pt; p: Pt; shift: boolean; alt: boolean }
   | { k: "art"; start: Pt; orig: Artwork }
   | { k: "move"; start: Pt; orig: Node[] }
   | { k: "pscale"; hx: HandleDir; hy: HandleDir; W: number; H: number }
@@ -2883,6 +2893,7 @@ function PatternCanvas({
   selLayer,
   onSelLayer,
   onLayersChange,
+  drawOpts = DEFAULT_DRAW_OPTS,
   showSeam = true,
   showBleed = true,
   showSafety = true,
@@ -2931,12 +2942,14 @@ function PatternCanvas({
   selLayer: string | null;
   onSelLayer: (id: string | null) => void;
   onLayersChange: (l: Layer[]) => void;
+  drawOpts?: DrawOpts;
   showSeam?: boolean;
   showBleed?: boolean;
   showSafety?: boolean;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
+  const freeRef = useRef<Pt[]>([]);
   const [draft, setDraft] = useState<Node[] | null>(null);
   const [zoom, setZoom] = useState({ k: 1, px: 0, py: 0 });
   const [tape, setTape] = useState<{ a: Pt | null; b: Pt | null }>({ a: null, b: null });
@@ -3041,15 +3054,32 @@ function PatternCanvas({
   };
   const capture = (e: React.PointerEvent) => svgRef.current?.setPointerCapture(e.pointerId);
 
-  const commitDraft = () => {
-    if (draft && draft.length >= 3) setNodes(draft);
+  /* Desenhos da Caneta viram camadas vetoriais novas; o molde (shapes) nunca é alterado aqui. */
+  const addDrawn = (cm: CmNode[], closed: boolean) => {
+    const nodesCm = dedupe(cm);
+    const l = layerFromCm(nodesCm, closed && nodesCm.length >= 3, { stroke: drawOpts.penStroke, fill: null, widthCm: drawOpts.penWidth }, nextName("Desenho", layers), W, H);
+    if (!l) return;
+    onLayersChange([...layers, l]);
+    onSelLayer(l.id);
+  };
+  const commitDraft = (closed = false) => {
+    if (draft && draft.length >= 2) {
+      const cm: CmNode[] = draft.map((n, i) => {
+        const o: CmNode = { x: (n.x - 0.5) * W, y: n.y * H, smooth: n.smooth && (closed || (i > 0 && i < draft.length - 1)) };
+        if (n.hIn) o.hIn = { x: n.hIn.x * W, y: n.hIn.y * H };
+        if (n.hOut) o.hOut = { x: n.hOut.x * W, y: n.hOut.y * H };
+        if (n.hIn || n.hOut) o.smooth = n.smooth;
+        return o;
+      });
+      addDrawn(cm, closed);
+    }
     setDraft(null);
   };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (tool !== "caneta" || !draft) return;
-      if (e.key === "Enter") commitDraft();
+      if (e.key === "Enter") commitDraft(false);
       if (e.key === "Escape") setDraft(null);
     };
     window.addEventListener("keydown", onKey);
@@ -3130,18 +3160,28 @@ function PatternCanvas({
     } else if (tool === "fita") {
       setTape((t) => (!t.a || t.b ? { a: p, b: null } : { a: t.a, b: p }));
     } else if (tool === "caneta") {
+      if (e.button !== 0) return;
       if (draft && draft.length >= 3) {
         const f = toSvg(draft[0]!);
         if (Math.hypot(f.x - p.x, f.y - p.y) < unit * 1.5) {
-          commitDraft();
+          commitDraft(true);
           return;
         }
+      }
+      capture(e);
+      if (drawOpts.penMode === "livre") {
+        freeRef.current = [p];
+        setDrag({ k: "free", pts: [p], sx: e.clientX, sy: e.clientY });
+        return;
       }
       const n = toNorm(p);
       const next = [...(draft ?? []), { x: n.x, y: n.y, smooth: false }];
       setDraft(next);
-      capture(e);
       setDrag({ k: "pen", i: next.length - 1 });
+    } else if (tool === "formas") {
+      if (e.button !== 0) return;
+      capture(e);
+      setDrag({ k: "shape", s: p, p, shift: e.shiftKey, alt: e.altKey });
     }
   };
 
@@ -3224,6 +3264,18 @@ function PatternCanvas({
           }),
         );
         break;
+      case "free": {
+        const fp = freeRef.current;
+        const l = fp[fp.length - 1]!;
+        if (Math.hypot(l.x - p.x, l.y - p.y) > unit * 0.1) {
+          fp.push(p);
+          setDrag({ ...drag, pts: fp.slice() });
+        }
+        break;
+      }
+      case "shape":
+        setDrag({ ...drag, p, shift: e.shiftKey, alt: e.altKey });
+        break;
       case "move": {
         const dx = n.x - drag.start.x;
         const dy = n.y - drag.start.y;
@@ -3249,6 +3301,45 @@ function PatternCanvas({
       const at = drag.at;
       setZoom((z) => ({ k: Math.min(12, Math.max(0.3, z.k * f)), px: at.x - bcx, py: at.y - bcy }));
     }
+    if (drag?.k === "free") {
+      const fpts = freeRef.current;
+      const moved = fpts.length > 2 || (fpts.length > 1 && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) >= 4);
+      if (!moved) {
+        const n = toNorm(fpts[0]!);
+        setDraft([...(draft ?? []), { x: n.x, y: n.y, smooth: false }]);
+      } else {
+        const simp = rdp(fpts, unit * 0.4);
+        if (draft && draft.length) {
+          const add = simp.slice(1).map((q) => ({ ...toNorm(q), smooth: true }));
+          setDraft([...draft, ...add]);
+        } else {
+          const f = simp[0]!;
+          const l = simp[simp.length - 1]!;
+          const closed = simp.length >= 3 && Math.hypot(f.x - l.x, f.y - l.y) < unit * 1.5;
+          const pts = closed ? simp.slice(0, -1) : simp;
+          const cm = pts.map((q, i) => ({ x: q.x, y: q.y, smooth: closed || (i > 0 && i < pts.length - 1) }));
+          addDrawn(cm, closed && cm.length >= 3);
+        }
+      }
+    }
+    if (drag?.k === "shape") {
+      const r = dragRect(drag.s, drag.p, drag.shift, drag.alt);
+      if (Math.max(r.w, r.h) >= 0.3) {
+        const sh = shapeNodes(drawOpts.shape, r);
+        const l = layerFromCm(
+          sh.nodes,
+          sh.closed,
+          { stroke: drawOpts.shapeStroke, fill: drawOpts.shapeFill, widthCm: drawOpts.shapeWidth },
+          nextName(SHAPE_LABELS[drawOpts.shape], layers),
+          W,
+          H,
+        );
+        if (l) {
+          onLayersChange([...layers, l]);
+          onSelLayer(l.id);
+        }
+      }
+    }
     setDrag(null);
   };
 
@@ -3265,6 +3356,10 @@ function PatternCanvas({
   };
 
   const onDoubleClick = (e: React.MouseEvent) => {
+    if (tool === "caneta") {
+      if (draft) commitDraft(false);
+      return;
+    }
     if (tool !== "forma" || layerNodeMode) return;
     const p = toNorm(svgPoint(e));
     let best = 0;
@@ -3306,9 +3401,9 @@ function PatternCanvas({
 
   const others = overlay ? SIZES.filter((s) => s !== size) : [];
   const title = { frente: "FRENTE", costas: "COSTAS", mangaEsq: "MANGA ESQUERDA", mangaDir: "MANGA DIREITA" }[view];
-  const showNodes = (tool === "forma" && !layerNodeMode) || tool === "caneta";
-  const nodesInteractive = tool === "forma" || (tool === "caneta" && !draft);
-  const cursor = { selecao: "cursor-default", forma: "cursor-crosshair", caneta: "cursor-crosshair", zoom: "cursor-zoom-in", fita: "cursor-crosshair", texto: "cursor-text" }[tool];
+  const showNodes = tool === "forma" && !layerNodeMode;
+  const nodesInteractive = tool === "forma";
+  const cursor = { selecao: "cursor-default", forma: "cursor-crosshair", caneta: "cursor-crosshair", formas: "cursor-crosshair", zoom: "cursor-zoom-in", fita: "cursor-crosshair", texto: "cursor-text" }[tool];
   const tapeEnd = tape.b ?? (tape.a ? hover : null);
   const sw = { strokeWidth: 1.5, vectorEffect: "non-scaling-stroke" as const };
 
@@ -3744,6 +3839,31 @@ function PatternCanvas({
           })}
         </g>
       )}
+
+      {/* Prévia do traço à mão livre */}
+      {drag?.k === "free" && drag.pts.length > 1 && (
+        <path
+          d={drag.pts.map((q, i) => `${i ? "L" : "M"} ${q.x} ${q.y}`).join(" ")}
+          className="fill-none stroke-amber pointer-events-none"
+          strokeWidth={1.75}
+          vectorEffect="non-scaling-stroke"
+        />
+      )}
+
+      {/* Prévia da forma */}
+      {drag?.k === "shape" && (() => {
+        const sh = shapeNodes(drawOpts.shape, dragRect(drag.s, drag.p, drag.shift, drag.alt));
+        const pl = layerFromCm(sh.nodes, sh.closed, { stroke: drawOpts.shapeStroke, fill: drawOpts.shapeFill, widthCm: drawOpts.shapeWidth }, "", W, H);
+        if (!pl?.paths) return null;
+        const { c, aw, ah } = lg(pl);
+        const pp = pl.paths[0]!;
+        return (
+          <g className="pointer-events-none" transform={`translate(${c.x} ${c.y - ah / 2})`}>
+            <path d={layerPathD(pp, aw, ah)} fill={pp.fill ?? "none"} fillOpacity={0.6} stroke="var(--color-amber, #f59e0b)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+          </g>
+        );
+      })()}
+
 
       <TextWorkspace tool={tool} view={view} svgPoint={svgPoint} bounds={{ x: vx, y: vy, width: vw, height: vh }} texts={texts} setTexts={onTextsChange} checkpoint={onCheckpoint} />
 
