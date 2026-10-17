@@ -67,6 +67,7 @@ import {
   TECHNICAL_OFFSET_OPTIONS,
 } from "@/lib/vector-offset";
 import { DirectTextEditor } from "@/components/DirectTextEditor";
+import { PowerClipEditor, artTransform, type PcArt } from "@/components/PowerClipEditor";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -99,7 +100,7 @@ type Grading = Record<Size, Measurements>;
 type View = "frente" | "costas" | "mangaEsq" | "mangaDir";
 type Node = { x: number; y: number; smooth: boolean; hIn?: { x: number; y: number }; hOut?: { x: number; y: number } };
 type Shapes = Record<View, Node[]>;
-type Artwork = { src: string; cx: number; cy: number; w: number; ratio: number; clipped?: boolean; rot?: number };
+type Artwork = PcArt;
 type Artworks = Record<View, Artwork | null>;
 type Layers = Record<View, Layer[]>;
 const NO_LAYERS: Layers = { frente: [], costas: [], mangaEsq: [], mangaDir: [] };
@@ -1501,7 +1502,7 @@ function Index() {
       rest.unshift({ id: crypto.randomUUID(), name: "Estampa anterior", kind: "imagem", src: art.src, cx: art.cx, cy: art.cy, w: art.w, ratio: art.ratio, rot: art.rot ?? 0 });
     checkpoint("pc-layer:" + Date.now());
     const nl = { ...layers, [view]: rest };
-    const na = { ...artworks, [view]: { src, cx: l.cx, cy: l.cy, w: l.w, ratio: l.ratio, rot: l.rot, clipped: true } };
+    const na = { ...artworks, [view]: { src, name: l.name, cx: l.cx, cy: l.cy, w: l.w, ratio: l.ratio, rot: l.rot, clipped: true, init: { cx: l.cx, cy: l.cy, w: l.w, ratio: l.ratio, rot: l.rot ?? 0 }, pre: { cx: l.cx, cy: l.cy, w: l.w, rot: l.rot ?? 0 } } };
     setLayers(nl);
     setArtworks(na);
     saveLS(LS_LAYERS, nl);
@@ -1599,7 +1600,13 @@ function Index() {
               }
             : null;
   const pcApply = () => {
-    if (art) setArt({ ...art, clipped: true });
+    if (art)
+      setArt({
+        ...art,
+        clipped: true,
+        init: art.init ?? { cx: art.cx, cy: art.cy, w: art.w, ratio: art.ratio, rot: art.rot ?? 0 },
+        pre: art.clipped === false ? { cx: art.cx, cy: art.cy, w: art.w, rot: art.rot ?? 0 } : art.pre,
+      });
     setPcEdit(false);
   };
   const pcEditStart = () => {
@@ -1611,6 +1618,19 @@ function Index() {
     if (art) setArt({ ...art, clipped: false });
     setPcEdit(false);
   };
+  const pcRemove = () => {
+    if (art) setArt({ ...art, ...(art.pre ?? {}), clipped: false });
+    setPcEdit(false);
+    setSelPart("estampa");
+  };
+  const pcFrame = (() => {
+    const b = pathBounds(offsetPathD(buildPath(shapes[view], pieceW, pieceH), BLEED_OFFSET_CM, TECHNICAL_OFFSET_OPTIONS)) ?? {
+      minX: -pieceW / 2 - PLOTTER_MARGIN, minY: -PLOTTER_MARGIN, maxX: pieceW / 2 + PLOTTER_MARGIN, maxY: pieceH + PLOTTER_MARGIN,
+    };
+    return { x: b.minX, y: b.minY, w: b.maxX - b.minX, h: b.maxY - b.minY };
+  })();
+  const pcFileBase = `MOLDE_${partLabel(view).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, "_")}_TAMANHO_${size}`;
+  const showPcEditor = tool === "selecao" && selPart === "estampa" && !!art && art.clipped !== false && !pcEdit && size === mother;
   const pcState = !art ? "none" : art.clipped === false ? "free" : pcEdit ? "editing" : "locked";
 
   const onUpload = (file: File) => {
@@ -1646,7 +1666,7 @@ function Index() {
         const ah = aw * art.ratio;
         const x = (art.cx - 0.5) * W - aw / 2;
         const y = art.cy * H - ah / 2;
-        const im = `<image href="${art.src}" x="${x}" y="${y}" width="${aw}" height="${ah}" transform="rotate(${art.rot ?? 0} ${x + aw / 2} ${y + ah / 2})" preserveAspectRatio="none"/>`;
+        const im = `<image href="${art.src}" x="${x}" y="${y}" width="${aw}" height="${ah}" transform="${artTransform(art, x + aw / 2, y + ah / 2)}" opacity="${art.opacity ?? 1}" preserveAspectRatio="none"/>`;
         const fb = pathBounds(offsetPathD(path, BLEED_OFFSET_CM, TECHNICAL_OFFSET_OPTIONS)) ?? { minX: -W / 2 - PLOTTER_MARGIN, minY: -PLOTTER_MARGIN, maxX: W / 2 + PLOTTER_MARGIN, maxY: H + PLOTTER_MARGIN };
         img = `<clipPath id="c"><rect x="${fb.minX}" y="${fb.minY}" width="${fb.maxX - fb.minX}" height="${fb.maxY - fb.minY}"/></clipPath>${art.clipped === false ? im : `<g clip-path="url(#c)">${im}</g>`}`;
       }
@@ -1700,7 +1720,7 @@ function Index() {
       const ah = aw * art.ratio;
       const ax = (art.cx - 0.5) * W - aw / 2;
       const ay = art.cy * H - ah / 2;
-      const im = `<image href="${art.src}" x="${ax}" y="${ay}" width="${aw}" height="${ah}" transform="rotate(${art.rot ?? 0} ${ax + aw / 2} ${ay + ah / 2})" preserveAspectRatio="none"/>`;
+      const im = `<image href="${art.src}" x="${ax}" y="${ay}" width="${aw}" height="${ah}" transform="${artTransform(art, ax + aw / 2, ay + ah / 2)}" opacity="${art.opacity ?? 1}" preserveAspectRatio="none"/>`;
       img = art.clipped === false ? im : `<g clip-path="url(#moldeClip)">${im}</g>`;
     }
 
@@ -2321,6 +2341,18 @@ function Index() {
                   lockRatio={lockRatio}
                   onPieceDims={setPieceDims}
                 />
+                {showPcEditor && art && (
+                  <PowerClipEditor
+                    art={art}
+                    frame={pcFrame}
+                    W={pieceW}
+                    H={pieceH}
+                    fileBase={pcFileBase}
+                    onChange={setArt}
+                    onRemove={pcRemove}
+                    onClose={() => setSelPart(null)}
+                  />
+                )}
                 {selInfo && (
                   <SelectionPropsBar info={selInfo} locked={lockRatio} onToggleLock={() => setLockRatio((v) => !v)} />
                 )}
@@ -3301,7 +3333,7 @@ function PatternCanvas({
           width: aw,
           height: ah,
           preserveAspectRatio: "none",
-          transform: `rotate(${artwork.rot ?? 0} ${c.x} ${c.y})`,
+          transform: artTransform(artwork, c.x, c.y),
         };
         const down = (e: React.PointerEvent) => {
           e.stopPropagation();
@@ -3330,6 +3362,7 @@ function PatternCanvas({
               <g clipPath="url(#outline-clip)">
                 <image
                   {...imgProps}
+                  opacity={artwork.opacity ?? 1}
                   className={clipMovable ? "cursor-move" : ""}
                   style={{ pointerEvents: clipMovable ? "all" : "none" }}
                   onPointerDown={clipMovable ? down : undefined}
