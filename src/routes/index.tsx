@@ -718,7 +718,6 @@ function TextWorkspace({ tool, view, svgPoint, bounds }: TextWorkspaceProps) {
   };
 
   const commitText = (forId?: string, forValue?: string) => {
-    console.log("COMMIT", editingIdRef.current, forId, new Error().stack?.split("\n").slice(2,9).join("|"));
     const id = editingIdRef.current;
     if (!id || (forId && forId !== id)) return;
     const value = (forValue ?? activeTextValueRef.current).replace(/\u00a0/g, " ");
@@ -765,7 +764,6 @@ function TextWorkspace({ tool, view, svgPoint, bounds }: TextWorkspaceProps) {
   };
 
   const addText = (event: React.PointerEvent<SVGRectElement>) => {
-    console.log("ADDTEXT", tool, event.button);
     if (tool !== "texto" || event.button !== 0) return;
     event.stopPropagation();
     event.preventDefault();
@@ -774,7 +772,6 @@ function TextWorkspace({ tool, view, svgPoint, bounds }: TextWorkspaceProps) {
     const point = svgPoint(event);
     const item: TextElement = { id: crypto.randomUUID(), text: "", x: point.x, y: point.y, ...defaults };
     updateTexts(view, (items) => [...items, item]);
-    console.log("ADDED", localStorage.getItem(TEXT_STORAGE));
     startEditing(item);
   };
 

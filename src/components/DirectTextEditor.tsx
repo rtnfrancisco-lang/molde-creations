@@ -79,14 +79,17 @@ export function DirectTextEditor({
 
   // Garante que uma edição pendente não seja perdida quando a ferramenta muda
   // e o editor é removido antes que o navegador dispare o blur.
+  // Adiado e só se o editor saiu da tela: o React (modo de desenvolvimento) desmonta
+  // e remonta efeitos sem remover o elemento, o que apagava o texto recém-criado.
   useEffect(() => {
+    const editor = editorRef.current;
     return () => {
-      if (committedRef.current) return;
-
-      const editor = editorRef.current;
-      const nextValue = editor ? readValue(editor) : latestValueRef.current;
-      committedRef.current = true;
-      onCommitRef.current(nextValue);
+      const lastValue = editor ? readValue(editor) : latestValueRef.current;
+      setTimeout(() => {
+        if (committedRef.current || editor?.isConnected) return;
+        committedRef.current = true;
+        onCommitRef.current(lastValue);
+      }, 0);
     };
   }, []);
 
