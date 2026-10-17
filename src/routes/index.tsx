@@ -764,6 +764,7 @@ function TextWorkspace({ tool, view, svgPoint, bounds }: TextWorkspaceProps) {
   };
 
   const addText = (event: React.PointerEvent<SVGRectElement>) => {
+    console.log("ADDTEXT", tool, event.button);
     if (tool !== "texto" || event.button !== 0) return;
     event.stopPropagation();
     event.preventDefault();
