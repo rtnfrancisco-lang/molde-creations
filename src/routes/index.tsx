@@ -2413,6 +2413,7 @@ function Index() {
                   onCheckpoint={checkpoint}
                 />
                 <div id="text-panel-host" className="pointer-events-none absolute inset-0 z-20" />
+                {(tool === "caneta" || tool === "formas") && <DrawOptionsPanel mode={tool} opts={drawOpts} onChange={setDrawOpts} />}
                 {showPcEditor && art && (
                   <PowerClipEditor
                     art={art}
