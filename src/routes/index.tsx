@@ -3423,19 +3423,7 @@ function PatternCanvas({
       {/* Quadro de Mídia do Plotter — retângulo externo automático em volta do molde */}
       <g className="pointer-events-none">
         {(() => {
-          /* Mesma caixa usada na exportação: limites absolutos da Linha Azul de
-             Sangria, sem margem, para o quadro colar no contorno do molde. */
-          const bb =
-            pathBounds(offsetPathD(buildPath(nodes, W, H), BLEED_OFFSET_CM, TECHNICAL_OFFSET_OPTIONS)) ?? {
-              minX: -W / 2 - PLOTTER_MARGIN,
-              minY: -PLOTTER_MARGIN,
-              maxX: W / 2 + PLOTTER_MARGIN,
-              maxY: H + PLOTTER_MARGIN,
-            };
-          const fx = bb.minX;
-          const fy = bb.minY;
-          const fw = Math.max(0.1, bb.maxX - bb.minX);
-          const fh = Math.max(0.1, bb.maxY - bb.minY);
+          const { x: fx, y: fy, w: fw, h: fh } = frame;
           return (
             <>
               <rect
@@ -3443,10 +3431,39 @@ function PatternCanvas({
                 y={fy}
                 width={fw}
                 height={fh}
-                className="fill-none stroke-ink"
-                strokeWidth={2}
+                className={"fill-none " + (pcArmed && frameHover ? "stroke-primary" : "stroke-ink")}
+                strokeWidth={pcArmed && frameHover ? 4 : 2}
                 vectorEffect="non-scaling-stroke"
               />
+              {pcArmed && (
+                <>
+                  {/* Área de clique do destino: só a borda do retângulo (as linhas do molde não disparam o PowerClip). */}
+                  <rect
+                    x={fx}
+                    y={fy}
+                    width={fw}
+                    height={fh}
+                    fill="none"
+                    stroke="transparent"
+                    strokeWidth={18}
+                    vectorEffect="non-scaling-stroke"
+                    className="cursor-copy"
+                    style={{ pointerEvents: "stroke" }}
+                    onPointerEnter={() => setFrameHover(true)}
+                    onPointerLeave={() => setFrameHover(false)}
+                    onPointerDown={(e) => {
+                      if (e.button !== 0) return;
+                      e.stopPropagation();
+                      setFrameHover(false);
+                      if (pcArmed === "art") {
+                        onPowerClipArt();
+                        onSelPart(null);
+                      } else onPowerClipLayer(pcArmed);
+                    }}
+                  />
+                  {pcIndicator}
+                </>
+              )}
               <text
                 x={fx + unit * 1.2}
                 y={fy + unit * 2.2}
