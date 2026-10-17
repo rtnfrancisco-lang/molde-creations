@@ -1647,7 +1647,8 @@ function Index() {
         const x = (art.cx - 0.5) * W - aw / 2;
         const y = art.cy * H - ah / 2;
         const im = `<image href="${art.src}" x="${x}" y="${y}" width="${aw}" height="${ah}" transform="rotate(${art.rot ?? 0} ${x + aw / 2} ${y + ah / 2})" preserveAspectRatio="none"/>`;
-        img = `<clipPath id="c"><path d="${path}"/></clipPath>${art.clipped === false ? im : `<g clip-path="url(#c)">${im}</g>`}`;
+        const fb = pathBounds(offsetPathD(path, BLEED_OFFSET_CM, TECHNICAL_OFFSET_OPTIONS)) ?? { minX: -W / 2 - PLOTTER_MARGIN, minY: -PLOTTER_MARGIN, maxX: W / 2 + PLOTTER_MARGIN, maxY: H + PLOTTER_MARGIN };
+        img = `<clipPath id="c"><rect x="${fb.minX}" y="${fb.minY}" width="${fb.maxX - fb.minX}" height="${fb.maxY - fb.minY}"/></clipPath>${art.clipped === false ? im : `<g clip-path="url(#c)">${im}</g>`}`;
       }
       const objs = curLayers.map((l) => layerMarkup(l, W, H)).join("");
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W + 2}cm" height="${H + 2}cm" viewBox="${-W / 2 - 1} -1 ${W + 2} ${H + 2}"><path d="${path}" fill="${st.fill ?? "none"}"/>${img}${objs}<path d="${path}" fill="none" stroke="${st.stroke ?? "#000"}" stroke-width="0.05"/></svg>`;
@@ -1734,7 +1735,7 @@ function Index() {
     /* A janela de exportação é recortada exatamente nos limites do quadro. */
     const svg =
       `<svg xmlns="http://www.w3.org/2000/svg" width="${cmW.toFixed(3)}cm" height="${cmH.toFixed(3)}cm" viewBox="${x0.toFixed(3)} ${y0.toFixed(3)} ${cmW.toFixed(3)} ${cmH.toFixed(3)}">` +
-      `<defs><clipPath id="moldeClip"><path d="${path}"/></clipPath></defs>` +
+      `<defs><clipPath id="moldeClip"><rect x="${x0.toFixed(3)}" y="${y0.toFixed(3)}" width="${cmW.toFixed(3)}" height="${cmH.toFixed(3)}"/></clipPath></defs>` +
       body +
       img +
       objs +
