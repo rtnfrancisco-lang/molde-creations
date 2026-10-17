@@ -675,6 +675,28 @@ function CanvasContextMenu({
   );
 }
 
+const LS_TEXTS = "moldecore.textos";
+type TextsByView = Record<View, TextElement[]>;
+const NO_TEXTS: TextsByView = { frente: [], costas: [], mangaEsq: [], mangaDir: [] };
+
+const escXml = (v: string) =>
+  v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+
+/* Textos para exportação: mesmo desenho do canvas (cm, x centrado em 0). */
+const textMarkup = (items: TextElement[]) =>
+  items
+    .filter((t) => t.text.trim().length > 0)
+    .map((t) => {
+      const fs = t.fontSize / 10;
+      const anchor = t.align === "left" ? "start" : t.align === "center" ? "middle" : "end";
+      const spans = t.text
+        .split("\n")
+        .map((line, i) => `<tspan x="${t.x}" dy="${i ? fs * 1.15 : 0}">${escXml(line || " ")}</tspan>`)
+        .join("");
+      return `<text x="${t.x}" y="${t.y + fs}" font-size="${fs}" text-anchor="${anchor}" font-family="${escXml(t.fontFamily)}" font-weight="${t.bold ? 700 : 400}" font-style="${t.italic ? "italic" : "normal"}"${t.underline ? ' text-decoration="underline"' : ""} fill="${escXml(t.color)}" xml:space="preserve">${spans}</text>`;
+    })
+    .join("");
+
 const TEXT_FONTS = ["Arial", "Impact", "Montserrat", "Bebas Neue", "Roboto", "Comic Sans MS"];
 
 type TextWorkspaceProps = {
@@ -682,18 +704,19 @@ type TextWorkspaceProps = {
   view: View;
   svgPoint: (event: { clientX: number; clientY: number }) => { x: number; y: number };
   bounds: { x: number; y: number; width: number; height: number };
+  texts: TextsByView;
+  setTexts: (next: TextsByView) => void;
+  checkpoint: (key: string) => void;
 };
 
-const TEXT_STORAGE = "moldecore.textos";
-const EMPTY_TEXTS: Record<View, TextElement[]> = { frente: [], costas: [], mangaEsq: [], mangaDir: [] };
-
-function TextWorkspace({ tool, view, svgPoint, bounds }: TextWorkspaceProps) {
-  const [byView, setByView] = useState<Record<View, TextElement[]>>(EMPTY_TEXTS);
+function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, checkpoint }: TextWorkspaceProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeTextValue, setActiveTextValue] = useState("");
   const [drag, setDrag] = useState<{ id: string; dx: number; dy: number } | null>(null);
-  const textsRef = useRef<Record<View, TextElement[]>>(EMPTY_TEXTS);
+  // Espelho síncrono do estado do Index (atualizado a cada render e a cada mudança).
+  const textsRef = useRef<TextsByView>(byView);
+  textsRef.current = byView;
   const editingIdRef = useRef<string | null>(null);
   const editingViewRef = useRef<View>(view);
   const activeTextValueRef = useRef("");
@@ -701,22 +724,10 @@ function TextWorkspace({ tool, view, svgPoint, bounds }: TextWorkspaceProps) {
   const texts = byView[view];
   const selected = texts.find((item) => item.id === selectedId) ?? null;
 
-  useEffect(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem(TEXT_STORAGE) ?? "null");
-      if (stored && typeof stored === "object") {
-        const restored = { ...EMPTY_TEXTS, ...stored };
-        textsRef.current = restored;
-        setByView(restored);
-      }
-    } catch { /* Dados locais inválidos não impedem o desenho. */ }
-  }, []);
-
   const updateTexts = (target: View, updater: (items: TextElement[]) => TextElement[]) => {
     const next = { ...textsRef.current, [target]: updater(textsRef.current[target]) };
     textsRef.current = next;
-    setByView(next);
-    localStorage.setItem(TEXT_STORAGE, JSON.stringify(next));
+    setTexts(next);
   };
 
   const commitText = (forId?: string, forValue?: string) => {
@@ -753,6 +764,7 @@ function TextWorkspace({ tool, view, svgPoint, bounds }: TextWorkspaceProps) {
     // Sem texto selecionado, o estilo vale para o próximo texto criado.
     setDefaults((d) => ({ ...d, ...patch }));
     if (!selectedId) return;
+    checkpoint("text-style:" + selectedId);
     updateTexts(view, (items) => items.map((item) => item.id === selectedId ? { ...item, ...patch } : item));
   };
 
@@ -773,6 +785,7 @@ function TextWorkspace({ tool, view, svgPoint, bounds }: TextWorkspaceProps) {
     commitText();
     const point = svgPoint(event);
     const item: TextElement = { id: crypto.randomUUID(), text: "", x: point.x, y: point.y, ...defaults };
+    checkpoint("text-add:" + item.id);
     updateTexts(view, (items) => [...items, item]);
     startEditing(item);
   };
@@ -803,6 +816,7 @@ function TextWorkspace({ tool, view, svgPoint, bounds }: TextWorkspaceProps) {
       event.preventDefault();
       event.stopImmediatePropagation();
       const id = selectedId;
+      checkpoint("text-del:" + Date.now());
       updateTexts(view, (items) => items.filter((item) => item.id !== id));
       setSelectedId(null);
     };
@@ -844,10 +858,11 @@ function TextWorkspace({ tool, view, svgPoint, bounds }: TextWorkspaceProps) {
               if (tool !== "selecao" && tool !== "texto") return;
               event.stopPropagation();
               setSelectedId(item.id);
+              checkpoint("text-move:" + Date.now());
               const point = svgPoint(event);
               setDrag({ id: item.id, dx: point.x - item.x, dy: point.y - item.y });
             }}
-            onDoubleClick={(event) => { event.stopPropagation(); startEditing(item); }}
+            onDoubleClick={(event) => { event.stopPropagation(); checkpoint("text-edit:" + item.id); startEditing(item); }}
           >
             {item.text.split("\n").map((line, index) =>
               <tspan key={index} x={item.x} dy={index ? fontSize * 1.15 : 0}>{line || " "}</tspan>)}
@@ -895,6 +910,8 @@ function Index() {
   const [mother, setMother] = useState<Size>("M");
   const [artworks, setArtworks] = useState<Artworks>(NO_ART);
   const [layers, setLayers] = useState<Layers>(NO_LAYERS);
+  const [texts, setTexts] = useState<TextsByView>(NO_TEXTS);
+  const textsHydrated = useRef(false);
   const [selLayer, setSelLayer] = useState<string | null>(null);
   const [layersOpen, setLayersOpen] = useState(true);
   const [importMsg, setImportMsg] = useState("");
@@ -1102,6 +1119,11 @@ function Index() {
       if (s) setShapes({ ...DEFAULT_SHAPES, ...JSON.parse(s) });
       const ly = localStorage.getItem(LS_LAYERS);
       if (ly) setLayers({ ...NO_LAYERS, ...JSON.parse(ly) });
+      try {
+        const tx = JSON.parse(localStorage.getItem(LS_TEXTS) ?? "null");
+        if (tx && typeof tx === "object") setTexts({ ...NO_TEXTS, ...tx });
+      } catch { /* textos inválidos não impedem o desenho */ }
+      textsHydrated.current = true;
       const sb = localStorage.getItem(LS_SIDEBARS);
       if (sb) setSidebars((cur) => ({ ...cur, ...JSON.parse(sb) }));
     } catch {
@@ -1116,10 +1138,17 @@ function Index() {
       return next;
     });
 
+  // Grava os textos com atraso de 300 ms (evita gravar a cada tecla).
+  useEffect(() => {
+    if (!textsHydrated.current) return;
+    const t = setTimeout(() => saveLS(LS_TEXTS, texts), 300);
+    return () => clearTimeout(t);
+  }, [texts]);
+
   /* ---------- Histórico (Desfazer / Refazer) ---------- */
-  type Snap = { table: Grading; shapes: Shapes; artworks: Artworks; styles: Styles; layers: Layers };
-  const snapRef = useRef<Snap>({ table, shapes, artworks, styles, layers });
-  snapRef.current = { table, shapes, artworks, styles, layers };
+  type Snap = { table: Grading; shapes: Shapes; artworks: Artworks; styles: Styles; layers: Layers; texts: TextsByView };
+  const snapRef = useRef<Snap>({ table, shapes, artworks, styles, layers, texts });
+  snapRef.current = { table, shapes, artworks, styles, layers, texts };
   const [past, setPast] = useState<Snap[]>([]);
   const [future, setFuture] = useState<Snap[]>([]);
   const lastCp = useRef({ key: "", t: 0 });
@@ -1147,6 +1176,8 @@ function Index() {
     localStorage.setItem(LS_STYLES, JSON.stringify(sn.styles));
     saveLS(LS_ART, sn.artworks);
     saveLS(LS_LAYERS, sn.layers);
+    setTexts(sn.texts);
+    saveLS(LS_TEXTS, sn.texts);
     lastCp.current = { key: "", t: 0 };
   };
 
@@ -1673,7 +1704,7 @@ function Index() {
         img = `<clipPath id="c"><rect x="${fb.minX}" y="${fb.minY}" width="${fb.maxX - fb.minX}" height="${fb.maxY - fb.minY}"/></clipPath>${art.clipped === false ? im : `<g clip-path="url(#c)">${im}</g>`}`;
       }
       const objs = curLayers.map((l) => layerMarkup(l, W, H)).join("");
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W + 2}cm" height="${H + 2}cm" viewBox="${-W / 2 - 1} -1 ${W + 2} ${H + 2}"><path d="${path}" fill="${st.fill ?? "none"}"/>${img}${objs}<path d="${path}" fill="none" stroke="${st.stroke ?? "#000"}" stroke-width="0.05"/></svg>`;
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W + 2}cm" height="${H + 2}cm" viewBox="${-W / 2 - 1} -1 ${W + 2} ${H + 2}"><path d="${path}" fill="${st.fill ?? "none"}"/>${img}${objs}${textMarkup(texts[view])}<path d="${path}" fill="none" stroke="${st.stroke ?? "#000"}" stroke-width="0.05"/></svg>`;
       const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
       setTimeout(() => {
         const el = document.createElement("a");
@@ -1761,6 +1792,7 @@ function Index() {
       body +
       img +
       objs +
+      textMarkup(texts[view]) +
       tech +
       outline +
       frame +
@@ -2343,6 +2375,9 @@ function Index() {
                   onSelPart={selectPart}
                   lockRatio={lockRatio}
                   onPieceDims={setPieceDims}
+                  texts={texts}
+                  onTextsChange={setTexts}
+                  onCheckpoint={checkpoint}
                 />
                 {showPcEditor && art && (
                   <PowerClipEditor
@@ -2832,7 +2867,13 @@ function PatternCanvas({
   onPowerClipArt,
   onPowerClipLayer,
   onEditImage,
+  texts,
+  onTextsChange,
+  onCheckpoint,
 }: {
+  texts: TextsByView;
+  onTextsChange: (t: TextsByView) => void;
+  onCheckpoint: (key: string) => void;
   /** Duplo clique na arte dentro do PowerClip: abre o editor de imagem. */
   onEditImage?: () => void;
   /** Clique no retângulo da Plotter com a estampa livre selecionada. */
@@ -3684,7 +3725,7 @@ function PatternCanvas({
         </g>
       )}
 
-      <TextWorkspace tool={tool} view={view} svgPoint={svgPoint} bounds={{ x: vx, y: vy, width: vw, height: vh }} />
+      <TextWorkspace tool={tool} view={view} svgPoint={svgPoint} bounds={{ x: vx, y: vy, width: vw, height: vh }} texts={texts} setTexts={onTextsChange} checkpoint={onCheckpoint} />
 
       {/* Fita métrica */}
       {tape.a && tapeEnd && (
