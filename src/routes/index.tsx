@@ -718,7 +718,7 @@ function TextWorkspace({ tool, view, svgPoint, bounds }: TextWorkspaceProps) {
   };
 
   const commitText = (forId?: string, forValue?: string) => {
-    console.log("COMMIT", editingIdRef.current, forId, new Error().stack?.split("\n").slice(2,4).join("|"));
+    console.log("COMMIT", editingIdRef.current, forId, new Error().stack?.split("\n").slice(2,9).join("|"));
     const id = editingIdRef.current;
     if (!id || (forId && forId !== id)) return;
     const value = (forValue ?? activeTextValueRef.current).replace(/\u00a0/g, " ");
