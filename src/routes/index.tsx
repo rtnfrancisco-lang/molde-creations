@@ -67,6 +67,7 @@ import {
   TECHNICAL_OFFSET_OPTIONS,
 } from "@/lib/vector-offset";
 import { DirectTextEditor } from "@/components/DirectTextEditor";
+import { ImageEditorModal } from "@/components/ImageEditorModal";
 import { PowerClipEditor, artTransform, type PcArt } from "@/components/PowerClipEditor";
 
 export const Route = createFileRoute("/")({
@@ -901,6 +902,7 @@ function Index() {
   const [styles, setStyles] = useState<Styles>(DEFAULT_STYLES);
   const [colorTarget, setColorTarget] = useState<ColorTarget>("preenchimento");
   const [pcEdit, setPcEdit] = useState(false);
+  const [imgEditOpen, setImgEditOpen] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const contextMenuRootRef = useRef<Root | null>(null);
   const contextMenuHostRef = useRef<HTMLDivElement | null>(null);
@@ -2325,6 +2327,7 @@ function Index() {
                   onArtworkChange={setArt}
                   onPowerClipArt={pcApply}
                   onPowerClipLayer={layerToPowerClip}
+                  onEditImage={() => setImgEditOpen(true)}
                   mother={mother}
                   pcEdit={pcEdit}
                   partStyle={styles[view]}
@@ -2351,6 +2354,16 @@ function Index() {
                     onChange={setArt}
                     onRemove={pcRemove}
                     onClose={() => setSelPart(null)}
+                  />
+                )}
+                {imgEditOpen && art && (
+                  <ImageEditorModal
+                    src={art.src}
+                    onCancel={() => setImgEditOpen(false)}
+                    onSave={(src, ratio) => {
+                      setImgEditOpen(false);
+                      setArt({ ...art, src, ratio });
+                    }}
                   />
                 )}
                 {selInfo && (
@@ -2818,7 +2831,10 @@ function PatternCanvas({
   onPieceDims,
   onPowerClipArt,
   onPowerClipLayer,
+  onEditImage,
 }: {
+  /** Duplo clique na arte dentro do PowerClip: abre o editor de imagem. */
+  onEditImage?: () => void;
   /** Clique no retângulo da Plotter com a estampa livre selecionada. */
   onPowerClipArt: () => void;
   /** Clique no retângulo da Plotter com um objeto importado selecionado. */
@@ -3366,6 +3382,7 @@ function PatternCanvas({
                   className={clipMovable ? "cursor-move" : ""}
                   style={{ pointerEvents: clipMovable ? "all" : "none" }}
                   onPointerDown={clipMovable ? down : undefined}
+                  onDoubleClick={clipMovable ? (e) => { e.stopPropagation(); onEditImage?.(); } : undefined}
                 />
               </g>
             )}

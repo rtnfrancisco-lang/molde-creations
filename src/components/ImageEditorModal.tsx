@@ -228,14 +228,9 @@ export function ImageEditorModal({
     strokeLayer.current = document.createElement("canvas");
     strokeLayer.current.width = size.w;
     strokeLayer.current.height = size.h;
-    stroke(p, { x: p.x + 0.01, y: p.y });
-    compose();
+    paintTo({ x: p.x + 0.01, y: p.y });
   };
   const strokeLayer = useRef<HTMLCanvasElement | null>(null);
-  const compose = () => {
-    // Pincel: os traços acumulam direto no canvas; com opacidade < 100, recompõe a base + traço.
-    if (brushOpacity >= 100 || tool === "borracha" || !drawing.current) return;
-  };
 
   const onMove = (e: React.PointerEvent) => {
     if (tool === "selecao" && selStart.current) {
@@ -243,9 +238,11 @@ export function ImageEditorModal({
       setSel({ x: Math.min(s.x, p.x), y: Math.min(s.y, p.y), w: Math.abs(p.x - s.x), h: Math.abs(p.y - s.y) });
       return;
     }
+    if (drawing.current) paintTo(pt(e));
+  };
+  const paintTo = (p: { x: number; y: number }) => {
     const dr = drawing.current;
     if (!dr) return;
-    const p = pt(e);
     if (brushOpacity < 100 && tool === "pincel") {
       // Desenha o traço completo numa camada separada e recompõe com a opacidade escolhida.
       const sl = strokeLayer.current!;
