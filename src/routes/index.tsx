@@ -3745,6 +3745,31 @@ function PatternCanvas({
         </g>
       )}
 
+      {/* Prévia do traço à mão livre */}
+      {drag?.k === "free" && drag.pts.length > 1 && (
+        <path
+          d={drag.pts.map((q, i) => `${i ? "L" : "M"} ${q.x} ${q.y}`).join(" ")}
+          className="fill-none stroke-amber pointer-events-none"
+          strokeWidth={1.75}
+          vectorEffect="non-scaling-stroke"
+        />
+      )}
+
+      {/* Prévia da forma */}
+      {drag?.k === "shape" && (() => {
+        const sh = shapeNodes(drawOpts.shape, dragRect(drag.s, drag.p, drag.shift, drag.alt));
+        const pl = layerFromCm(sh.nodes, sh.closed, { stroke: drawOpts.shapeStroke, fill: drawOpts.shapeFill, widthCm: drawOpts.shapeWidth }, "", W, H);
+        if (!pl?.paths) return null;
+        const { c, aw, ah } = lg(pl);
+        const pp = pl.paths[0]!;
+        return (
+          <g className="pointer-events-none" transform={`translate(${c.x} ${c.y - ah / 2})`}>
+            <path d={layerPathD(pp, aw, ah)} fill={pp.fill ?? "none"} fillOpacity={0.6} stroke="var(--color-amber, #f59e0b)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+          </g>
+        );
+      })()}
+
+
       <TextWorkspace tool={tool} view={view} svgPoint={svgPoint} bounds={{ x: vx, y: vy, width: vw, height: vh }} texts={texts} setTexts={onTextsChange} checkpoint={onCheckpoint} />
 
       {/* Fita métrica */}
