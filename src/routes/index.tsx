@@ -2302,6 +2302,8 @@ function Index() {
                   fitSignal={fitSignal}
                   artwork={art}
                   onArtworkChange={setArt}
+                  onPowerClipArt={pcApply}
+                  onPowerClipLayer={layerToPowerClip}
                   mother={mother}
                   pcEdit={pcEdit}
                   partStyle={styles[view]}
@@ -2781,7 +2783,13 @@ function PatternCanvas({
   onSelPart,
   lockRatio,
   onPieceDims,
+  onPowerClipArt,
+  onPowerClipLayer,
 }: {
+  /** Clique no retângulo da Plotter com a estampa livre selecionada. */
+  onPowerClipArt: () => void;
+  /** Clique no retângulo da Plotter com um objeto importado selecionado. */
+  onPowerClipLayer: (id: string) => void;
   clothingType: ClothingType;
   selPart: "peca" | "estampa" | null;
   onSelPart: (p: "peca" | "estampa" | null) => void;
