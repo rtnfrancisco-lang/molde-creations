@@ -1404,6 +1404,19 @@ function Index() {
 
   /* ---------- Ferramenta Seleção: objeto ativo e propriedades ---------- */
   const [selPart, setSelPart] = useState<"peca" | "estampa" | null>(null);
+  /* Modo "Inserir no PowerClip": só ativado pelo menu do botão direito. */
+  const [pcPick, setPcPick] = useState<"art" | string | null>(null);
+  useEffect(() => {
+    setPcPick(null);
+  }, [tool, view, selLayer, selPart]);
+  useEffect(() => {
+    if (!pcPick) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPcPick(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pcPick]);
   const [lockRatio, setLockRatio] = useState(true);
 
   useEffect(() => {
@@ -2377,6 +2390,11 @@ function Index() {
                 </button>
               </div>
               <div className="flex-1 min-w-0 relative bg-canvas blueprint-grid blueprint-grid-fine overflow-hidden">
+                {pcPick && (
+                  <div className="pointer-events-none absolute bottom-3 left-1/2 z-30 -translate-x-1/2 rounded-md border border-primary bg-panel px-3 py-1.5 text-xs font-medium text-primary shadow">
+                    Clique na borda do retângulo para inserir o PowerClip · Esc cancela
+                  </div>
+                )}
                 <PatternCanvas
                   clothingType={clothingType}
                   view={view}
@@ -2391,6 +2409,8 @@ function Index() {
                   onArtworkChange={setArt}
                   onPowerClipArt={pcApply}
                   onPowerClipLayer={layerToPowerClip}
+                  pcPick={pcPick}
+                  onPcPickChange={setPcPick}
                   onEditImage={() => setImgEditOpen(true)}
                   mother={mother}
                   pcEdit={pcEdit}
@@ -2536,7 +2556,7 @@ function Index() {
                 <>
                   <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-faint truncate">Objeto · {selObj.name}</div>
                   {[
-                    { label: `Colocar no PowerClip do Molde Mãe (${mother})`, show: true, run: () => layerToPowerClip(selObj.id) },
+                    { label: "Inserir no PowerClip", show: true, run: () => setPcPick(selObj.id) },
                     { label: "Converter em contorno da peça", show: selObj.kind === "vetor", run: () => layerToOutline(selObj.id) },
                     { label: "Trazer para Frente", show: true, run: () => reorder(selObj.id, "front") },
                     { label: "Avançar uma posição", show: true, run: () => reorder(selObj.id, "up") },
@@ -2562,7 +2582,7 @@ function Index() {
               )}
               <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-faint">PowerClip</div>
               {[
-                { label: `Aplicar PowerClip em ${VIEWS.find((v) => v.key === view)?.label}`, show: pcState === "free", run: pcApply },
+                { label: "Inserir no PowerClip", show: pcState === "free", run: () => { setSelPart("estampa"); setTimeout(() => setPcPick("art"), 0); } },
                 { label: "Editar Conteúdo do PowerClip", show: pcState === "locked", run: pcEditStart },
                 { label: "Concluir Edição", show: pcState === "editing", run: pcApply },
                 { label: "Extrair Conteúdo", show: pcState === "locked" || pcState === "editing", run: pcExtract },
@@ -2904,6 +2924,8 @@ function PatternCanvas({
   onPieceDims,
   onPowerClipArt,
   onPowerClipLayer,
+  pcPick = null,
+  onPcPickChange = () => {},
   onEditImage,
   texts,
   onTextsChange,
@@ -2918,6 +2940,9 @@ function PatternCanvas({
   onPowerClipArt: () => void;
   /** Clique no retângulo da Plotter com um objeto importado selecionado. */
   onPowerClipLayer: (id: string) => void;
+  /** Alvo do modo "Inserir no PowerClip" (escolhido no menu do botão direito). */
+  pcPick?: "art" | string | null;
+  onPcPickChange?: (p: "art" | string | null) => void;
   clothingType: ClothingType;
   selPart: "peca" | "estampa" | null;
   onSelPart: (p: "peca" | "estampa" | null) => void;
@@ -3099,14 +3124,15 @@ function PatternCanvas({
     return { x: bb.minX, y: bb.minY, w: Math.max(0.1, bb.maxX - bb.minX), h: Math.max(0.1, bb.maxY - bb.minY) };
   })();
   /* PowerClip armado: estampa livre selecionada ("art") ou imagem/vetor importado selecionado (id). */
-  const pcArmed: "art" | string | null =
-    tool !== "selecao"
-      ? null
-      : selPart === "estampa" && artwork && artwork.clipped === false && size === mother
-        ? "art"
-        : selL && !selL.hidden
-          ? selL.id
-          : null;
+  const pcPickValid =
+    tool === "selecao" &&
+    (pcPick === "art"
+      ? !!artwork && artwork.clipped === false && size === mother
+      : !!pcPick && !!selL && selL.id === pcPick && !selL.hidden);
+  const pcArmed: "art" | string | null = pcPickValid ? pcPick : null;
+  useEffect(() => {
+    if (pcPick && !pcPickValid) onPcPickChange(null);
+  }, [pcPick, pcPickValid]);
   const pcIndicator = (() => {
     if (!pcArmed) return null;
     let from: Pt;
@@ -3730,6 +3756,7 @@ function PatternCanvas({
                         onPowerClipArt();
                         onSelPart(null);
                       } else onPowerClipLayer(pcArmed);
+                      onPcPickChange(null);
                     }}
                   />
                   {pcIndicator}
