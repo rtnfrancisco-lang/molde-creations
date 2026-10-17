@@ -1623,7 +1623,7 @@ function Index() {
       ? null
       : selObj
         ? boxInfo(selObj, selObj.name, (next) => setViewLayers(curLayers.map((l) => (l.id === next.id ? next : l)), `resize:${next.id}`))
-        : selPart === "estampa" && art && size === mother
+        : selPart === "estampa" && art && size === mother && (art.clipped === false || pcEdit)
           ? boxInfo(art, "Estampa", setArt)
           : selPart === "peca"
             ? {
@@ -1642,7 +1642,12 @@ function Index() {
         pre: art.clipped === false ? { cx: art.cx, cy: art.cy, w: art.w, rot: art.rot ?? 0 } : art.pre,
       });
     setPcEdit(false);
+    if (selPart === "estampa") setSelPart(null);
   };
+  // Ao sair da edição do PowerClip, limpa qualquer seleção fantasma da arte recortada.
+  useEffect(() => {
+    if (!pcEdit && selPart === "estampa" && art && art.clipped !== false) setSelPart(null);
+  }, [pcEdit, selPart, art]);
   const pcEditStart = () => {
     setSize(mother);
     setTool("selecao");
@@ -3382,9 +3387,8 @@ function PatternCanvas({
         const c = toSvg({ x: artwork.cx, y: artwork.cy });
         const clipped = artwork.clipped !== false;
         const editingNow = clipped && pcEdit && size === mother;
-        // Depois do PowerClip a arte continua selecionável/móvel; o recorte segue o retângulo.
+        // Com PowerClip aplicado, a arte só é interativa durante "Editar Conteúdo do PowerClip".
         const movable = size === mother && tool === "selecao";
-        const clipMovable = movable && clipped && !editingNow;
         const imgProps = {
           href: artwork.src,
           x: c.x - aw / 2,
@@ -3401,7 +3405,7 @@ function PatternCanvas({
           capture(e);
           setDrag({ k: "art", start: toNorm(svgPoint(e)), orig: artwork });
         };
-        const artSelected = movable && selPart === "estampa";
+        const artSelected = movable && selPart === "estampa" && (!clipped || editingNow);
         return (
           <g>
             {/* PowerClip: a máscara é o retângulo da Plotter, nunca as linhas do molde. */}
@@ -3415,18 +3419,12 @@ function PatternCanvas({
                 className={movable ? "cursor-move" : ""}
                 style={{ pointerEvents: movable ? "all" : "none" }}
                 onPointerDown={movable ? down : undefined}
+                onDoubleClick={editingNow && movable ? (e) => { e.stopPropagation(); onEditImage?.(); } : undefined}
               />
             )}
             {clipped && (
               <g clipPath="url(#outline-clip)">
-                <image
-                  {...imgProps}
-                  opacity={artwork.opacity ?? 1}
-                  className={clipMovable ? "cursor-move" : ""}
-                  style={{ pointerEvents: clipMovable ? "all" : "none" }}
-                  onPointerDown={clipMovable ? down : undefined}
-                  onDoubleClick={clipMovable ? (e) => { e.stopPropagation(); onEditImage?.(); } : undefined}
-                />
+                <image {...imgProps} opacity={artwork.opacity ?? 1} style={{ pointerEvents: "none" }} />
               </g>
             )}
             {artSelected && (
