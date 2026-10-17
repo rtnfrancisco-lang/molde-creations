@@ -3254,8 +3254,9 @@ function PatternCanvas({
         const artSelected = movable && selPart === "estampa";
         return (
           <g>
+            {/* PowerClip: a máscara é o retângulo da Plotter, nunca as linhas do molde. */}
             <clipPath id="outline-clip">
-              <path d={buildPath(nodes, W, H)} />
+              <rect x={frame.x} y={frame.y} width={frame.w} height={frame.h} />
             </clipPath>
             {(!clipped || editingNow) && (
               <image
@@ -3268,7 +3269,12 @@ function PatternCanvas({
             )}
             {clipped && (
               <g clipPath="url(#outline-clip)">
-                <image {...imgProps} style={{ pointerEvents: "none" }} />
+                <image
+                  {...imgProps}
+                  className={clipMovable ? "cursor-move" : ""}
+                  style={{ pointerEvents: clipMovable ? "all" : "none" }}
+                  onPointerDown={clipMovable ? down : undefined}
+                />
               </g>
             )}
             {artSelected && (
