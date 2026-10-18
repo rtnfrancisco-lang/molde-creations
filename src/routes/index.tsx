@@ -613,12 +613,23 @@ const pathBounds = (d: string): { minX: number; minY: number; maxX: number; maxY
 
 const PLOTTER_MARGIN = 2; // margem de reserva do quadro de mídia (usada só se a sangria não puder ser lida)
 
-type CtxItem = { label: string; run: () => void };
+type CtxItem = { label: string; run: () => void; disabled?: boolean };
+
+/** "Digitando" = só campos de texto reais; color/range/checkbox/select não bloqueiam atalhos. */
+const TYPING_INPUTS = new Set(["text", "number", "search", "email", "url", "tel", "password"]);
+const isTypingTarget = (target: EventTarget | null) => {
+  const el = target as HTMLElement | null;
+  if (!el) return false;
+  if (el.isContentEditable || el.tagName === "TEXTAREA") return true;
+  if (el.tagName === "INPUT") return TYPING_INPUTS.has(((el as HTMLInputElement).type || "text").toLowerCase());
+  return false;
+};
 
 function CanvasContextMenu({
   x,
   y,
   disabled,
+  deleteDisabled,
   onCut,
   onCopy,
   onPaste,
@@ -631,6 +642,7 @@ function CanvasContextMenu({
   x: number;
   y: number;
   disabled: boolean;
+  deleteDisabled: boolean;
   onCut: () => void;
   onCopy: () => void;
   onPaste: () => void;
