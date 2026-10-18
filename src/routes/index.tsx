@@ -1339,6 +1339,189 @@ function Index() {
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  /* ---------- Arquivo de projeto (.moldecore) ---------- */
+  const [projectName, setProjectName] = useState("Sem título");
+  const [rev, setRev] = useState(0);
+  const [savedRev, setSavedRev] = useState(0);
+  const cleanUntil = useRef(Date.now() + 1500);
+  const fileHandle = useRef<FileHandle | null>(null);
+  const [askUnsaved, setAskUnsaved] = useState<null | ((c: "save" | "discard" | "cancel") => void)>(null);
+  const dirty = rev !== savedRev;
+  const markClean = () => {
+    cleanUntil.current = Date.now() + 400;
+    setSavedRev(rev);
+  };
+  useEffect(() => {
+    setRev((r) => {
+      const n = r + 1;
+      if (Date.now() < cleanUntil.current) setSavedRev(n);
+      return n;
+    });
+  }, [table, shapes, artworks, styles, layers, texts, mother, clothingType, profiles, activeProfile]);
+  useEffect(() => {
+    if (!dirty) return;
+    const h = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", h);
+    return () => window.removeEventListener("beforeunload", h);
+  }, [dirty]);
+
+  const projectText = (name: string) =>
+    buildProjectFile(name, { grading: table, mother, clothingType, shapes, artworks, styles, layers, texts, profiles, activeProfile });
+
+  const saveProject = async (as: boolean): Promise<boolean> => {
+    try {
+      let h = as ? null : fileHandle.current;
+      let name = projectName;
+      if (!h && hasFsAccess()) {
+        h = await pickSaveHandle(name + PROJECT_EXT);
+        if (!h) return false;
+        name = nameFromFile(h.name);
+      }
+      const text = projectText(name);
+      if (h) {
+        await writeHandle(h, text);
+        fileHandle.current = h;
+      } else downloadText(text, name + PROJECT_EXT);
+      setProjectName(name);
+      setSavedRev(rev);
+      toast.success("Projeto salvo");
+      return true;
+    } catch (e) {
+      if (isAbort(e)) return false;
+      toast.error("Não foi possível salvar: " + ((e as Error)?.message || "erro desconhecido"));
+      return false;
+    }
+  };
+
+  const confirmUnsaved = async (): Promise<boolean> => {
+    if (!dirty) return true;
+    const c = await new Promise<"save" | "discard" | "cancel">((res) => setAskUnsaved(() => res));
+    setAskUnsaved(null);
+    if (c === "cancel") return false;
+    if (c === "save") return saveProject(false);
+    return true;
+  };
+
+  const resetHistory = () => {
+    setPast([]);
+    setFuture([]);
+    lastCp.current = { key: "", t: 0 };
+  };
+
+  const newProject = async () => {
+    if (!(await confirmUnsaved())) return;
+    cleanUntil.current = Date.now() + 400;
+    setLayers(NO_LAYERS);
+    setArtworks(NO_ART);
+    setTexts(NO_TEXTS);
+    setShapes(DEFAULT_SHAPES);
+    setStyles(DEFAULT_STYLES);
+    saveLS(LS_LAYERS, NO_LAYERS);
+    saveLS(LS_ART, NO_ART);
+    saveLS(LS_TEXTS, NO_TEXTS);
+    saveLS(LS_SHAPES, DEFAULT_SHAPES);
+    saveLS(LS_STYLES, DEFAULT_STYLES);
+    resetHistory();
+    fileHandle.current = null;
+    setProjectName("Sem título");
+    markClean();
+    toast.success("Novo projeto criado");
+  };
+
+  const openProject = async () => {
+    if (!(await confirmUnsaved())) return;
+    let res: Awaited<ReturnType<typeof openProjectFile>>;
+    try {
+      res = await openProjectFile();
+    } catch (e) {
+      toast.error("Não foi possível abrir: " + ((e as Error)?.message || "erro desconhecido"));
+      return;
+    }
+    if (!res) return;
+    const parsed = parseProjectFile(res.text);
+    if (!parsed.ok) {
+      toast.error(parsed.error);
+      return;
+    }
+    const d = parsed.data;
+    const obj = (v: unknown) => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
+    try {
+      const g = obj(d.grading);
+      const grading = { ...DEFAULT_TABLE } as Grading;
+      for (const s of SIZES) {
+        const row = g[s];
+        if (row && typeof row === "object") grading[s] = { ...DEFAULT_TABLE[s], ...(row as object) };
+      }
+      const nArt = { ...NO_ART, ...obj(d.artworks) } as Artworks;
+      const nStyles = { ...DEFAULT_STYLES, ...obj(d.styles) } as Styles;
+      const nShapes = { ...DEFAULT_SHAPES, ...obj(d.shapes) } as Shapes;
+      const nLayers = { ...NO_LAYERS, ...obj(d.layers) } as Layers;
+      const nTexts = { ...NO_TEXTS, ...obj(d.texts) } as TextsByView;
+      const nMother = (SIZES as readonly string[]).includes(d.mother ?? "") ? (d.mother as Size) : mother;
+      const nType = typeof d.clothingType === "string" && d.clothingType in PRESET_TABLES ? (d.clothingType as ClothingType) : clothingType;
+      // Perfis: adiciona por nome, sem sobrescrever perfis locais.
+      const incoming = Array.isArray(d.profiles) ? (d.profiles as GradeProfile[]) : [];
+      const merged = [...profiles];
+      for (const p of incoming) {
+        if (!p || typeof p.name !== "string" || !p.name.trim()) continue;
+        if (merged.some((m) => m.name.toLowerCase() === p.name.toLowerCase())) continue;
+        merged.push({ name: p.name, tables: { ...defaultTablesForProfiles(), ...obj(p.tables) } as ProfileTables });
+      }
+      const nActive = typeof d.activeProfile === "string" && merged.some((m) => m.name === d.activeProfile) ? d.activeProfile : activeProfile;
+
+      cleanUntil.current = Date.now() + 400;
+      setTable(grading);
+      setMother(nMother);
+      setSize(nMother);
+      setClothingType(nType);
+      setArtworks(nArt);
+      setStyles(nStyles);
+      setShapes(nShapes);
+      setLayers(nLayers);
+      setTexts(nTexts);
+      setProfiles(merged);
+      setActiveProfile(nActive);
+      saveLS(LS_GRADING, grading);
+      localStorage.setItem(LS_MOTHER, nMother);
+      saveLS(LS_ART, nArt);
+      saveLS(LS_STYLES, nStyles);
+      saveLS(LS_SHAPES, nShapes);
+      saveLS(LS_LAYERS, nLayers);
+      saveLS(LS_TEXTS, nTexts);
+      saveGradeProfiles(merged);
+      localStorage.setItem(LS_ACTIVE_PROFILE, nActive);
+      resetHistory();
+      fileHandle.current = res.handle;
+      setProjectName(parsed.name.trim() || nameFromFile(res.name));
+      if (res.handle) setProjectName(nameFromFile(res.name));
+      markClean();
+      toast.success("Projeto aberto");
+    } catch {
+      toast.error("Arquivo inválido ou corrompido.");
+    }
+  };
+
+  const fileActions = useRef({ saveProject, openProject });
+  fileActions.current = { saveProject, openProject };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      if (k === "s") {
+        e.preventDefault();
+        void fileActions.current.saveProject(e.shiftKey);
+      } else if (k === "o") {
+        e.preventDefault();
+        void fileActions.current.openProject();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const updateShapes = (next: Shapes) => {
     checkpoint("shapes");
     setShapes(next);
