@@ -729,10 +729,25 @@ type TextWorkspaceProps = {
   texts: TextsByView;
   setTexts: (next: TextsByView) => void;
   checkpoint: (key: string) => void;
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+  unit: number;
+  selectionBox: (
+    aw: number,
+    ah: number,
+    color: "amber" | "cyan",
+    onHandle: (e: React.PointerEvent, hx: HandleDir, hy: HandleDir) => void,
+    skip?: (hx: HandleDir, hy: HandleDir) => boolean,
+  ) => React.ReactNode;
 };
 
-function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, checkpoint }: TextWorkspaceProps) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+type TBox = { x: number; y: number; w: number; h: number };
+
+function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, checkpoint, selectedId, onSelect: setSelectedId, unit, selectionBox }: TextWorkspaceProps) {
+  const selTextRef = useRef<SVGTextElement | null>(null);
+  const [box, setBox] = useState<TBox | null>(null);
+  const [fontsTick, setFontsTick] = useState(0);
+  const [resize, setResize] = useState<{ id: string; px: number; py: number; d0: number; hx: HandleDir; hy: HandleDir; orig: TextElement } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeTextValue, setActiveTextValue] = useState("");
   const [drag, setDrag] = useState<{ id: string; dx: number; dy: number } | null>(null);
@@ -781,11 +796,69 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
     setSelectedId(null);
   }, [view]);
 
+  // Outras ferramentas (Caneta, Formas, Zoom, Fita, Forma) limpam a seleção do texto.
+  useEffect(() => {
+    if (tool !== "selecao" && tool !== "texto" && selectedId) setSelectedId(null);
+  }, [tool]);
+
+  useEffect(() => {
+    document.fonts?.ready.then(() => setFontsTick((t) => t + 1));
+  }, []);
+
   const [defaults, setDefaults] = useState<Omit<TextElement, "id" | "text" | "x" | "y">>({
     fontFamily: "Arial", fontSize: 24, bold: false, italic: false,
     underline: false, align: "left", color: "#20242b",
   });
   const current = selected ?? defaults;
+
+  // Caixa do texto selecionado, medida no próprio SVG (unidades do canvas).
+  useLayoutEffect(() => {
+    const el = selTextRef.current;
+    if (!selected || editingId === selected.id || !el) {
+      setBox(null);
+      return;
+    }
+    try {
+      const b = el.getBBox();
+      setBox({ x: b.x, y: b.y, w: b.width, h: b.height });
+    } catch {
+      setBox(null);
+    }
+  }, [selected?.text, selected?.fontSize, selected?.fontFamily, selected?.bold, selected?.italic, selected?.align, selected?.x, selected?.y, selected?.id, view, editingId, fontsTick]);
+
+  // Redimensionamento proporcional pelas alças, com o ponto oposto fixo.
+  useEffect(() => {
+    if (!resize) return;
+    const move = (event: PointerEvent) => {
+      const p = svgPoint(event);
+      const { px, py, d0, hx, hy, orig } = resize;
+      const d = hx !== 0 && hy !== 0 ? Math.max(Math.abs(p.x - px), Math.abs(p.y - py)) : hx !== 0 ? Math.abs(p.x - px) : Math.abs(p.y - py);
+      const sRaw = d0 > 0 ? d / d0 : 1;
+      const fs = Math.min(1000, Math.max(1, orig.fontSize * sRaw));
+      const s = fs / orig.fontSize;
+      updateTexts(view, (items) => items.map((item) => item.id === resize.id
+        ? { ...item, fontSize: Math.round(fs * 100) / 100, x: px + s * (orig.x - px), y: py + s * (orig.y - py) } : item));
+    };
+    const stop = () => setResize(null);
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", stop, { once: true });
+    return () => {
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", stop);
+    };
+  }, [resize, view, svgPoint]);
+
+  const startResize = (_e: React.PointerEvent, hx: HandleDir, hy: HandleDir) => {
+    if (!selected || !box) return;
+    // Ponto fixo: canto/lado oposto da caixa.
+    const px = box.x + box.w / 2 - (hx * box.w) / 2;
+    const py = box.y + box.h / 2 - (hy * box.h) / 2;
+    const hxp = box.x + box.w / 2 + (hx * box.w) / 2;
+    const hyp = box.y + box.h / 2 + (hy * box.h) / 2;
+    const d0 = hx !== 0 && hy !== 0 ? Math.max(Math.abs(hxp - px), Math.abs(hyp - py)) : hx !== 0 ? Math.abs(hxp - px) : Math.abs(hyp - py);
+    checkpoint("text-resize:" + Date.now());
+    setResize({ id: selected.id, px, py, d0, hx, hy, orig: selected });
+  };
 
   const updateSelected = (patch: Partial<TextElement>) => {
     // Sem texto selecionado, o estilo vale para o próximo texto criado.
@@ -876,25 +949,50 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
               onCancel={() => commitText(item.id)}
             />
           </foreignObject>
-        ) : (
-          <text
-            key={item.id} x={item.x} y={item.y + fontSize} fill={item.color}
-            style={textStyle} textAnchor={item.align === "left" ? "start" : item.align === "center" ? "middle" : "end"}
-            className={tool === "selecao" || tool === "texto" ? "cursor-move" : "pointer-events-none"}
-            onPointerDown={(event) => {
-              if (tool !== "selecao" && tool !== "texto") return;
-              event.stopPropagation();
-              setSelectedId(item.id);
-              checkpoint("text-move:" + Date.now());
-              const point = svgPoint(event);
-              setDrag({ id: item.id, dx: point.x - item.x, dy: point.y - item.y });
-            }}
-            onDoubleClick={(event) => { event.stopPropagation(); checkpoint("text-edit:" + item.id); startEditing(item); }}
-          >
-            {item.text.split("\n").map((line, index) =>
-              <tspan key={index} x={item.x} dy={index ? fontSize * 1.15 : 0}>{line || " "}</tspan>)}
-          </text>
-        );
+        ) : (() => {
+          const active = tool === "selecao" || tool === "texto";
+          const onDown = (event: React.PointerEvent) => {
+            if (!active || event.button !== 0) return;
+            event.stopPropagation();
+            setSelectedId(item.id);
+            checkpoint("text-move:" + Date.now());
+            const point = svgPoint(event);
+            setDrag({ id: item.id, dx: point.x - item.x, dy: point.y - item.y });
+          };
+          const onDbl = (event: React.MouseEvent) => { event.stopPropagation(); checkpoint("text-edit:" + item.id); startEditing(item); };
+          const isSel = item.id === selectedId;
+          return (
+            <g key={item.id}>
+              {isSel && box && (
+                <rect x={box.x} y={box.y} width={box.w} height={box.h} fill="transparent"
+                  className={active ? "cursor-move" : "pointer-events-none"} onPointerDown={onDown} onDoubleClick={onDbl} />
+              )}
+              <text
+                ref={isSel ? selTextRef : undefined}
+                x={item.x} y={item.y + fontSize} fill={item.color}
+                style={textStyle} textAnchor={item.align === "left" ? "start" : item.align === "center" ? "middle" : "end"}
+                className={active ? "cursor-move" : "pointer-events-none"}
+                onPointerDown={onDown}
+                onDoubleClick={onDbl}
+              >
+                {item.text.split("\n").map((line, index) =>
+                  <tspan key={index} x={item.x} dy={index ? fontSize * 1.15 : 0}>{line || " "}</tspan>)}
+              </text>
+              {isSel && box && (
+                <g transform={`translate(${box.x + box.w / 2} ${box.y + box.h / 2})`}>
+                  {tool === "selecao"
+                    ? selectionBox(box.w, box.h, "amber", startResize)
+                    : <rect x={-box.w / 2} y={-box.h / 2} width={box.w} height={box.h} className="fill-none stroke-amber pointer-events-none" strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />}
+                  {tool === "selecao" && (
+                    <text x={0} y={box.h / 2 + unit * 2.2} textAnchor="middle" fontSize={unit * 1.1} className="fill-amber font-mono pointer-events-none">
+                      {fmt(box.w)} × {fmt(box.h)} cm
+                    </text>
+                  )}
+                </g>
+              )}
+            </g>
+          );
+        })();
       })}
       {tool === "texto" && panelHost && createPortal(
         <div
@@ -954,6 +1052,7 @@ function Index() {
   const [texts, setTexts] = useState<TextsByView>(NO_TEXTS);
   const textsHydrated = useRef(false);
   const [selLayer, setSelLayer] = useState<string | null>(null);
+  const [selText, setSelText] = useState<string | null>(null);
   const [layersOpen, setLayersOpen] = useState(true);
   const [importMsg, setImportMsg] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
@@ -1418,11 +1517,24 @@ function Index() {
     // Fora de "Editar Conteúdo do PowerClip", camadas recortadas não são selecionáveis.
     if (id && !pcEdit && layers[view].find((l) => l.id === id)?.clipped) return;
     setSelLayer(id);
-    if (id) setSelPart(null);
+    if (id) {
+      setSelPart(null);
+      setSelText(null);
+    }
   };
   const selectPart = (p: "peca" | "estampa" | null) => {
     setSelPart(p);
-    if (p) setSelLayer(null);
+    if (p) {
+      setSelLayer(null);
+      setSelText(null);
+    }
+  };
+  const selectText = (id: string | null) => {
+    setSelText(id);
+    if (id) {
+      setSelLayer(null);
+      setSelPart(null);
+    }
   };
   const isBodyView = view === "frente" || view === "costas";
   const pieceW = isBodyView ? graded[size].bodyWidth : graded[size].sleeveWidth;
@@ -2413,6 +2525,8 @@ function Index() {
                   layers={curLayers}
                   selLayer={selLayer}
                   onSelLayer={selectLayer}
+                  selText={selText}
+                  onSelText={selectText}
                   onLayersChange={(arr) => setViewLayers(arr)}
                   drawOpts={drawOpts}
                   showSeam={showSeam}
@@ -2946,6 +3060,8 @@ function PatternCanvas({
   layers: Layer[];
   selLayer: string | null;
   onSelLayer: (id: string | null) => void;
+  selText: string | null;
+  onSelText: (id: string | null) => void;
   onLayersChange: (l: Layer[]) => void;
   drawOpts?: DrawOpts;
   showSeam?: boolean;
@@ -3159,6 +3275,7 @@ function PatternCanvas({
     if ((tool === "selecao" || tool === "forma") && e.button === 0) {
       onSelLayer(null);
       onSelPart(null);
+      onSelText(null);
     }
     if (tool === "zoom") {
       capture(e);
@@ -3884,7 +4001,7 @@ function PatternCanvas({
       })()}
 
 
-      <TextWorkspace tool={tool} view={view} svgPoint={svgPoint} bounds={{ x: vx, y: vy, width: vw, height: vh }} texts={texts} setTexts={onTextsChange} checkpoint={onCheckpoint} />
+      <TextWorkspace tool={tool} view={view} svgPoint={svgPoint} bounds={{ x: vx, y: vy, width: vw, height: vh }} texts={texts} setTexts={onTextsChange} checkpoint={onCheckpoint} selectedId={selText} onSelect={onSelText} unit={unit} selectionBox={selectionBox} />
 
       {/* Fita métrica */}
       {tape.a && tapeEnd && (
