@@ -3035,7 +3035,7 @@ function Index() {
       </main>
 
       {/* Coluna própria no layout: a paleta não cobre mais o painel direito nem o cabeçalho. */}
-      <PaletteDock target={colorTarget} onTarget={setColorTarget} onApply={applyColor} current={styles[view]} />
+      <PaletteDock target={colorTarget} onTarget={setColorTarget} onApply={applyColor} current={colorCurrent} targetLabel={colorLabel} targetKind={colorKind} />
     </div>
   );
 }
@@ -4251,11 +4251,15 @@ function PaletteDock({
   onTarget,
   onApply,
   current,
+  targetLabel,
+  targetKind,
 }: {
   target: ColorTarget;
   onTarget: (t: ColorTarget) => void;
   onApply: (t: ColorTarget, hex: string | null) => void;
-  current: PartStyle;
+  current: { stroke: string | null; fill: string | null; mixedFill?: boolean; mixedStroke?: boolean };
+  targetLabel: string;
+  targetKind: "vetor" | "texto" | "imagem" | "molde";
 }) {
   const [open, setOpen] = useState(true);
   const [mode, setMode] = useState<"rgb" | "cmyk">("cmyk");
@@ -4300,11 +4304,15 @@ function PaletteDock({
           ))}
         </div>
 
+        <div className="rounded border border-line bg-panel2 px-1 py-1 text-[9px] leading-tight text-muted-foreground break-words" title={targetLabel}>
+          Aplicando em: <span className="text-foreground font-semibold">{targetLabel}</span>
+          {targetKind === "imagem" && <div className="mt-0.5 text-faint">Esta imagem não tem cor de preenchimento</div>}
+        </div>
         <div className="space-y-1">
           {(
             [
               ["contorno", "Contorno"],
-              ["preenchimento", "Preenchimento do Molde"],
+              ["preenchimento", "Preenchimento"],
             ] as const
           ).map(([k, label]) => (
             <button
@@ -4319,8 +4327,12 @@ function PaletteDock({
                 className={"size-4 shrink-0 rounded-sm border border-line " + (k === "contorno" ? "border-2" : "")}
                 style={
                   k === "contorno"
-                    ? { borderColor: current.stroke ?? "var(--color-cyan)" }
-                    : { background: current.fill ?? "transparent" }
+                    ? current.mixedStroke
+                      ? { borderStyle: "dashed" }
+                      : { borderColor: current.stroke ?? "var(--color-cyan)" }
+                    : current.mixedFill
+                      ? { borderStyle: "dashed", background: "transparent" }
+                      : { background: current.fill ?? "transparent" }
                 }
               />
               <span className="leading-tight">{label}</span>
