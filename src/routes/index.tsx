@@ -2540,7 +2540,7 @@ function Index() {
               >
                 <ImagePlus className="size-3.5" /> Carregar Estampa
               </button>
-              {(art || hasClipped || (selObj && !selObj.clipped)) && (() => {
+              {(art || hasClipped || (selObj && !selObj.clipped)) && ((() => {
                 const freeSel: "layer" | "art" | null = !pcEdit && selObj && !selObj.clipped ? "layer" : !pcEdit && selPart === "estampa" && !!art && art.clipped === false ? "art" : null;
                 return (
                 <>
@@ -2569,7 +2569,7 @@ function Index() {
                   </button>}
                 </>
                 );
-              })()}
+              })())}
               <button
                 onClick={exportAll}
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap border border-line text-muted-foreground hover:text-foreground"
