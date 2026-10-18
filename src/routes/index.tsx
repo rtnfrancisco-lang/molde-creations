@@ -135,7 +135,7 @@ type TextElement = {
   field?: "nome" | "numero";
   upper?: boolean;
   /** Largura máxima em cm, medida no tamanho do molde mãe. */
-  fitWidth?: number;
+  fitWidth?: number | undefined;
   scaleWithSize?: boolean;
 };
 type ClothingType = "Camiseta" | "Moletom" | "Regata" | "Manga Longa" | "Camisa Infantil" | "Camisa Baby Look";
@@ -1029,7 +1029,7 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
                   <tspan key={index} x={item.x} dy={index ? fontSize * 1.15 : 0}>{line || " "}</tspan>)}
               </text>
               {item.field && fieldBoxes[item.id] && (() => {
-                const fb = fieldBoxes[item.id];
+                const fb = fieldBoxes[item.id]!;
                 return (
                   <g className="pointer-events-none" data-screen-only>
                     <rect x={fb.x} y={fb.y} width={fb.w} height={fb.h} className="fill-none stroke-cyan" strokeWidth={1} strokeDasharray="3 2" vectorEffect="non-scaling-stroke" />
