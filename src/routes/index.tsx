@@ -613,6 +613,8 @@ const pathBounds = (d: string): { minX: number; minY: number; maxX: number; maxY
 
 const PLOTTER_MARGIN = 2; // margem de reserva do quadro de mídia (usada só se a sangria não puder ser lida)
 
+type CtxItem = { label: string; run: () => void };
+
 function CanvasContextMenu({
   x,
   y,
@@ -623,7 +625,8 @@ function CanvasContextMenu({
   onDelete,
   onBringForward,
   onSendBackward,
-  onPowerClip,
+  sections,
+  onClose,
 }: {
   x: number;
   y: number;
@@ -634,48 +637,62 @@ function CanvasContextMenu({
   onDelete: () => void;
   onBringForward: () => void;
   onSendBackward: () => void;
-  onPowerClip: () => void;
+  sections: { title: string; items: CtxItem[] }[];
+  onClose: () => void;
 }) {
   const itemClass =
     "flex w-full items-center justify-between gap-5 rounded px-2.5 py-2 text-left text-xs text-foreground transition-colors hover:bg-accent disabled:pointer-events-none disabled:opacity-40";
+  const act = (fn: () => void) => () => {
+    fn();
+    onClose();
+  };
 
   return (
     <div
-      className="fixed z-[100] min-w-52 rounded-lg border border-line bg-panel p-1.5 shadow-xl"
-      style={{ left: Math.min(x, window.innerWidth - 230), top: Math.min(y, window.innerHeight - 300) }}
+      className="fixed z-[100] min-w-52 max-h-[calc(100vh-1rem)] overflow-y-auto rounded-lg border border-line bg-panel p-1.5 shadow-xl"
+      style={{ left: Math.min(x, window.innerWidth - 230), top: Math.max(8, Math.min(y, window.innerHeight - 460)) }}
       onContextMenu={(event) => event.preventDefault()}
+      onClick={(event) => event.stopPropagation()}
     >
-      <button type="button" className={itemClass} disabled={disabled} onClick={onCut}>
+      <button type="button" className={itemClass} disabled={disabled} onClick={act(onCut)}>
         <span>Recortar</span>
         <span className="font-mono text-[10px] text-muted-foreground">Ctrl+X</span>
       </button>
-      <button type="button" className={itemClass} disabled={disabled} onClick={onCopy}>
+      <button type="button" className={itemClass} disabled={disabled} onClick={act(onCopy)}>
         <span>Copiar</span>
         <span className="font-mono text-[10px] text-muted-foreground">Ctrl+C</span>
       </button>
-      <button type="button" className={itemClass} onClick={onPaste}>
+      <button type="button" className={itemClass} onClick={act(onPaste)}>
         <span>Colar</span>
         <span className="font-mono text-[10px] text-muted-foreground">Ctrl+V</span>
       </button>
       <div className="my-1 border-t border-line" />
-      <button type="button" className={itemClass} disabled={disabled} onClick={onDelete}>
+      <button type="button" className={itemClass} disabled={disabled} onClick={act(onDelete)}>
         <span>Excluir</span>
         <span className="font-mono text-[10px] text-muted-foreground">Delete</span>
       </button>
       <div className="my-1 border-t border-line" />
-      <button type="button" className={itemClass} disabled={disabled} onClick={onBringForward}>
+      <button type="button" className={itemClass} disabled={disabled} onClick={act(onBringForward)}>
         <span>Trazer para Frente</span>
         <span className="font-mono text-[10px] text-muted-foreground">Camada</span>
       </button>
-      <button type="button" className={itemClass} disabled={disabled} onClick={onSendBackward}>
+      <button type="button" className={itemClass} disabled={disabled} onClick={act(onSendBackward)}>
         <span>Enviar para Trás</span>
         <span className="font-mono text-[10px] text-muted-foreground">Camada</span>
       </button>
-      <div className="my-1 border-t border-line" />
-      <button type="button" className={itemClass} disabled={disabled} onClick={onPowerClip}>
-        <span>Aplicar PowerClip</span>
-        <span className="font-mono text-[10px] text-muted-foreground">Enter</span>
-      </button>
+      {sections
+        .filter((sec) => sec.items.length > 0)
+        .map((sec) => (
+          <div key={sec.title}>
+            <div className="my-1 border-t border-line" />
+            <div className="px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider text-faint">{sec.title}</div>
+            {sec.items.map((i) => (
+              <button key={i.label} type="button" className={itemClass} onClick={act(i.run)}>
+                <span>{i.label}</span>
+              </button>
+            ))}
+          </div>
+        ))}
     </div>
   );
 }
@@ -1091,34 +1108,6 @@ function Index() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!contextMenuHostRef.current) {
-      const host = document.createElement("div");
-      host.setAttribute("data-moldecore-context-menu", "true");
-      document.body.appendChild(host);
-      contextMenuHostRef.current = host;
-      contextMenuRootRef.current = createRoot(host);
-    }
-    contextMenuRootRef.current?.render(
-      menu ? (
-        <CanvasContextMenu
-          x={menu.x}
-          y={menu.y}
-          disabled={!selectedLayer()}
-          onCut={cutSelectedLayer}
-          onCopy={copySelectedLayer}
-          onPaste={pasteLayer}
-          onDelete={deleteSelectedLayer}
-          onBringForward={() => moveSelectedLayer("front")}
-          onSendBackward={() => moveSelectedLayer("back")}
-          onPowerClip={() => {
-            pcEditStartRef.current();
-            setMenu(null);
-          }}
-        />
-      ) : null,
-    );
-  }, [menu, layers, view, selLayer]);
 
   // Carregar do armazenamento local
   useEffect(() => {
@@ -1568,13 +1557,18 @@ function Index() {
   const layerToPowerClip = (id: string) => {
     const l = curLayers.find((x) => x.id === id);
     if (!l) return;
-    const src = l.kind === "vetor" ? vectorDataUrl(l) : l.src!;
+    // Vetor: amplia a área com meia espessura do contorno para o traço não ser cortado.
+    const pad = l.kind === "vetor" ? (Math.max(0, ...(l.paths ?? []).map((p) => (p.stroke ? p.sw : 0))) * 1000) / 2 : 0;
+    const src = l.kind === "vetor" ? vectorDataUrl(l, pad) : l.src!;
+    const k = (1000 + 2 * pad) / 1000;
+    const w2 = l.w * k;
+    const ratio2 = (1000 * l.ratio + 2 * pad) / (1000 + 2 * pad);
     const rest = curLayers.filter((x) => x.id !== id);
     if (art)
       rest.unshift({ id: crypto.randomUUID(), name: "Estampa anterior", kind: "imagem", src: art.src, cx: art.cx, cy: art.cy, w: art.w, ratio: art.ratio, rot: art.rot ?? 0 });
     checkpoint("pc-layer:" + Date.now());
     const nl = { ...layers, [view]: rest };
-    const na = { ...artworks, [view]: { src, name: l.name, cx: l.cx, cy: l.cy, w: l.w, ratio: l.ratio, rot: l.rot, clipped: true, init: { cx: l.cx, cy: l.cy, w: l.w, ratio: l.ratio, rot: l.rot ?? 0 }, pre: { cx: l.cx, cy: l.cy, w: l.w, rot: l.rot ?? 0 } } };
+    const na = { ...artworks, [view]: { src, name: l.name, cx: l.cx, cy: l.cy, w: w2, ratio: ratio2, rot: l.rot, clipped: true, init: { cx: l.cx, cy: l.cy, w: w2, ratio: ratio2, rot: l.rot ?? 0 }, pre: { cx: l.cx, cy: l.cy, w: w2, rot: l.rot ?? 0 } } };
     setLayers(nl);
     setArtworks(na);
     saveLS(LS_LAYERS, nl);
@@ -1629,12 +1623,6 @@ function Index() {
     setSelLayer(null);
     setTool("forma");
   };
-  useEffect(() => {
-    if (!menu) return;
-    const close = () => setMenu(null);
-    window.addEventListener("click", close);
-    return () => window.removeEventListener("click", close);
-  }, [menu]);
 
   const applyColor = (t: ColorTarget, hex: string | null) => {
     checkpoint("color:" + Date.now());
@@ -2546,65 +2534,50 @@ function Index() {
             </div>
           </section>
 
-          {menu && (
-            <div
-              className="fixed z-50 min-w-56 rounded-md border border-line bg-panel2 py-1 shadow-lg text-xs"
-              style={{ left: menu.x, top: menu.y }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {selObj && (
-                <>
-                  <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-faint truncate">Objeto · {selObj.name}</div>
-                  {[
-                    { label: "Inserir no PowerClip", show: true, run: () => setPcPick(selObj.id) },
-                    { label: "Converter em contorno da peça", show: selObj.kind === "vetor", run: () => layerToOutline(selObj.id) },
-                    { label: "Trazer para Frente", show: true, run: () => reorder(selObj.id, "front") },
-                    { label: "Avançar uma posição", show: true, run: () => reorder(selObj.id, "up") },
-                    { label: "Recuar uma posição", show: true, run: () => reorder(selObj.id, "down") },
-                    { label: "Enviar para Trás", show: true, run: () => reorder(selObj.id, "back") },
-                    { label: "Excluir objeto", show: true, run: () => deleteLayer(selObj.id) },
-                  ]
-                    .filter((i) => i.show)
-                    .map((i) => (
-                      <button
-                        key={i.label}
-                        onClick={() => {
-                          i.run();
-                          setMenu(null);
-                        }}
-                        className="w-full text-left px-3 py-1.5 text-foreground hover:bg-cyan/15 hover:text-cyan"
-                      >
-                        {i.label}
-                      </button>
-                    ))}
-                  <div className="my-1 border-t border-line" />
-                </>
-              )}
-              <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-faint">PowerClip</div>
-              {[
-                { label: "Inserir no PowerClip", show: pcState === "free", run: () => { setSelPart("estampa"); setTimeout(() => setPcPick("art"), 0); } },
-                { label: "Editar Conteúdo do PowerClip", show: pcState === "locked", run: pcEditStart },
-                { label: "Concluir Edição", show: pcState === "editing", run: pcApply },
-                { label: "Extrair Conteúdo", show: pcState === "locked" || pcState === "editing", run: pcExtract },
-                { label: "Carregar Estampa…", show: pcState === "none", run: () => fileRef.current?.click() },
-                { label: "Importar Arquivo…", show: true, run: () => importRef.current?.click() },
-                { label: "Remover Estampa", show: pcState !== "none", run: () => setArt(null) },
-              ]
-                .filter((i) => i.show)
-                .map((i) => (
-                  <button
-                    key={i.label}
-                    onClick={() => {
-                      i.run();
-                      setMenu(null);
-                    }}
-                    className="w-full text-left px-3 py-1.5 text-foreground hover:bg-cyan/15 hover:text-cyan"
-                  >
-                    {i.label}
-                  </button>
-                ))}
-            </div>
-          )}
+          {menu &&
+            createPortal(
+              <CanvasContextMenu
+                x={menu.x}
+                y={menu.y}
+                disabled={!selObj}
+                onCut={cutSelectedLayer}
+                onCopy={copySelectedLayer}
+                onPaste={pasteLayer}
+                onDelete={deleteSelectedLayer}
+                onBringForward={() => moveSelectedLayer("front")}
+                onSendBackward={() => moveSelectedLayer("back")}
+                onClose={() => setMenu(null)}
+                sections={[
+                  {
+                    title: "PowerClip",
+                    items: [
+                      selObj
+                        ? { label: "Inserir no PowerClip", run: () => setPcPick(selObj.id) }
+                        : pcState === "free"
+                          ? { label: "Inserir no PowerClip", run: () => { setSelPart("estampa"); setTimeout(() => setPcPick("art"), 0); } }
+                          : null,
+                      pcState === "locked" ? { label: "Editar Conteúdo do PowerClip", run: pcEditStart } : null,
+                      pcState === "editing" ? { label: "Concluir Edição", run: pcApply } : null,
+                      pcState === "locked" || pcState === "editing" ? { label: "Extrair Conteúdo", run: pcExtract } : null,
+                    ].filter((i): i is CtxItem => !!i),
+                  },
+                  {
+                    title: "Objeto",
+                    items: selObj?.kind === "vetor" ? [{ label: "Converter em contorno da peça", run: () => layerToOutline(selObj.id) }] : [],
+                  },
+                  {
+                    title: "Arquivo",
+                    items: [
+                      { label: "Importar Arquivo…", run: () => importRef.current?.click() },
+                      pcState === "none"
+                        ? { label: "Carregar Estampa…", run: () => fileRef.current?.click() }
+                        : { label: "Remover Estampa", run: () => setArt(null) },
+                    ],
+                  },
+                ]}
+              />,
+              document.body,
+            )}
 
           {/* ============ PAINEL DIREITO ============ */}
           <div
@@ -3589,7 +3562,7 @@ function PatternCanvas({
         const sel = l.id === selLayer;
         const pickable = tool === "selecao" || tool === "forma";
         const down = (e: React.PointerEvent) => {
-          if (!pickable) return;
+          if (!pickable && e.button !== 2) return;
           e.stopPropagation();
           onSelLayer(l.id);
           if (e.button !== 0 || tool !== "selecao") return;
