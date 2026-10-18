@@ -12,11 +12,12 @@ import {
   type RosterSize,
   type RosterSizeOption,
 } from "@/lib/roster";
-import { DEFAULT_TEAM_TEMPLATE } from "@/lib/team-export";
+import { DEFAULT_TEAM_TEMPLATE, TEAM_DPIS, cmToPx, fitDpi, type TeamFormat } from "@/lib/team-export";
 
 export type TeamExportView = "frente" | "costas" | "mangaEsq" | "mangaDir";
 const VIEW_LABEL: Record<TeamExportView, string> = { frente: "Frente", costas: "Costas", mangaEsq: "Manga esquerda", mangaDir: "Manga direita" };
-export type TeamExportOpts = { players: Player[]; views: TeamExportView[]; hideTechnical: boolean; template: string };
+export type TeamExportOpts = { players: Player[]; views: TeamExportView[]; hideTechnical: boolean; template: string; format: TeamFormat; dpi: number; quality: number };
+type TeamExportResult = { players: number; files: number; warnings: string[] } | null;
 
 type Props = {
   open: boolean;
@@ -29,10 +30,11 @@ type Props = {
   viewingId?: string | null;
   onView?: (p: Player) => void;
   teamViews?: TeamExportView[];
-  onExportTeam?: (o: TeamExportOpts, onProgress: (done: number, total: number) => void) => Promise<{ players: number; files: number }>;
+  onExportTeam?: (o: TeamExportOpts, onProgress: (done: number, total: number) => void, signal: { cancelled: boolean }) => Promise<TeamExportResult>;
+  measurePieces?: (players: Player[], views: TeamExportView[]) => { cmW: number; cmH: number };
 };
 
-export function TeamPanel({ open, onClose, roster, setRoster, options, garment, labelOf, viewingId, onView, teamViews = [], onExportTeam }: Props) {
+export function TeamPanel({ open, onClose, roster, setRoster, options, garment, labelOf, viewingId, onView, teamViews = [], onExportTeam, measurePieces }: Props) {
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const csvRef = useRef<HTMLInputElement>(null);
@@ -49,6 +51,11 @@ export function TeamPanel({ open, onClose, roster, setRoster, options, garment, 
   const [expTpl, setExpTpl] = useState(DEFAULT_TEAM_TEMPLATE);
   const [expProg, setExpProg] = useState<{ done: number; total: number } | null>(null);
   const [expMsg, setExpMsg] = useState("");
+  const [expWarn, setExpWarn] = useState<string[]>([]);
+  const [expFmt, setExpFmt] = useState<TeamFormat>("png");
+  const [expDpi, setExpDpi] = useState(150);
+  const [expQ, setExpQ] = useState(92);
+  const sigRef = useRef<{ cancelled: boolean } | null>(null);
 
   if (!open) return null;
 
@@ -56,24 +63,44 @@ export function TeamPanel({ open, onClose, roster, setRoster, options, garment, 
   const openExport = () => {
     setExpViews(teamViews.length ? teamViews : []);
     setExpMsg("");
+    setExpWarn([]);
     setExpProg(null);
     setExpOpen(true);
   };
+  const exportPlayers = (skipBad: boolean) => (skipBad ? roster.filter((p) => !badIds.has(p.id)) : roster);
   const runTeamExport = async (skipBad: boolean) => {
     if (!onExportTeam) return;
-    const players = skipBad ? roster.filter((p) => !badIds.has(p.id)) : roster;
+    const players = exportPlayers(skipBad);
     if (!players.length || !expViews.length) return;
+    const sig = { cancelled: false };
+    sigRef.current = sig;
     setExpMsg("");
-    setExpProg({ done: 0, total: players.length });
+    setExpWarn([]);
+    setExpProg({ done: 0, total: players.length * expViews.length });
     try {
-      const r = await onExportTeam({ players, views: expViews, hideTechnical: !expTech, template: expTpl }, (done, total) => setExpProg({ done, total }));
-      setExpMsg(`${r.players} jogador(es) · ${r.files} arquivo(s)`);
+      const r = await onExportTeam(
+        { players, views: expViews, hideTechnical: !expTech, template: expTpl, format: expFmt, dpi: expDpi, quality: expQ },
+        (done, total) => setExpProg({ done, total }),
+        sig,
+      );
+      if (!r) setExpMsg("Exportação cancelada. Nenhum ZIP foi gerado.");
+      else {
+        setExpMsg(`${r.players} jogador(es) · ${r.files} arquivo(s) · ${expFmt.toUpperCase()} ${expDpi} DPI`);
+        setExpWarn(r.warnings);
+      }
     } catch {
       setExpMsg("Não foi possível gerar o ZIP.");
     } finally {
+      sigRef.current = null;
       setExpProg(null);
     }
   };
+
+  const expPlayers = exportPlayers(badIds.size > 0);
+  const fileCount = expPlayers.length * expViews.length;
+  const bigJob = expDpi >= 300 && fileCount > 40;
+  const piece = expOpen && measurePieces && expViews.length ? measurePieces(expPlayers, expViews) : null;
+  const maxPx = piece && piece.cmW > 0 ? (() => { const d = fitDpi(piece.cmW, piece.cmH, expDpi); return `${cmToPx(piece.cmW, d)} × ${cmToPx(piece.cmH, d)} px${d < expDpi ? ` (${d} DPI)` : ""}`; })() : null;
 
   const update = (id: string, patch: Partial<Player>) => setRoster(roster.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   const add = () => {
@@ -159,6 +186,28 @@ export function TeamPanel({ open, onClose, roster, setRoster, options, garment, 
               ))}
             </div>
           </div>
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground w-16">Formato</span>
+            {(["png", "jpeg", "pdf"] as TeamFormat[]).map((f) => (
+              <label key={f} className="flex items-center gap-1 text-foreground">
+                <input type="radio" name="exp-fmt" checked={expFmt === f} onChange={() => setExpFmt(f)} /> {f.toUpperCase()}
+              </label>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground w-16">Resolução</span>
+            <select value={expDpi} onChange={(e) => setExpDpi(Number(e.target.value))} aria-label="Resolução" className="rounded border border-border bg-background px-1 py-0.5 text-foreground">
+              {TEAM_DPIS.map((d) => <option key={d} value={d}>{d} DPI</option>)}
+            </select>
+            {maxPx && <span className="text-faint" data-testid="maior-peca">maior peça: {maxPx}</span>}
+          </div>
+          {expFmt !== "png" && (
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground w-16">Qualidade</span>
+              <input type="range" min={60} max={100} value={expQ} onChange={(e) => setExpQ(Number(e.target.value))} aria-label="Qualidade" className="flex-1" />
+              <span className="w-9 text-right text-foreground">{expQ}%</span>
+            </div>
+          )}
           <label className="flex items-center gap-1.5 text-foreground">
             <input type="checkbox" checked={expTech} onChange={(e) => setExpTech(e.target.checked)} /> Incluir linhas técnicas
           </label>
@@ -172,9 +221,14 @@ export function TeamPanel({ open, onClose, roster, setRoster, options, garment, 
           {expProg && (
             <div className="h-1.5 rounded bg-border overflow-hidden"><div className="h-full bg-cyan transition-all" style={{ width: `${(expProg.done / expProg.total) * 100}%` }} /></div>
           )}
+          {bigJob && (
+            <div className="flex gap-1 text-destructive"><AlertTriangle className="size-3 mt-px shrink-0" />{fileCount} arquivos em 300 DPI: pode demorar e usar muita memória.</div>
+          )}
+          {expProg && <div className="text-muted-foreground">Arquivo {Math.min(expProg.done + 1, expProg.total)} de {expProg.total}</div>}
           {expMsg && <div className="text-foreground font-medium" data-testid="resumo-exportacao">{expMsg}</div>}
+          {expWarn.map((w) => <div key={w} className="text-destructive">{w}</div>)}
           <div className="flex justify-end gap-2">
-            <Btn onClick={() => setExpOpen(false)}>Cancelar</Btn>
+            <Btn onClick={() => (expProg && sigRef.current ? (sigRef.current.cancelled = true) : setExpOpen(false))}>Cancelar</Btn>
             {badIds.size > 0 ? (
               <Btn onClick={() => void runTeamExport(true)} disabled={!!expProg || !expViews.length || badIds.size === roster.length} primary>Continuar sem esses jogadores</Btn>
             ) : (
