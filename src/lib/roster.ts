@@ -85,7 +85,7 @@ export function parseRoster(text: string, options: readonly RosterSizeOption[], 
   const lines = clean.split(/\r?\n/);
   const rows: PasteRow[] = [];
   let first = true;
-  lines.forEach((raw, idx) => {
+  lines.forEach((raw, idx): void => {
     if (!raw.trim()) return;
     const cols = splitLine(raw, sep);
     if (first) {
@@ -94,10 +94,10 @@ export function parseRoster(text: string, options: readonly RosterSizeOption[], 
     }
     const line = idx + 1;
     const [numero = "", nome = "", tam = ""] = cols;
-    if (!numero) return rows.push({ ok: false, line, raw, reason: "Sem número" });
-    if (!tam) return rows.push({ ok: false, line, raw, reason: "Sem tamanho" });
+    if (!numero) { rows.push({ ok: false, line, raw, reason: "Sem número" }); return; }
+    if (!tam) { rows.push({ ok: false, line, raw, reason: "Sem tamanho" }); return; }
     const m = matchSize(tam, options);
-    if (!m) return rows.push({ ok: false, line, raw, reason: `Tamanho "${tam}" desconhecido` });
+    if (!m) { rows.push({ ok: false, line, raw, reason: `Tamanho "${tam}" desconhecido` }); return; }
     rows.push({ ok: true, line, numero, nome, tamanho: m.id, ...(m.inGarment ? {} : { warn: `${m.id} não existe em ${garment}` }) });
   });
   return rows;
