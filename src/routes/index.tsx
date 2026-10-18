@@ -26,6 +26,7 @@ import {
   Lock,
   LockOpen,
   ChevronRight,
+  ChevronLeft,
   X,
   Crop,
   MousePointer2,
@@ -2044,6 +2045,42 @@ function Index() {
     setSelLayer(null);
     setTool("forma");
   };
+
+  /* ---------- Pré-visualização do jogador (somente leitura, fora do desfazer) ---------- */
+  const viewPlayer = teamView ? roster.find((p) => p.id === teamView.id) ?? null : null;
+  const playerSizeOk = (p: Player) => sizeIdsForGarment(clothingType).includes(p.tamanho);
+  const startTeamView = (id: string) => {
+    const p = roster.find((x) => x.id === id);
+    if (!p || !playerSizeOk(p)) return;
+    setSelText(null);
+    setTeamView((cur) => ({ id, prev: cur?.prev ?? size }));
+    setSize(p.tamanho);
+  };
+  const exitTeamView = () => {
+    if (teamView) setSize(teamView.prev);
+    setTeamView(null);
+  };
+  const stepPlayer = (dir: 1 | -1) => {
+    const list = roster.filter(playerSizeOk);
+    if (!list.length || !teamView) return;
+    const i = list.findIndex((p) => p.id === teamView.id);
+    startTeamView(list[(i + dir + list.length) % list.length]!.id);
+  };
+  useEffect(() => {
+    if (teamView && (!viewPlayer || !playerSizeOk(viewPlayer))) exitTeamView();
+    else if (viewPlayer && size !== viewPlayer.tamanho) setSize(viewPlayer.tamanho);
+  }, [viewPlayer?.tamanho, viewPlayer?.id, clothingType]);
+  const teamPreviewTexts = useMemo<TextElement[] | null>(() => {
+    if (!viewPlayer) return null;
+    const { sx, sy } = teamScale(table, mother, viewPlayer.tamanho, view);
+    const out: TextElement[] = [];
+    for (const t of texts[view]) {
+      const value = t.field === "nome" ? viewPlayer.nome : t.field === "numero" ? viewPlayer.numero : null;
+      const r = resolveTeamText(t, { value, sx, sy, measure: measureText });
+      if (r && r.text.trim()) out.push({ ...t, ...r });
+    }
+    return out;
+  }, [viewPlayer, table, mother, view, texts, fontsTick]);
 
   const selTextEl = selText ? texts[view].find((t) => t.id === selText) ?? null : null;
   const colorKind: "vetor" | "texto" | "imagem" | "molde" =
