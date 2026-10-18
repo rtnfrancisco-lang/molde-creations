@@ -11,7 +11,6 @@ import {
   Table2,
   Save,
   RotateCcw,
-  ImagePlus,
   Users,
   Download,
   Crown,
@@ -1208,7 +1207,6 @@ function Index() {
   const contextMenuRootRef = useRef<Root | null>(null);
   const contextMenuHostRef = useRef<HTMLDivElement | null>(null);
   const clipboardLayerRef = useRef<Layer | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
   const pcEditStartRef = useRef<() => void>(() => {});
   const [shapes, setShapes] = useState<Shapes>(DEFAULT_SHAPES);
   const [size, setSize] = useState<Size>("M");
@@ -2327,24 +2325,7 @@ function Index() {
   const pcState = pcEdit ? "editing" : pcHasContent ? "locked" : art ? "free" : "none";
   const artFree = !!art && art.clipped === false;
 
-  const onUpload = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const src = reader.result as string;
-      const img = new Image();
-      img.onload = () => {
-        updateArtworks({
-          ...artworks,
-          [artView]: { src, cx: 0.5, cy: 0.35, w: 0.3, ratio: img.naturalHeight / img.naturalWidth, clipped: false },
-        });
-        setPcEdit(false);
-        setSize(mother);
-        setTool("selecao");
-      };
-      img.src = src;
-    };
-    reader.readAsDataURL(file);
-  };
+
 
   const exportAll = () => {
     const isBody = view === "frente" || view === "costas";
@@ -2985,11 +2966,14 @@ function Index() {
                 ref={importRef}
                 type="file"
                 accept=".pdf,.svg,.png,.jpg,.jpeg,application/pdf,image/svg+xml,image/png,image/jpeg"
+                multiple
                 className="hidden"
                 onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) void onImport(f);
+                  const fs = Array.from(e.target.files ?? []);
                   e.target.value = "";
+                  void (async () => {
+                    for (const [i, f] of fs.entries()) await onImport(f, fs.length > 1 ? { x: 0.5 + i * 0.03, y: 0.4 + i * 0.03 } : undefined);
+                  })();
                 }}
               />
               <button
@@ -2997,23 +2981,6 @@ function Index() {
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap bg-cyan text-primary-foreground hover:bg-cyan/90"
               >
                 <FileUp className="size-3.5" /> Importar
-              </button>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) onUpload(f);
-                  e.target.value = "";
-                }}
-              />
-              <button
-                onClick={() => fileRef.current?.click()}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap border border-cyan/40 text-cyan hover:bg-cyan/10"
-              >
-                <ImagePlus className="size-3.5" /> Carregar Estampa
               </button>
               <button
                 onClick={() => setTeamOpen((v) => !v)}
@@ -3333,9 +3300,7 @@ function Index() {
                     title: "Arquivo",
                     items: [
                       { label: "Importar Arquivo…", run: () => importRef.current?.click() },
-                      !art
-                        ? { label: "Carregar Estampa…", run: () => fileRef.current?.click() }
-                        : { label: "Remover Estampa", run: () => setArt(null) },
+                      ...(art ? [{ label: "Remover Estampa", run: () => setArt(null) }] : []),
                     ],
                   },
                 ]}
