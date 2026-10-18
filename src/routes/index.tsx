@@ -12,6 +12,7 @@ import {
   Save,
   RotateCcw,
   ImagePlus,
+  Users,
   Download,
   Crown,
   Trash2,
@@ -51,6 +52,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { TeamPanel } from "@/components/TeamPanel";
+import { sanitizeRoster, type Player } from "@/lib/roster";
 import { buildProjectFile, parseProjectFile, nameFromFile, PROJECT_EXT } from "@/lib/project-file";
 import { hasFsAccess, pickSaveHandle, writeHandle, downloadText, openProjectFile, isAbort, type FileHandle } from "@/lib/file-access";
 import {
@@ -720,6 +723,7 @@ function CanvasContextMenu({
 }
 
 const LS_TEXTS = "moldecore.textos";
+const LS_TEAM = "moldecore.time";
 type TextsByView = Record<View, TextElement[]>;
 const NO_TEXTS: TextsByView = { frente: [], costas: [], mangaEsq: [], mangaDir: [] };
 
@@ -1140,6 +1144,22 @@ function Index() {
   const [artworks, setArtworks] = useState<Artworks>(NO_ART);
   const [layers, setLayers] = useState<Layers>(NO_LAYERS);
   const [texts, setTexts] = useState<TextsByView>(NO_TEXTS);
+  const [roster, setRoster] = useState<Player[]>([]);
+  const [teamOpen, setTeamOpen] = useState(false);
+  const rosterLoaded = useRef(false);
+  useEffect(() => {
+    try {
+      setRoster(sanitizeRoster(JSON.parse(localStorage.getItem(LS_TEAM) ?? "[]")));
+    } catch {
+      /* lista corrompida */
+    }
+    rosterLoaded.current = true;
+  }, []);
+  useEffect(() => {
+    if (!rosterLoaded.current) return;
+    const t = setTimeout(() => saveLS(LS_TEAM, roster), 400);
+    return () => clearTimeout(t);
+  }, [roster]);
   const textsHydrated = useRef(false);
   const [selLayer, setSelLayer] = useState<string | null>(null);
   const [selText, setSelText] = useState<string | null>(null);
@@ -1436,7 +1456,7 @@ function Index() {
       if (Date.now() < cleanUntil.current) setSavedRev(n);
       return n;
     });
-  }, [table, shapes, artworks, styles, layers, texts, mother, clothingType, profiles, activeProfile]);
+  }, [table, shapes, artworks, styles, layers, texts, mother, clothingType, profiles, activeProfile, roster]);
   useEffect(() => {
     if (!dirty) return;
     const h = (e: BeforeUnloadEvent) => {
@@ -1448,7 +1468,7 @@ function Index() {
   }, [dirty]);
 
   const projectText = (name: string) =>
-    buildProjectFile(name, { grading: table, mother, clothingType, shapes, artworks, styles, layers, texts, profiles, activeProfile });
+    buildProjectFile(name, { grading: table, mother, clothingType, shapes, artworks, styles, layers, texts, profiles, activeProfile, roster });
 
   const saveProject = async (as: boolean): Promise<boolean> => {
     try {
@@ -1561,6 +1581,9 @@ function Index() {
       setShapes(nShapes);
       setLayers(nLayers);
       setTexts(nTexts);
+      const nRoster = sanitizeRoster(d.roster);
+      setRoster(nRoster);
+      saveLS(LS_TEAM, nRoster);
       setProfiles(merged);
       setActiveProfile(nActive);
       saveLS(LS_GRADING, grading);
@@ -2874,6 +2897,21 @@ function Index() {
               >
                 <ImagePlus className="size-3.5" /> Carregar Estampa
               </button>
+              <button
+                onClick={() => setTeamOpen((v) => !v)}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap border ${teamOpen ? "bg-cyan/10 border-cyan text-cyan" : "border-border text-foreground hover:bg-muted"}`}
+              >
+                <Users className="size-3.5" /> Time{roster.length > 0 && ` (${roster.length})`}
+              </button>
+              <TeamPanel
+                open={teamOpen}
+                onClose={() => setTeamOpen(false)}
+                roster={roster}
+                setRoster={setRoster}
+                options={sizesForGarment(clothingType)}
+                garment={clothingType}
+                labelOf={(s) => sizesForGarment(clothingType).find((o) => o.id === s)?.label ?? s}
+              />
               {(art || hasClipped || (selObj && !selObj.clipped)) && ((() => {
                 const freeSel: "layer" | "art" | null = !pcEdit && selObj && !selObj.clipped ? "layer" : !pcEdit && selPart === "estampa" && !!art && art.clipped === false ? "art" : null;
                 return (
