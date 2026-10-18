@@ -2568,7 +2568,8 @@ function Index() {
                     <Trash2 className="size-3.5" />
                   </button>}
                 </>
-              )}
+                );
+              })()}
               <button
                 onClick={exportAll}
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap border border-line text-muted-foreground hover:text-foreground"
