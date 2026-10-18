@@ -79,6 +79,7 @@ export function PowerClipEditor({
   onRemove,
   onExtract,
   onClose,
+  features,
 }: {
   art: PcArt;
   frame: Frame;
@@ -89,7 +90,9 @@ export function PowerClipEditor({
   onRemove: () => void;
   onExtract?: () => void;
   onClose: () => void;
+  features?: { flip?: boolean; opacity?: boolean; replace?: boolean; reset?: boolean };
 }) {
+  const f = { flip: true, opacity: true, replace: true, reset: true, ...features };
   const fileRef = useRef<HTMLInputElement>(null);
   const [askFormat, setAskFormat] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -205,7 +208,7 @@ export function PowerClipEditor({
       <Section title="Posicionamento">
         <button className={btn + " w-full"} onClick={center}><Crosshair className="size-3.5" /> Centralizar no Retângulo</button>
         <button className={btn + " w-full"} onClick={fit}><Maximize2 className="size-3.5" /> Ajustar Tamanho 100%</button>
-        <button className={btn + " w-full"} onClick={reset}><RotateCcw className="size-3.5" /> Redefinir Posição e Tamanho</button>
+        {f.reset && <button className={btn + " w-full"} onClick={reset}><RotateCcw className="size-3.5" /> Redefinir Posição e Tamanho</button>}
       </Section>
 
       <Section title="Transformação">
@@ -217,17 +220,17 @@ export function PowerClipEditor({
           ))}
         </div>
         <NumField label="Rotação" value={rot} suffix="°" onChange={rotTo} />
-        <div className="grid grid-cols-2 gap-1">
+        {f.flip && <div className="grid grid-cols-2 gap-1">
           <button className={btn + (art.flipX ? " border-primary text-primary" : "")} onClick={() => set({ flipX: !art.flipX })}>
             <FlipHorizontal2 className="size-3.5" /> Espelhar H
           </button>
           <button className={btn + (art.flipY ? " border-primary text-primary" : "")} onClick={() => set({ flipY: !art.flipY })}>
             <FlipVertical2 className="size-3.5" /> Espelhar V
           </button>
-        </div>
+        </div>}
       </Section>
 
-      <Section title="Propriedades">
+      {f.opacity && <Section title="Propriedades">
         <label className="flex items-center gap-2">
           <span className="w-14 text-faint">Opacidade</span>
           <input
@@ -240,7 +243,7 @@ export function PowerClipEditor({
           />
           <span className="w-9 text-right font-mono text-foreground">{Math.round((art.opacity ?? 1) * 100)}%</span>
         </label>
-      </Section>
+      </Section>}
 
       <Section title="Arquivo">
         <input
