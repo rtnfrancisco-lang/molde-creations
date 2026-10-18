@@ -49,6 +49,10 @@ import {
   AlignCenter,
   AlignRight,
 } from "lucide-react";
+import { toast } from "sonner";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { buildProjectFile, parseProjectFile, nameFromFile, PROJECT_EXT } from "@/lib/project-file";
+import { hasFsAccess, pickSaveHandle, writeHandle, downloadText, openProjectFile, isAbort, type FileHandle } from "@/lib/file-access";
 import {
   buildPath,
   importSvg,
@@ -2660,6 +2664,37 @@ function Index() {
               Icon={sidebars.left ? PanelLeftClose : PanelLeftOpen}
               onClick={() => toggleSidebar("left")}
             />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" className="flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-line bg-panel2 text-xs font-medium text-foreground hover:text-cyan hover:bg-cyan/10">
+                  <FileText className="size-3.5" /> Arquivo <ChevronDown className="size-3" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-60">
+                <DropdownMenuItem onSelect={() => void newProject()}>Novo projeto</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void openProject()}>Abrir projeto…<DropdownMenuShortcut>Ctrl+O</DropdownMenuShortcut></DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => void saveProject(false)}>Salvar<DropdownMenuShortcut>Ctrl+S</DropdownMenuShortcut></DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void saveProject(true)}>Salvar como…<DropdownMenuShortcut>Ctrl+Shift+S</DropdownMenuShortcut></DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <span className="text-sm font-medium text-foreground truncate max-w-[180px]" title={dirty ? "Alterações não salvas" : "Projeto salvo"}>
+              {projectName}{dirty && <span className="text-amber-600 ml-1" aria-label="alterações não salvas">•</span>}
+            </span>
+            {askUnsaved && (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center bg-foreground/30">
+                <div className="w-[380px] rounded-lg border border-line bg-panel p-5 shadow-xl">
+                  <h2 className="text-sm font-semibold text-foreground">Alterações não salvas</h2>
+                  <p className="mt-2 text-sm text-muted-foreground">O projeto "{projectName}" tem alterações não salvas. Deseja salvar antes de continuar?</p>
+                  <div className="mt-4 flex justify-end gap-2">
+                    <button type="button" onClick={() => askUnsaved("cancel")} className="h-8 px-3 rounded-md border border-line text-xs">Cancelar</button>
+                    <button type="button" onClick={() => askUnsaved("discard")} className="h-8 px-3 rounded-md border border-line text-xs text-destructive">Descartar</button>
+                    <button type="button" onClick={() => askUnsaved("save")} className="h-8 px-3 rounded-md bg-cyan text-xs font-semibold text-primary-foreground">Salvar</button>
+                  </div>
+                </div>
+              </div>
+            )}
+            <span className="text-faint">/</span>
             <span className="text-[10px] font-mono uppercase tracking-[0.18em] text-faint">Área de Trabalho</span>
             <span className="text-faint">/</span>
             <span className="text-sm font-medium text-foreground truncate">{clothingType} — Sublimação</span>
