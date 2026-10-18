@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { createPortal } from "react-dom";
 import {
@@ -2990,6 +2990,8 @@ type Drag =
 
 function PatternCanvas({
   view,
+  selText,
+  onSelText,
   size,
   graded,
   overlay,
