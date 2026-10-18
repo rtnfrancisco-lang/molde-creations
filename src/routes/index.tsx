@@ -131,6 +131,12 @@ type TextElement = {
   underline: boolean;
   align: "left" | "center" | "right";
   color: string;
+  /** Campo do time: texto variável por jogador (opcional). */
+  field?: "nome" | "numero";
+  upper?: boolean;
+  /** Largura máxima em cm, medida no tamanho do molde mãe. */
+  fitWidth?: number | undefined;
+  scaleWithSize?: boolean;
 };
 type ClothingType = "Camiseta" | "Moletom" | "Regata" | "Manga Longa" | "Camisa Infantil" | "Camisa Baby Look";
 type SizeOption = { id: Size; label: string };
@@ -826,6 +832,35 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
     underline: false, align: "left", color: "#20242b",
   });
   const current = selected ?? defaults;
+  const shownText = (item: Pick<TextElement, "text" | "field" | "upper">) =>
+    item.field === "nome" && item.upper ? item.text.toUpperCase() : item.text;
+
+  // Caixas medidas dos textos com campo do time (selo visual, só na tela).
+  const textEls = useRef<Record<string, SVGTextElement | null>>({});
+  const [fieldBoxes, setFieldBoxes] = useState<Record<string, { x: number; y: number; w: number; h: number }>>({});
+  useLayoutEffect(() => {
+    const next: Record<string, { x: number; y: number; w: number; h: number }> = {};
+    for (const item of texts) {
+      if (!item.field || item.id === editingId) continue;
+      const el = textEls.current[item.id];
+      if (!el) continue;
+      try { const b = el.getBBox(); next[item.id] = { x: b.x, y: b.y, w: b.width, h: b.height }; } catch { /* ignora */ }
+    }
+    setFieldBoxes((prev) => JSON.stringify(prev) === JSON.stringify(next) ? prev : next);
+  });
+
+  const setField = (field: "fixo" | "nome" | "numero") => {
+    const apply = (item: Omit<TextElement, "id" | "text" | "x" | "y"> | TextElement) => {
+      const { field: _f, upper: _u, fitWidth: _w, scaleWithSize: _s, ...rest } = item as TextElement;
+      if (field === "fixo") return rest;
+      return { ...rest, field, scaleWithSize: item.scaleWithSize ?? true,
+        ...(field === "nome" ? { upper: item.upper ?? false, ...(item.fitWidth ? { fitWidth: item.fitWidth } : {}) } : {}) };
+    };
+    setDefaults((d) => apply(d) as typeof d);
+    if (!selectedId) return;
+    checkpoint("text-style:" + selectedId);
+    updateTexts(view, (items) => items.map((item) => item.id === selectedId ? apply(item) as TextElement : item));
+  };
 
   // Caixa do texto selecionado, medida no próprio SVG (unidades do canvas).
   useLayoutEffect(() => {
@@ -840,7 +875,7 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
     } catch {
       setBox(null);
     }
-  }, [selected?.text, selected?.fontSize, selected?.fontFamily, selected?.bold, selected?.italic, selected?.align, selected?.x, selected?.y, selected?.id, view, editingId, fontsTick]);
+  }, [selected?.text, selected?.fontSize, selected?.fontFamily, selected?.bold, selected?.italic, selected?.align, selected?.x, selected?.y, selected?.id, selected?.upper, selected?.field, view, editingId, fontsTick]);
 
   // Redimensionamento proporcional pelas alças, com o ponto oposto fixo.
   useEffect(() => {
@@ -983,16 +1018,25 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
                   className={active ? "cursor-move" : "pointer-events-none"} onPointerDown={onDown} onDoubleClick={onDbl} />
               )}
               <text
-                ref={isSel ? selTextRef : undefined}
+                ref={(el) => { textEls.current[item.id] = el; if (isSel) selTextRef.current = el; }}
                 x={item.x} y={item.y + fontSize} fill={item.color}
                 style={textStyle} textAnchor={item.align === "left" ? "start" : item.align === "center" ? "middle" : "end"}
                 className={active ? "cursor-move" : "pointer-events-none"}
                 onPointerDown={onDown}
                 onDoubleClick={onDbl}
               >
-                {item.text.split("\n").map((line, index) =>
+                {shownText(item).split("\n").map((line, index) =>
                   <tspan key={index} x={item.x} dy={index ? fontSize * 1.15 : 0}>{line || " "}</tspan>)}
               </text>
+              {item.field && fieldBoxes[item.id] && (() => {
+                const fb = fieldBoxes[item.id]!;
+                return (
+                  <g className="pointer-events-none" data-screen-only>
+                    <rect x={fb.x} y={fb.y} width={fb.w} height={fb.h} className="fill-none stroke-cyan" strokeWidth={1} strokeDasharray="3 2" vectorEffect="non-scaling-stroke" />
+                    <text x={fb.x} y={fb.y - unit * 0.4} fontSize={unit * 1.1} className="fill-cyan font-mono">{item.field === "nome" ? "NOME" : "Nº"}</text>
+                  </g>
+                );
+              })()}
               {isSel && box && (
                 <g transform={`translate(${box.x + box.w / 2} ${box.y + box.h / 2})`}>
                   {tool === "selecao"
@@ -1039,6 +1083,37 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
               <button key={align} type="button" title={label} aria-label={label} onMouseDown={(event) => event.preventDefault()} onClick={() => updateSelected({ align })} className={"grid h-8 place-items-center rounded-md border " + (current.align === align ? "border-primary text-primary" : "border-line text-foreground")}><Icon className="size-4" /></button>
             ))}
           </div>
+          <label className="block space-y-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-faint">Campo do time</span>
+            <select value={current.field ?? "fixo"} onChange={(event) => setField(event.target.value as "fixo" | "nome" | "numero")} className="h-8 w-full rounded-md border border-input bg-panel2 px-2 text-xs text-foreground" aria-label="Campo do time">
+              <option value="fixo">Texto fixo</option>
+              <option value="nome">Nome do jogador</option>
+              <option value="numero">Número do jogador</option>
+            </select>
+          </label>
+          {current.field === "nome" && (
+            <>
+              <label className="flex items-center gap-2 text-foreground">
+                <input type="checkbox" checked={!!current.upper} onChange={(event) => updateSelected({ upper: event.target.checked })} />
+                MAIÚSCULAS
+              </label>
+              <label className="block space-y-1">
+                <span className="text-faint">Largura máxima (cm)</span>
+                <input type="number" min="0" step="0.1" value={current.fitWidth ?? ""} placeholder="sem limite"
+                  onChange={(event) => { const v = Number(event.target.value); updateSelected({ fitWidth: event.target.value && v > 0 ? v : undefined }); }}
+                  className="h-8 w-full rounded-md border border-input bg-panel2 px-2 text-xs text-foreground" aria-label="Largura máxima (cm)" />
+              </label>
+              <button type="button" disabled={!selected || !box} onMouseDown={(event) => event.preventDefault()}
+                onClick={() => box && updateSelected({ fitWidth: Math.round(box.w * 10) / 10 })}
+                className="h-8 w-full rounded-md border border-line text-foreground disabled:opacity-50">Usar a largura atual do texto</button>
+            </>
+          )}
+          {current.field && (
+            <label className="flex items-center gap-2 text-foreground">
+              <input type="checkbox" checked={current.scaleWithSize !== false} onChange={(event) => updateSelected({ scaleWithSize: event.target.checked })} />
+              Escalar com o tamanho
+            </label>
+          )}
         </div>, panelHost)}
     </g>
   );
