@@ -342,10 +342,12 @@ const pathsMarkup = (paths: LPath[], aw: number, ah: number) =>
     .join("");
 
 /** SVG autônomo de uma camada vetorial (usado para PowerClip). */
-export function vectorDataUrl(l: Layer) {
+export function vectorDataUrl(l: Layer, pad = 0) {
   const aw = 1000;
   const ah = aw * l.ratio;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${aw}" height="${ah}" viewBox="${-aw / 2} 0 ${aw} ${ah}">${pathsMarkup(l.paths ?? [], aw, ah)}</svg>`;
+  const vw = aw + 2 * pad;
+  const vh = ah + 2 * pad;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${vw}" height="${vh}" viewBox="${-aw / 2 - pad} ${-pad} ${vw} ${vh}">${pathsMarkup(l.paths ?? [], aw, ah)}</svg>`;
   return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
 }
 
