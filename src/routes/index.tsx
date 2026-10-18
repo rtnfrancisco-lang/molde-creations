@@ -1735,7 +1735,48 @@ function Index() {
     setTool("forma");
   };
 
+  const selTextEl = selText ? texts[view].find((t) => t.id === selText) ?? null : null;
+  const colorKind: "vetor" | "texto" | "imagem" | "molde" =
+    selObj && selObj.paths && !selObj.src ? "vetor" : selTextEl ? "texto" : selObj || (selPart === "estampa" && art) ? "imagem" : "molde";
+  const colorLabel =
+    colorKind === "vetor" ? selObj!.name : colorKind === "texto" ? "Texto" : colorKind === "imagem" ? "(imagem sem cor)" : "Molde";
+  const colorCurrent: { stroke: string | null; fill: string | null; mixedFill?: boolean; mixedStroke?: boolean } = (() => {
+    if (colorKind === "vetor") {
+      const ps = selObj!.paths!;
+      const f = ps[0]?.fill ?? null;
+      const s = ps[0]?.stroke ?? null;
+      return { fill: f, stroke: s, mixedFill: ps.some((p) => p.fill !== f), mixedStroke: ps.some((p) => p.stroke !== s) };
+    }
+    if (colorKind === "texto") return { fill: selTextEl!.color, stroke: null };
+    if (colorKind === "imagem") return { fill: null, stroke: null };
+    return { fill: styles[view].fill ?? null, stroke: styles[view].stroke ?? null };
+  })();
+
   const applyColor = (t: ColorTarget, hex: string | null) => {
+    if (colorKind === "imagem") return;
+    if (colorKind === "texto") {
+      if (t !== "preenchimento" || !hex) return;
+      checkpoint("color:" + Date.now());
+      setTexts({ ...texts, [view]: texts[view].map((x) => (x.id === selText ? { ...x, color: hex } : x)) });
+      return;
+    }
+    if (colorKind === "vetor" && selObj) {
+      const aw = Math.max(1e-6, selObj.w * pieceW);
+      const next = curLayers.map((l) =>
+        l.id !== selObj.id || !l.paths
+          ? l
+          : {
+              ...l,
+              paths: l.paths.map((p) =>
+                t === "contorno"
+                  ? { ...p, stroke: hex, sw: hex && !(p.sw > 0) ? 0.1 / aw : p.sw }
+                  : { ...p, fill: hex },
+              ),
+            },
+      );
+      setViewLayers(next, "color:" + Date.now());
+      return;
+    }
     checkpoint("color:" + Date.now());
     const next = { ...styles, [view]: { ...styles[view], [t === "contorno" ? "stroke" : "fill"]: hex } };
     setStyles(next);
@@ -2994,7 +3035,7 @@ function Index() {
       </main>
 
       {/* Coluna própria no layout: a paleta não cobre mais o painel direito nem o cabeçalho. */}
-      <PaletteDock target={colorTarget} onTarget={setColorTarget} onApply={applyColor} current={styles[view]} />
+      <PaletteDock target={colorTarget} onTarget={setColorTarget} onApply={applyColor} current={colorCurrent} targetLabel={colorLabel} targetKind={colorKind} />
     </div>
   );
 }
@@ -3697,9 +3738,15 @@ function PatternCanvas({
       <>
         {hit && <rect x={-aw / 2} y={-ah / 2} width={aw} height={ah} fill="transparent" />}
         <g transform={`translate(0 ${-ah / 2})`}>
-          {l.paths!.map((p, pi) => (
-            <path key={pi} d={layerPathD(p, aw, ah)} fill={p.fill ?? "none"} stroke={p.stroke ?? "none"} strokeWidth={p.sw * aw} fillRule={p.rule} />
-          ))}
+          {l.paths!.map((p, pi) => {
+            const d = layerPathD(p, aw, ah);
+            return (
+              <g key={pi}>
+                {hit && <path d={d} fill="none" stroke="transparent" strokeWidth={Math.max(p.sw * aw, unit * 1.2)} style={{ pointerEvents: "stroke" }} />}
+                <path d={d} fill={p.fill ?? "none"} stroke={p.stroke ?? "none"} strokeWidth={p.sw * aw} fillRule={p.rule} />
+              </g>
+            );
+          })}
         </g>
       </>
     );
@@ -4204,11 +4251,15 @@ function PaletteDock({
   onTarget,
   onApply,
   current,
+  targetLabel,
+  targetKind,
 }: {
   target: ColorTarget;
   onTarget: (t: ColorTarget) => void;
   onApply: (t: ColorTarget, hex: string | null) => void;
-  current: PartStyle;
+  current: { stroke: string | null; fill: string | null; mixedFill?: boolean; mixedStroke?: boolean };
+  targetLabel: string;
+  targetKind: "vetor" | "texto" | "imagem" | "molde";
 }) {
   const [open, setOpen] = useState(true);
   const [mode, setMode] = useState<"rgb" | "cmyk">("cmyk");
@@ -4253,11 +4304,15 @@ function PaletteDock({
           ))}
         </div>
 
+        <div className="rounded border border-line bg-panel2 px-1 py-1 text-[9px] leading-tight text-muted-foreground break-words" title={targetLabel}>
+          Aplicando em: <span className="text-foreground font-semibold">{targetLabel}</span>
+          {targetKind === "imagem" && <div className="mt-0.5 text-faint">Esta imagem não tem cor de preenchimento</div>}
+        </div>
         <div className="space-y-1">
           {(
             [
               ["contorno", "Contorno"],
-              ["preenchimento", "Preenchimento do Molde"],
+              ["preenchimento", "Preenchimento"],
             ] as const
           ).map(([k, label]) => (
             <button
@@ -4272,8 +4327,12 @@ function PaletteDock({
                 className={"size-4 shrink-0 rounded-sm border border-line " + (k === "contorno" ? "border-2" : "")}
                 style={
                   k === "contorno"
-                    ? { borderColor: current.stroke ?? "var(--color-cyan)" }
-                    : { background: current.fill ?? "transparent" }
+                    ? current.mixedStroke
+                      ? { borderStyle: "dashed" }
+                      : { borderColor: current.stroke ?? "var(--color-cyan)" }
+                    : current.mixedFill
+                      ? { borderStyle: "dashed", background: "transparent" }
+                      : { background: current.fill ?? "transparent" }
                 }
               />
               <span className="leading-tight">{label}</span>
