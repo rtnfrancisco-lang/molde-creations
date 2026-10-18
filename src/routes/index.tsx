@@ -613,12 +613,23 @@ const pathBounds = (d: string): { minX: number; minY: number; maxX: number; maxY
 
 const PLOTTER_MARGIN = 2; // margem de reserva do quadro de mídia (usada só se a sangria não puder ser lida)
 
-type CtxItem = { label: string; run: () => void };
+type CtxItem = { label: string; run: () => void; disabled?: boolean };
+
+/** "Digitando" = só campos de texto reais; color/range/checkbox/select não bloqueiam atalhos. */
+const TYPING_INPUTS = new Set(["text", "number", "search", "email", "url", "tel", "password"]);
+const isTypingTarget = (target: EventTarget | null) => {
+  const el = target as HTMLElement | null;
+  if (!el) return false;
+  if (el.isContentEditable || el.tagName === "TEXTAREA") return true;
+  if (el.tagName === "INPUT") return TYPING_INPUTS.has(((el as HTMLInputElement).type || "text").toLowerCase());
+  return false;
+};
 
 function CanvasContextMenu({
   x,
   y,
   disabled,
+  deleteDisabled,
   onCut,
   onCopy,
   onPaste,
@@ -631,6 +642,7 @@ function CanvasContextMenu({
   x: number;
   y: number;
   disabled: boolean;
+  deleteDisabled: boolean;
   onCut: () => void;
   onCopy: () => void;
   onPaste: () => void;
@@ -667,7 +679,7 @@ function CanvasContextMenu({
         <span className="font-mono text-[10px] text-muted-foreground">Ctrl+V</span>
       </button>
       <div className="my-1 border-t border-line" />
-      <button type="button" className={itemClass} disabled={disabled} onClick={act(onDelete)}>
+      <button type="button" className={itemClass} disabled={deleteDisabled} onClick={act(onDelete)}>
         <span>Excluir</span>
         <span className="font-mono text-[10px] text-muted-foreground">Delete</span>
       </button>
@@ -687,7 +699,7 @@ function CanvasContextMenu({
             <div className="my-1 border-t border-line" />
             <div className="px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider text-faint">{sec.title}</div>
             {sec.items.map((i) => (
-              <button key={i.label} type="button" className={itemClass} onClick={act(i.run)}>
+              <button key={i.label} type="button" className={itemClass} disabled={i.disabled} onClick={act(i.run)}>
                 <span>{i.label}</span>
               </button>
             ))}
@@ -911,8 +923,7 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
     const onKey = (event: KeyboardEvent) => {
       if (!selectedId || editingIdRef.current) return;
       if (event.key !== "Delete" && event.key !== "Backspace") return;
-      const el = event.target as HTMLElement | null;
-      if (el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName))) return;
+      if (isTypingTarget(event.target)) return;
       event.preventDefault();
       event.stopImmediatePropagation();
       const id = selectedId;
@@ -1086,6 +1097,7 @@ function Index() {
   const [exporting, setExporting] = useState(false);
 
 
+  const deleteSelectionRef = useRef<() => boolean>(() => false);
   const selectedLayer = () => {
     if (!selLayer) return null;
     return layers[view].find((layer) => String((layer as Layer & { id?: string }).id) === selLayer) ?? null;
@@ -1156,8 +1168,7 @@ function Index() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement;
-      const typing = el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "TEXTAREA" || el.isContentEditable;
+      const typing = isTypingTarget(e.target);
       const modifier = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
 
@@ -1177,10 +1188,7 @@ function Index() {
         return;
       }
       if (!typing && (e.key === "Delete" || e.key === "Backspace")) {
-        if (selectedLayer()) {
-          e.preventDefault();
-          deleteSelectedLayer();
-        }
+        if (deleteSelectionRef.current()) e.preventDefault();
         return;
       }
       if (typing || modifier) return;
@@ -1189,7 +1197,7 @@ function Index() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [layers, view, selLayer]);
+  }, [layers, view, selLayer, selText]);
 
   useEffect(() => {
     const onContextMenu = (event: MouseEvent) => {
@@ -1784,22 +1792,92 @@ function Index() {
     setPcEdit(true);
   };
   pcEditStartRef.current = pcEditStart;
-  const pcExtract = () => {
-    if (art) setArt({ ...art, clipped: false });
-    setPcEdit(false);
+  /** Aplica camadas e/ou estampa da vista atual com UM único passo de desfazer. */
+  const commitView = (key: string, nextLayers: Layer[] | null, nextArt: Artwork | null | undefined) => {
+    checkpoint(key);
+    if (nextLayers) {
+      const all = { ...snapRef.current.layers, [view]: nextLayers };
+      setLayers(all);
+      saveLS(LS_LAYERS, all);
+    }
+    if (nextArt !== undefined) {
+      const all = { ...snapRef.current.artworks, [view]: nextArt };
+      setArtworks(all);
+      try {
+        localStorage.setItem(LS_ART, JSON.stringify(all));
+      } catch {
+        /* imagem grande demais */
+      }
+    }
   };
-  /** Extrai do PowerClip: em edição com camada recortada selecionada, só ela; senão tudo. */
-  const pcExtractSmart = () => {
-    const one = pcEdit && selLayer ? curLayers.find((l) => l.id === selLayer && l.clipped) : undefined;
-    if (one) {
-      setViewLayers(curLayers.map((l) => (l.id === one.id ? { ...l, clipped: false } : l)), "pc-out:" + Date.now());
+  const artClipped = !!art && art.clipped !== false;
+  const selClippedLayer = pcEdit && selLayer ? curLayers.find((l) => l.id === selLayer && l.clipped) ?? null : null;
+  const selClippedArt = pcEdit && selPart === "estampa" && artClipped;
+  const canExtractSelected = !!selClippedLayer || selClippedArt;
+  /** Em edição: tira só o item selecionado, mantém posição/seleção e a edição ativa. */
+  const pcExtractSelected = () => {
+    if (selClippedLayer) {
+      const id = selClippedLayer.id;
+      commitView("pc-out:" + Date.now(), curLayers.map((l) => (l.id === id ? { ...l, clipped: false } : l)), undefined);
+      setSelLayer(id);
       return;
     }
-    if (hasClipped) setViewLayers(curLayers.map((l) => (l.clipped ? { ...l, clipped: false } : l)), "pc-out-all:" + Date.now());
-    if (art && art.clipped !== false) setArt({ ...art, clipped: false });
+    if (selClippedArt && art) {
+      commitView("pc-out-art:" + Date.now(), null, { ...art, clipped: false });
+      setSelPart("estampa");
+    }
+  };
+  /** Botão "Extrair Arquivo" do painel: tira apenas a estampa. */
+  const pcExtractArt = () => {
+    if (!art || !artClipped) return;
+    commitView("pc-out-art:" + Date.now(), null, { ...art, clipped: false });
+    setSelPart("estampa");
+  };
+  /** Extrai tudo (camadas recortadas + estampa) e sai da edição. */
+  const pcExtractAll = () => {
+    if (!pcHasContent) return;
+    commitView(
+      "pc-out-all:" + Date.now(),
+      hasClipped ? curLayers.map((l) => (l.clipped ? { ...l, clipped: false } : l)) : null,
+      artClipped && art ? { ...art, clipped: false } : undefined,
+    );
     setPcEdit(false);
     setSelLayer(null);
   };
+  // PowerClip vazio em edição → sai automaticamente.
+  useEffect(() => {
+    if (pcEdit && !pcHasContent) {
+      setPcEdit(false);
+      if (selLayer && layers[view].find((l) => l.id === selLayer)?.clipped) setSelLayer(null);
+    }
+  }, [pcEdit, pcHasContent]);
+  const artDeletable = selPart === "estampa" && !!art && (art.clipped === false || pcEdit);
+  const canDeleteSelection = !!selObj || artDeletable || !!selText;
+  /** Decide o que apagar: camada, estampa (ou texto, só via menu). Molde nunca. */
+  const deleteSelection = (includeText = false) => {
+    if (selObj) {
+      commitView("del:" + Date.now(), curLayers.filter((l) => l.id !== selObj.id), undefined);
+      setSelLayer(null);
+      setMenu(null);
+      return true;
+    }
+    if (artDeletable) {
+      commitView("art-del:" + Date.now(), null, null);
+      setSelPart(null);
+      setMenu(null);
+      return true;
+    }
+    if (includeText && selText) {
+      const id = selText;
+      checkpoint("text-del:" + Date.now());
+      setTexts({ ...texts, [view]: texts[view].filter((t) => t.id !== id) });
+      setSelText(null);
+      setMenu(null);
+      return true;
+    }
+    return false;
+  };
+  deleteSelectionRef.current = () => deleteSelection(false);
   const pcRemove = () => {
     if (art) setArt({ ...art, ...(art.pre ?? {}), clipped: false });
     setPcEdit(false);
@@ -2551,6 +2629,7 @@ function Index() {
                     fileBase={pcFileBase}
                     onChange={setArt}
                     onRemove={pcRemove}
+                    onExtract={pcExtractArt}
                     onClose={() => setPcEdit(false)}
                   />
                 )}
@@ -2661,10 +2740,11 @@ function Index() {
                 x={menu.x}
                 y={menu.y}
                 disabled={!selObj}
+                deleteDisabled={!canDeleteSelection}
                 onCut={cutSelectedLayer}
                 onCopy={copySelectedLayer}
                 onPaste={pasteLayer}
-                onDelete={deleteSelectedLayer}
+                onDelete={() => deleteSelection(true)}
                 onBringForward={() => moveSelectedLayer("front")}
                 onSendBackward={() => moveSelectedLayer("back")}
                 onClose={() => setMenu(null)}
@@ -2679,7 +2759,8 @@ function Index() {
                           : null,
                       pcHasContent && !pcEdit ? { label: "Editar Conteúdo do PowerClip", run: pcEditStart } : null,
                       pcEdit ? { label: "Concluir Edição", run: pcApply } : null,
-                      pcHasContent ? { label: "Extrair Conteúdo", run: pcExtractSmart } : null,
+                      pcEdit && pcHasContent ? { label: "Extrair Selecionado", run: pcExtractSelected, disabled: !canExtractSelected } : null,
+                      pcHasContent ? { label: "Extrair Tudo", run: pcExtractAll } : null,
                     ].filter((i): i is CtxItem => !!i),
                   },
                   {
@@ -3586,6 +3667,10 @@ function PatternCanvas({
       ref={svgRef}
       viewBox={`${vx} ${vy} ${vw} ${vh}`}
       className={"absolute inset-0 w-full h-full select-none touch-none " + cursor}
+      onPointerDownCapture={() => {
+        const a = document.activeElement as HTMLElement | null;
+        if (a && (a.tagName === "INPUT" || a.tagName === "SELECT" || a.tagName === "TEXTAREA")) a.blur();
+      }}
       onPointerDown={onBgDown}
       onPointerMove={onMove}
       onPointerUp={onUp}

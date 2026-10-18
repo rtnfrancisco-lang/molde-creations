@@ -77,6 +77,7 @@ export function PowerClipEditor({
   fileBase,
   onChange,
   onRemove,
+  onExtract,
   onClose,
 }: {
   art: PcArt;
@@ -86,6 +87,7 @@ export function PowerClipEditor({
   fileBase: string;
   onChange: (a: PcArt) => void;
   onRemove: () => void;
+  onExtract?: () => void;
   onClose: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -133,6 +135,7 @@ export function PowerClipEditor({
   };
   const extract = (fmt: "png" | "jpg" | "svg") => {
     setAskFormat(false);
+    setTimeout(() => onExtract?.(), 0);
     const name = `${fileBase}.${fmt}`;
     if (fmt === "svg") {
       if (art.src.startsWith("data:image/svg")) return download(art.src, name);
