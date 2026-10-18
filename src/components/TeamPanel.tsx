@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { ArrowDownWideNarrow, ClipboardPaste, Download, Plus, Trash2, Upload, Users, X, AlertTriangle } from "lucide-react";
+import { ArrowDownWideNarrow, ClipboardPaste, Download, Plus, Trash2, Upload, Users, X, AlertTriangle, Eye } from "lucide-react";
 import {
   newPlayerId,
   parseRoster,
@@ -21,9 +21,11 @@ type Props = {
   options: readonly RosterSizeOption[];
   garment: string;
   labelOf: (s: RosterSize) => string;
+  viewingId?: string | null;
+  onView?: (p: Player) => void;
 };
 
-export function TeamPanel({ open, onClose, roster, setRoster, options, garment, labelOf }: Props) {
+export function TeamPanel({ open, onClose, roster, setRoster, options, garment, labelOf, viewingId, onView }: Props) {
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const csvRef = useRef<HTMLInputElement>(null);
@@ -149,7 +151,7 @@ export function TeamPanel({ open, onClose, roster, setRoster, options, garment, 
               <th className="text-left px-3 py-1.5 w-16">Nº</th>
               <th className="text-left px-1 py-1.5">Nome</th>
               <th className="text-left px-1 py-1.5 w-28">Tamanho</th>
-              <th className="w-8" />
+              <th className="w-16" />
             </tr>
           </thead>
           <tbody>
@@ -214,7 +216,16 @@ export function TeamPanel({ open, onClose, roster, setRoster, options, garment, 
                       ))}
                     </select>
                   </td>
-                  <td className="py-1 pr-2">
+                  <td className="py-1 pr-2 whitespace-nowrap">
+                    <button
+                      onClick={() => onView?.(p)}
+                      disabled={!!sizeInvalid}
+                      title={sizeInvalid ? "Tamanho não existe neste tipo de peça" : "Ver no molde"}
+                      aria-label="Ver"
+                      className={`p-1 rounded disabled:opacity-30 ${viewingId === p.id ? "text-cyan bg-cyan/10" : "text-muted-foreground hover:text-cyan hover:bg-cyan/10"}`}
+                    >
+                      <Eye className="size-3.5" />
+                    </button>
                     <button onClick={() => setRoster(roster.filter((x) => x.id !== p.id))} aria-label="Remover jogador" className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10">
                       <Trash2 className="size-3.5" />
                     </button>

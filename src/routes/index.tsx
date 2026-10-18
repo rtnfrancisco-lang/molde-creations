@@ -26,6 +26,7 @@ import {
   Lock,
   LockOpen,
   ChevronRight,
+  ChevronLeft,
   X,
   Crop,
   MousePointer2,
@@ -54,6 +55,7 @@ import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { TeamPanel } from "@/components/TeamPanel";
 import { sanitizeRoster, type Player } from "@/lib/roster";
+import { teamScale, resolveTeamText, measureText, fontsReady } from "@/lib/team-text";
 import { buildProjectFile, parseProjectFile, nameFromFile, PROJECT_EXT } from "@/lib/project-file";
 import { hasFsAccess, pickSaveHandle, writeHandle, downloadText, openProjectFile, isAbort, type FileHandle } from "@/lib/file-access";
 import {
@@ -765,11 +767,13 @@ type TextWorkspaceProps = {
     onHandle: (e: React.PointerEvent, hx: HandleDir, hy: HandleDir) => void,
     skip?: (hx: HandleDir, hy: HandleDir) => boolean,
   ) => React.ReactNode;
+  /** Pré-visualização do time: textos já resolvidos, somente leitura. */
+  preview?: TextElement[] | null;
 };
 
 type TBox = { x: number; y: number; w: number; h: number };
 
-function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, checkpoint, selectedId, onSelect: setSelectedId, unit, selectionBox }: TextWorkspaceProps) {
+function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, checkpoint, selectedId, onSelect: setSelectedId, unit, selectionBox, preview }: TextWorkspaceProps) {
   const selTextRef = useRef<SVGTextElement | null>(null);
   const [box, setBox] = useState<TBox | null>(null);
   const [fontsTick, setFontsTick] = useState(0);
@@ -978,6 +982,23 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
     return () => window.removeEventListener("keydown", onKey, true);
   }, [selectedId, view]);
 
+  if (preview) {
+    return (
+      <g data-text-workspace data-team-preview className="pointer-events-none">
+        {preview.map((item) => {
+          const fontSize = item.fontSize / 10;
+          return (
+            <text key={item.id} x={item.x} y={item.y + fontSize} fill={item.color}
+              style={{ fontFamily: item.fontFamily, fontSize, fontWeight: item.bold ? 700 : 400, fontStyle: item.italic ? "italic" : "normal", textDecoration: item.underline ? "underline" : "none" }}
+              textAnchor={item.align === "left" ? "start" : item.align === "center" ? "middle" : "end"}>
+              {item.text.split("\n").map((line, index) => <tspan key={index} x={item.x} dy={index ? fontSize * 1.15 : 0}>{line || " "}</tspan>)}
+            </text>
+          );
+        })}
+      </g>
+    );
+  }
+
   return (
     <g data-text-workspace>
       {tool === "texto" && <rect {...bounds} fill="transparent" onPointerDown={addText} />}
@@ -1147,6 +1168,11 @@ function Index() {
   const [roster, setRoster] = useState<Player[]>([]);
   const [teamOpen, setTeamOpen] = useState(false);
   const rosterLoaded = useRef(false);
+  const [teamView, setTeamView] = useState<{ id: string; prev: Size } | null>(null);
+  const [fontsTick, setFontsTick] = useState(0);
+  useEffect(() => {
+    void fontsReady().then(() => setFontsTick((t) => t + 1));
+  }, []);
   useEffect(() => {
     try {
       setRoster(sanitizeRoster(JSON.parse(localStorage.getItem(LS_TEAM) ?? "[]")));
@@ -2019,6 +2045,42 @@ function Index() {
     setSelLayer(null);
     setTool("forma");
   };
+
+  /* ---------- Pré-visualização do jogador (somente leitura, fora do desfazer) ---------- */
+  const viewPlayer = teamView ? roster.find((p) => p.id === teamView.id) ?? null : null;
+  const playerSizeOk = (p: Player) => sizeIdsForGarment(clothingType).includes(p.tamanho);
+  const startTeamView = (id: string) => {
+    const p = roster.find((x) => x.id === id);
+    if (!p || !playerSizeOk(p)) return;
+    setSelText(null);
+    setTeamView((cur) => ({ id, prev: cur?.prev ?? size }));
+    setSize(p.tamanho);
+  };
+  const exitTeamView = () => {
+    if (teamView) setSize(teamView.prev);
+    setTeamView(null);
+  };
+  const stepPlayer = (dir: 1 | -1) => {
+    const list = roster.filter(playerSizeOk);
+    if (!list.length || !teamView) return;
+    const i = list.findIndex((p) => p.id === teamView.id);
+    startTeamView(list[(i + dir + list.length) % list.length]!.id);
+  };
+  useEffect(() => {
+    if (teamView && (!viewPlayer || !playerSizeOk(viewPlayer))) exitTeamView();
+    else if (viewPlayer && size !== viewPlayer.tamanho) setSize(viewPlayer.tamanho);
+  }, [viewPlayer?.tamanho, viewPlayer?.id, clothingType]);
+  const teamPreviewTexts = useMemo<TextElement[] | null>(() => {
+    if (!viewPlayer) return null;
+    const { sx, sy } = teamScale(table, mother, viewPlayer.tamanho, view);
+    const out: TextElement[] = [];
+    for (const t of texts[view]) {
+      const value = t.field === "nome" ? viewPlayer.nome : t.field === "numero" ? viewPlayer.numero : null;
+      const r = resolveTeamText(t, { value, sx, sy, measure: measureText });
+      if (r && r.text.trim()) out.push({ ...t, ...r });
+    }
+    return out;
+  }, [viewPlayer, table, mother, view, texts, fontsTick]);
 
   const selTextEl = selText ? texts[view].find((t) => t.id === selText) ?? null : null;
   const colorKind: "vetor" | "texto" | "imagem" | "molde" =
@@ -2910,6 +2972,8 @@ function Index() {
                 setRoster={setRoster}
                 options={sizesForGarment(clothingType)}
                 garment={clothingType}
+                viewingId={teamView?.id ?? null}
+                onView={(p) => startTeamView(p.id)}
                 labelOf={(s) => sizesForGarment(clothingType).find((o) => o.id === s)?.label ?? s}
               />
               {(art || hasClipped || (selObj && !selObj.clipped)) && ((() => {
@@ -3036,7 +3100,18 @@ function Index() {
                   texts={texts}
                   onTextsChange={setTexts}
                   onCheckpoint={checkpoint}
+                  teamPreview={teamPreviewTexts}
                 />
+                {viewPlayer && (
+                  <div className="absolute top-3 left-1/2 z-30 -translate-x-1/2 flex items-center gap-1.5 rounded-md border border-cyan bg-panel px-2 py-1 text-xs shadow" role="status">
+                    <button onClick={() => stepPlayer(-1)} aria-label="Jogador anterior" className="p-1 rounded hover:bg-muted"><ChevronLeft className="size-3.5" /></button>
+                    <span className="font-medium text-foreground">
+                      Visualizando: {viewPlayer.numero || "—"} · {viewPlayer.nome || "(sem nome)"} ({sizesForGarment(clothingType).find((o) => o.id === viewPlayer.tamanho)?.label ?? viewPlayer.tamanho})
+                    </span>
+                    <button onClick={() => stepPlayer(1)} aria-label="Próximo jogador" className="p-1 rounded hover:bg-muted"><ChevronRight className="size-3.5" /></button>
+                    <button onClick={exitTeamView} className="ml-1 px-2 py-0.5 rounded bg-cyan text-primary-foreground hover:bg-cyan/90">Sair</button>
+                  </div>
+                )}
                 <div id="text-panel-host" className="pointer-events-none absolute inset-0 z-20" />
                 {(tool === "caneta" || tool === "formas") && <DrawOptionsPanel mode={tool} opts={drawOpts} onChange={setDrawOpts} />}
                 {showPcEditor && pcTarget && (
@@ -3535,7 +3610,9 @@ function PatternCanvas({
   texts,
   onTextsChange,
   onCheckpoint,
+  teamPreview = null,
 }: {
+  teamPreview?: TextElement[] | null;
   texts: TextsByView;
   onTextsChange: (t: TextsByView) => void;
   onCheckpoint: (key: string) => void;
@@ -4522,7 +4599,7 @@ function PatternCanvas({
       })()}
 
 
-      <TextWorkspace tool={tool} view={view} svgPoint={svgPoint} bounds={{ x: vx, y: vy, width: vw, height: vh }} texts={texts} setTexts={onTextsChange} checkpoint={onCheckpoint} selectedId={selText} onSelect={onSelText} unit={unit} selectionBox={selectionBox} />
+      <TextWorkspace tool={tool} view={view} svgPoint={svgPoint} bounds={{ x: vx, y: vy, width: vw, height: vh }} texts={texts} setTexts={onTextsChange} checkpoint={onCheckpoint} selectedId={selText} onSelect={onSelText} unit={unit} selectionBox={selectionBox} preview={teamPreview} />
 
       {/* Fita métrica */}
       {tape.a && tapeEnd && (
