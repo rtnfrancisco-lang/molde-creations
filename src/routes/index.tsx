@@ -56,6 +56,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { TeamPanel } from "@/components/TeamPanel";
 import { sanitizeRoster, type Player } from "@/lib/roster";
 import { teamScale, resolveTeamText, measureText, fontsReady } from "@/lib/team-text";
+import { teamFileName, uniqueName } from "@/lib/team-export";
 import { buildProjectFile, parseProjectFile, nameFromFile, PROJECT_EXT } from "@/lib/project-file";
 import { hasFsAccess, pickSaveHandle, writeHandle, downloadText, openProjectFile, isAbort, type FileHandle } from "@/lib/file-access";
 import {
@@ -733,9 +734,15 @@ const escXml = (v: string) =>
   v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 
 /* Textos para exportação: mesmo desenho do canvas (cm, x centrado em 0). */
-const textMarkup = (items: TextElement[]) =>
+type TextResolve = (t: TextElement) => { text: string; x: number; y: number; fontSize: number } | null;
+const textMarkup = (items: TextElement[], opts?: { resolve?: TextResolve }) =>
   items
-    .filter((t) => t.text.trim().length > 0)
+    .map((t) => {
+      if (!opts?.resolve) return t;
+      const r = opts.resolve(t);
+      return r ? { ...t, ...r } : null;
+    })
+    .filter((t): t is TextElement => !!t && t.text.trim().length > 0)
     .map((t) => {
       const fs = t.fontSize / 10;
       const anchor = t.align === "left" ? "start" : t.align === "center" ? "middle" : "end";
@@ -2383,7 +2390,10 @@ function Index() {
     return { W, H, pad, cmW: W + PLOTTER_MARGIN * 2 + pad * 2, cmH: H + PLOTTER_MARGIN * 2 + pad * 2 };
   };
 
-  const buildPlotterSvg = (o: { hideTechnical: boolean; crop: boolean }) => {
+  const buildPlotterSvgFor = (o: { view: View; size: Size; hideTechnical: boolean; crop: boolean; player?: Player }) => {
+    const { view, size } = o;
+    const art = artworks[view];
+    const curLayers = layers[view];
     const isBody = view === "frente" || view === "costas";
     const mm = table[size];
     const W = isBody ? mm.bodyWidth : mm.sleeveWidth;
@@ -2438,7 +2448,7 @@ function Index() {
     /* Rótulo técnico fixo de produção: [Tamanho] [Parte] no canto superior
        esquerdo, por dentro da borda. Fica embutido no arquivo mesmo quando as
        linhas técnicas são escondidas. */
-    const label = `<text x="${(x0 + 0.6).toFixed(2)}" y="${(y0 + 1.3).toFixed(2)}" font-family="monospace" font-size="1" fill="#111827">${techLabel(clothingType, size, view)}</text>`;
+    const label = `<text x="${(x0 + 0.6).toFixed(2)}" y="${(y0 + 1.3).toFixed(2)}" font-family="monospace" font-size="1" fill="#111827">${escXml(techLabel(clothingType, size, view) + (o.player ? ` · Nº ${o.player.numero}${o.player.nome ? " " + o.player.nome : ""}` : ""))}</text>`;
 
     /* A janela de exportação é recortada exatamente nos limites do quadro. */
     const svg =
@@ -2447,13 +2457,47 @@ function Index() {
       body +
       img +
       objs +
-      textMarkup(texts[view]) +
+      textMarkup(texts[view], o.player ? { resolve: teamResolver(o.player, size, view) } : undefined) +
       tech +
       outline +
       frame +
       label +
       `</svg>`;
     return { svg, cmW, cmH };
+  };
+
+  const buildPlotterSvg = (o: { hideTechnical: boolean; crop: boolean }) => buildPlotterSvgFor({ ...o, view, size });
+
+  const teamResolver = (p: Player, sz: Size, v: View): TextResolve => {
+    const { sx, sy } = teamScale(table, mother, sz, v);
+    return (t) => {
+      const value = t.field === "nome" ? p.nome : t.field === "numero" ? p.numero : null;
+      return resolveTeamText(t, { value, sx, sy, measure: measureText });
+    };
+  };
+
+  const exportTeam = async (opt: { players: Player[]; views: View[]; hideTechnical: boolean; template: string }, onProgress: (done: number, total: number) => void) => {
+    await fontsReady();
+    const { zipSync, strToU8 } = await import("fflate");
+    const files: Record<string, Uint8Array> = {};
+    const used = new Set<string>();
+    let n = 0;
+    for (const [i, p] of opt.players.entries()) {
+      for (const v of opt.views) {
+        const sz = p.tamanho as Size;
+        const { svg } = buildPlotterSvgFor({ view: v, size: sz, hideTechnical: opt.hideTechnical, crop: true, player: p });
+        const name = uniqueName(teamFileName(opt.template, { numero: p.numero, nome: p.nome, tamanho: sizeLabel(clothingType, sz), vista: v }), used);
+        files[name] = strToU8(svg);
+        n++;
+      }
+      onProgress(i + 1, opt.players.length);
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    const zip = zipSync(files, { level: 6 });
+    const d = new Date();
+    const pad = (x: number) => String(x).padStart(2, "0");
+    downloadBlob(new Blob([zip as BlobPart], { type: "application/zip" }), `Time_${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.zip`);
+    return { players: opt.players.length, files: n };
   };
 
   const downloadBlob = (blob: Blob, filename: string) => {
@@ -2974,6 +3018,8 @@ function Index() {
                 garment={clothingType}
                 viewingId={teamView?.id ?? null}
                 onView={(p) => startTeamView(p.id)}
+                teamViews={(["frente", "costas", "mangaEsq", "mangaDir"] as View[]).filter((v) => texts[v].some((t) => t.field === "nome" || t.field === "numero"))}
+                onExportTeam={exportTeam}
                 labelOf={(s) => sizesForGarment(clothingType).find((o) => o.id === s)?.label ?? s}
               />
               {(art || hasClipped || (selObj && !selObj.clipped)) && ((() => {

@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { ArrowDownWideNarrow, ClipboardPaste, Download, Plus, Trash2, Upload, Users, X, AlertTriangle, Eye } from "lucide-react";
+import { ArrowDownWideNarrow, ClipboardPaste, Download, Plus, Trash2, Upload, Users, X, AlertTriangle, Eye, PackageOpen } from "lucide-react";
 import {
   newPlayerId,
   parseRoster,
@@ -12,6 +12,11 @@ import {
   type RosterSize,
   type RosterSizeOption,
 } from "@/lib/roster";
+import { DEFAULT_TEAM_TEMPLATE } from "@/lib/team-export";
+
+export type TeamExportView = "frente" | "costas" | "mangaEsq" | "mangaDir";
+const VIEW_LABEL: Record<TeamExportView, string> = { frente: "Frente", costas: "Costas", mangaEsq: "Manga esquerda", mangaDir: "Manga direita" };
+export type TeamExportOpts = { players: Player[]; views: TeamExportView[]; hideTechnical: boolean; template: string };
 
 type Props = {
   open: boolean;
@@ -23,9 +28,11 @@ type Props = {
   labelOf: (s: RosterSize) => string;
   viewingId?: string | null;
   onView?: (p: Player) => void;
+  teamViews?: TeamExportView[];
+  onExportTeam?: (o: TeamExportOpts, onProgress: (done: number, total: number) => void) => Promise<{ players: number; files: number }>;
 };
 
-export function TeamPanel({ open, onClose, roster, setRoster, options, garment, labelOf, viewingId, onView }: Props) {
+export function TeamPanel({ open, onClose, roster, setRoster, options, garment, labelOf, viewingId, onView, teamViews = [], onExportTeam }: Props) {
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const csvRef = useRef<HTMLInputElement>(null);
@@ -36,7 +43,37 @@ export function TeamPanel({ open, onClose, roster, setRoster, options, garment, 
   const summary = sizeSummary(roster);
   const defaultSize = (options.find((o) => o.id === "M") ?? options[0])?.id ?? "M";
 
+  const [expOpen, setExpOpen] = useState(false);
+  const [expViews, setExpViews] = useState<TeamExportView[]>([]);
+  const [expTech, setExpTech] = useState(true);
+  const [expTpl, setExpTpl] = useState(DEFAULT_TEAM_TEMPLATE);
+  const [expProg, setExpProg] = useState<{ done: number; total: number } | null>(null);
+  const [expMsg, setExpMsg] = useState("");
+
   if (!open) return null;
+
+  const badIds = new Set(Object.entries(issues).filter(([, i]) => i.repetido || i.tamanhoInvalido || i.semNumero).map(([id]) => id));
+  const openExport = () => {
+    setExpViews(teamViews.length ? teamViews : []);
+    setExpMsg("");
+    setExpProg(null);
+    setExpOpen(true);
+  };
+  const runTeamExport = async (skipBad: boolean) => {
+    if (!onExportTeam) return;
+    const players = skipBad ? roster.filter((p) => !badIds.has(p.id)) : roster;
+    if (!players.length || !expViews.length) return;
+    setExpMsg("");
+    setExpProg({ done: 0, total: players.length });
+    try {
+      const r = await onExportTeam({ players, views: expViews, hideTechnical: !expTech, template: expTpl }, (done, total) => setExpProg({ done, total }));
+      setExpMsg(`${r.players} jogador(es) · ${r.files} arquivo(s)`);
+    } catch {
+      setExpMsg("Não foi possível gerar o ZIP.");
+    } finally {
+      setExpProg(null);
+    }
+  };
 
   const update = (id: string, patch: Partial<Player>) => setRoster(roster.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   const add = () => {
@@ -90,6 +127,7 @@ export function TeamPanel({ open, onClose, roster, setRoster, options, garment, 
         <Btn onClick={() => setPasteOpen((v) => !v)}><ClipboardPaste className="size-3.5" /> Colar lista</Btn>
         <Btn onClick={() => csvRef.current?.click()}><Upload className="size-3.5" /> Importar CSV</Btn>
         <Btn onClick={exportCsv} disabled={!roster.length}><Download className="size-3.5" /> Exportar CSV</Btn>
+        <Btn onClick={openExport} disabled={!roster.length || !onExportTeam} primary><PackageOpen className="size-3.5" /> Exportar time</Btn>
         <input
           ref={csvRef}
           type="file"
@@ -102,6 +140,49 @@ export function TeamPanel({ open, onClose, roster, setRoster, options, garment, 
           }}
         />
       </div>
+
+      {expOpen && (
+        <div className="px-4 py-3 border-b border-border space-y-2 bg-muted/40 text-[11px]" data-testid="exportar-time">
+          <div className="flex items-center"><strong className="text-foreground flex-1 text-xs">Exportar time</strong>
+            <button onClick={() => setExpOpen(false)} aria-label="Fechar exportação" className="p-0.5 rounded hover:bg-muted"><X className="size-3.5" /></button></div>
+          {!teamViews.length && (
+            <div className="flex gap-1 text-destructive"><AlertTriangle className="size-3 mt-px shrink-0" />Nenhum texto do desenho está marcado como campo do time (nome ou número). Os arquivos sairão sem nome e número.</div>
+          )}
+          <div>
+            <div className="text-muted-foreground mb-1">Vistas a incluir</div>
+            <div className="grid grid-cols-2 gap-1">
+              {(Object.keys(VIEW_LABEL) as TeamExportView[]).map((v) => (
+                <label key={v} className="flex items-center gap-1.5 text-foreground">
+                  <input type="checkbox" checked={expViews.includes(v)} onChange={(e) => setExpViews(e.target.checked ? [...expViews, v] : expViews.filter((x) => x !== v))} />
+                  {VIEW_LABEL[v]}{teamViews.includes(v) && <span className="text-cyan">•</span>}
+                </label>
+              ))}
+            </div>
+          </div>
+          <label className="flex items-center gap-1.5 text-foreground">
+            <input type="checkbox" checked={expTech} onChange={(e) => setExpTech(e.target.checked)} /> Incluir linhas técnicas
+          </label>
+          <label className="block">
+            <span className="text-muted-foreground">Modelo do nome do arquivo</span>
+            <input value={expTpl} onChange={(e) => setExpTpl(e.target.value)} className="mt-0.5 w-full rounded border border-border bg-background px-1.5 py-1 font-mono text-foreground" />
+          </label>
+          {badIds.size > 0 && (
+            <div className="flex gap-1 text-destructive"><AlertTriangle className="size-3 mt-px shrink-0" />{badIds.size} jogador(es) com número repetido, sem número ou tamanho inexistente em {garment}.</div>
+          )}
+          {expProg && (
+            <div className="h-1.5 rounded bg-border overflow-hidden"><div className="h-full bg-cyan transition-all" style={{ width: `${(expProg.done / expProg.total) * 100}%` }} /></div>
+          )}
+          {expMsg && <div className="text-foreground font-medium" data-testid="resumo-exportacao">{expMsg}</div>}
+          <div className="flex justify-end gap-2">
+            <Btn onClick={() => setExpOpen(false)}>Cancelar</Btn>
+            {badIds.size > 0 ? (
+              <Btn onClick={() => void runTeamExport(true)} disabled={!!expProg || !expViews.length || badIds.size === roster.length} primary>Continuar sem esses jogadores</Btn>
+            ) : (
+              <Btn onClick={() => void runTeamExport(false)} disabled={!!expProg || !expViews.length} primary>{teamViews.length ? "Gerar ZIP" : "Gerar mesmo assim"}</Btn>
+            )}
+          </div>
+        </div>
+      )}
 
       {pasteOpen && (
         <div className="px-4 py-3 border-b border-border space-y-2 bg-muted/40">
