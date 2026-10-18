@@ -733,9 +733,15 @@ const escXml = (v: string) =>
   v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 
 /* Textos para exportação: mesmo desenho do canvas (cm, x centrado em 0). */
-const textMarkup = (items: TextElement[]) =>
+type TextResolve = (t: TextElement) => { text: string; x: number; y: number; fontSize: number } | null;
+const textMarkup = (items: TextElement[], opts?: { resolve?: TextResolve }) =>
   items
-    .filter((t) => t.text.trim().length > 0)
+    .map((t) => {
+      if (!opts?.resolve) return t;
+      const r = opts.resolve(t);
+      return r ? { ...t, ...r } : null;
+    })
+    .filter((t): t is TextElement => !!t && t.text.trim().length > 0)
     .map((t) => {
       const fs = t.fontSize / 10;
       const anchor = t.align === "left" ? "start" : t.align === "center" ? "middle" : "end";
