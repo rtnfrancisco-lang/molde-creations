@@ -1833,12 +1833,6 @@ function Index() {
       setSelPart("estampa");
     }
   };
-  /** Botão "Extrair Arquivo" do painel: tira apenas a estampa. */
-  const pcExtractArt = () => {
-    if (!art || !artClipped) return;
-    commitView("pc-out-art:" + Date.now(), null, { ...art, clipped: false });
-    setSelPart("estampa");
-  };
   /** Extrai tudo (camadas recortadas + estampa) e sai da edição. */
   const pcExtractAll = () => {
     if (!pcHasContent) return;
@@ -1909,7 +1903,7 @@ function Index() {
           w: selClippedLayer.w,
           ratio: selClippedLayer.ratio,
           rot: selClippedLayer.rot ?? 0,
-          init: selClippedLayer.init,
+          ...(selClippedLayer.init ? { init: selClippedLayer.init } : {}),
         }
       : null;
   const pcTargetChange = (next: Artwork) => {
@@ -2682,7 +2676,7 @@ function Index() {
                     features={
                       selClippedLayer
                         ? { flip: false, opacity: false, replace: !!selClippedLayer.src, reset: !!selClippedLayer.init }
-                        : undefined
+                        : {}
                     }
                   />
                 )}
