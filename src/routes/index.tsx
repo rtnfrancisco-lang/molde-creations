@@ -2476,28 +2476,58 @@ function Index() {
     };
   };
 
-  const exportTeam = async (opt: { players: Player[]; views: View[]; hideTechnical: boolean; template: string }, onProgress: (done: number, total: number) => void) => {
+  /** Maior peça (cm) entre os tamanhos dos jogadores × vistas. */
+  const teamMaxPiece = (players: Player[], views: View[]) => {
+    let best = { cmW: 0, cmH: 0 };
+    const seen = new Set<string>();
+    for (const p of players) for (const v of views) {
+      const k = p.tamanho + "|" + v;
+      if (seen.has(k) || !(p.tamanho in table)) continue;
+      seen.add(k);
+      const { cmW, cmH } = buildPlotterSvgFor({ view: v, size: p.tamanho as Size, hideTechnical: true, crop: true });
+      if (cmW * cmH > best.cmW * best.cmH) best = { cmW, cmH };
+    }
+    return best;
+  };
+
+  const exportTeam = async (opt: TeamExportOpts, onProgress: (done: number, total: number) => void, signal: { cancelled: boolean }) => {
     await fontsReady();
-    const { zipSync, strToU8 } = await import("fflate");
+    const { zipSync } = await import("fflate");
     const files: Record<string, Uint8Array> = {};
     const used = new Set<string>();
+    const warnings: string[] = [];
+    const total = opt.players.length * opt.views.length;
     let n = 0;
-    for (const [i, p] of opt.players.entries()) {
+    const ext = TEAM_EXT[opt.format];
+    onProgress(0, total);
+    for (const p of opt.players) {
       for (const v of opt.views) {
+        if (signal.cancelled) return null;
         const sz = p.tamanho as Size;
-        const { svg } = buildPlotterSvgFor({ view: v, size: sz, hideTechnical: opt.hideTechnical, crop: true, player: p });
-        const name = uniqueName(teamFileName(opt.template, { numero: p.numero, nome: p.nome, tamanho: sizeLabel(clothingType, sz), vista: v }), used);
-        files[name] = strToU8(svg);
+        const { svg, cmW, cmH } = buildPlotterSvgFor({ view: v, size: sz, hideTechnical: opt.hideTechnical, crop: true, player: p });
+        const label = sizeLabel(clothingType, sz);
+        const name = uniqueName(teamFileName(opt.template, { numero: p.numero, nome: p.nome, tamanho: label, vista: v }, ext), used);
+        const dpi = fitDpi(cmW, cmH, opt.dpi);
+        if (dpi < opt.dpi) warnings.push(`${label} (${v}) gerado a ${dpi} DPI para caber no navegador`);
+        const pxW = cmToPx(cmW, dpi);
+        const pxH = cmToPx(cmH, dpi);
+        const q = opt.quality / 100;
+        files[name] =
+          opt.format === "pdf"
+            ? await svgToPdf(svg, cmW, cmH, pxW, pxH, q, name)
+            : new Uint8Array(await (await rasterize(svg, pxW, pxH, opt.format === "jpeg" ? "image/jpeg" : "image/png", opt.format === "jpeg" ? q : undefined)).arrayBuffer());
         n++;
+        onProgress(n, total);
+        await new Promise((r) => setTimeout(r, 0));
       }
-      onProgress(i + 1, opt.players.length);
-      await new Promise((r) => setTimeout(r, 0));
     }
-    const zip = zipSync(files, { level: 6 });
+    if (signal.cancelled) return null;
+    const zip = zipSync(files, { level: opt.format === "png" ? 0 : 3 });
+    if (signal.cancelled) return null;
     const d = new Date();
     const pad = (x: number) => String(x).padStart(2, "0");
     downloadBlob(new Blob([zip as BlobPart], { type: "application/zip" }), `Time_${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.zip`);
-    return { players: opt.players.length, files: n };
+    return { players: opt.players.length, files: n, warnings: [...new Set(warnings)] };
   };
 
   const downloadBlob = (blob: Blob, filename: string) => {
@@ -2509,26 +2539,7 @@ function Index() {
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   };
 
-  const rasterizeSvg = (svg: string, pxW: number, pxH: number) =>
-    new Promise<Blob>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = pxW;
-        canvas.height = pxH;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          reject(new Error("canvas"));
-          return;
-        }
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, pxW, pxH);
-        ctx.drawImage(img, 0, 0, pxW, pxH);
-        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("png"))), "image/png");
-      };
-      img.onerror = () => reject(new Error("svg"));
-      img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
-    });
+  const rasterizeSvg = (svg: string, pxW: number, pxH: number) => rasterize(svg, pxW, pxH, "image/png");
 
   const printVectorPdf = (svg: string, cmW: number, cmH: number, name: string) => {
     const win = window.open("", "_blank", "width=900,height=720");
