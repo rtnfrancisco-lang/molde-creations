@@ -2540,17 +2540,25 @@ function Index() {
               >
                 <ImagePlus className="size-3.5" /> Carregar Estampa
               </button>
-              {(art || hasClipped) && (
+              {(art || hasClipped || (selObj && !selObj.clipped)) && (() => {
+                const freeSel: "layer" | "art" | null = !pcEdit && selObj && !selObj.clipped ? "layer" : !pcEdit && selPart === "estampa" && !!art && art.clipped === false ? "art" : null;
+                return (
                 <>
                   <button
-                    onClick={pcState === "free" ? pcApply : pcState === "locked" ? pcEditStart : pcApply}
+                    onClick={() => {
+                      if (pcEdit) return pcApply();
+                      if (freeSel === "layer" && selObj) return layerToPowerClip(selObj.id);
+                      if (freeSel === "art") return pcApply();
+                      if (pcHasContent) return pcEditStart();
+                      if (art && art.clipped === false) return pcApply();
+                    }}
                     className={
                       "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap border " +
-                      (pcState === "editing" ? "border-amber/60 text-amber bg-amber/10" : "border-line text-muted-foreground hover:text-foreground")
+                      (pcEdit ? "border-amber/60 text-amber bg-amber/10" : "border-line text-muted-foreground hover:text-foreground")
                     }
                   >
                     <Crop className="size-3.5" />
-                    {pcState === "free" ? "Aplicar PowerClip" : pcState === "locked" ? "Editar Conteúdo do PowerClip" : "Concluir Edição"}
+                    {pcEdit ? "Concluir Edição" : freeSel ? "Aplicar PowerClip" : pcHasContent ? "Editar Conteúdo do PowerClip" : "Aplicar PowerClip"}
                   </button>
                   {!!art && <button
                     onClick={() => setArt(null)}
