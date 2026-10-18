@@ -1415,6 +1415,8 @@ function Index() {
   }, [view]);
 
   const selectLayer = (id: string | null) => {
+    // Fora de "Editar Conteúdo do PowerClip", camadas recortadas não são selecionáveis.
+    if (id && !pcEdit && layers[view].find((l) => l.id === id)?.clipped) return;
     setSelLayer(id);
     if (id) setSelPart(null);
   };
@@ -1555,24 +1557,8 @@ function Index() {
     setViewLayers(curLayers.map((l) => (l.id === id ? { ...l, hidden: !l.hidden } : l)), "hide:" + Date.now());
 
   const layerToPowerClip = (id: string) => {
-    const l = curLayers.find((x) => x.id === id);
-    if (!l) return;
-    // Vetor: amplia a área com meia espessura do contorno para o traço não ser cortado.
-    const pad = l.kind === "vetor" ? (Math.max(0, ...(l.paths ?? []).map((p) => (p.stroke ? p.sw : 0))) * 1000) / 2 : 0;
-    const src = l.kind === "vetor" ? vectorDataUrl(l, pad) : l.src!;
-    const k = (1000 + 2 * pad) / 1000;
-    const w2 = l.w * k;
-    const ratio2 = (1000 * l.ratio + 2 * pad) / (1000 + 2 * pad);
-    const rest = curLayers.filter((x) => x.id !== id);
-    if (art)
-      rest.unshift({ id: crypto.randomUUID(), name: "Estampa anterior", kind: "imagem", src: art.src, cx: art.cx, cy: art.cy, w: art.w, ratio: art.ratio, rot: art.rot ?? 0 });
-    checkpoint("pc-layer:" + Date.now());
-    const nl = { ...layers, [view]: rest };
-    const na = { ...artworks, [view]: { src, name: l.name, cx: l.cx, cy: l.cy, w: w2, ratio: ratio2, rot: l.rot, clipped: true, init: { cx: l.cx, cy: l.cy, w: w2, ratio: ratio2, rot: l.rot ?? 0 }, pre: { cx: l.cx, cy: l.cy, w: w2, rot: l.rot ?? 0 } } };
-    setLayers(nl);
-    setArtworks(na);
-    saveLS(LS_LAYERS, nl);
-    saveLS(LS_ART, na);
+    if (!curLayers.some((x) => x.id === id)) return;
+    setViewLayers(curLayers.map((l) => (l.id === id ? { ...l, clipped: true } : l)), "pc-layer:" + Date.now());
     setSelLayer(null);
     setSize(mother);
     setPcEdit(false);
@@ -1669,7 +1655,13 @@ function Index() {
       });
     setPcEdit(false);
     if (selPart === "estampa") setSelPart(null);
+    if (selLayer && curLayers.find((l) => l.id === selLayer)?.clipped) setSelLayer(null);
   };
+  const hasClipped = curLayers.some((l) => l.clipped);
+  const pcHasContent = (!!art && art.clipped !== false) || hasClipped;
+  useEffect(() => {
+    if (!pcEdit && selLayer && layers[view].find((l) => l.id === selLayer)?.clipped) setSelLayer(null);
+  }, [pcEdit, selLayer, layers, view]);
   // Ao sair da edição do PowerClip, limpa qualquer seleção fantasma da arte recortada.
   useEffect(() => {
     if (!pcEdit && selPart === "estampa" && art && art.clipped !== false) setSelPart(null);
@@ -1683,6 +1675,18 @@ function Index() {
   const pcExtract = () => {
     if (art) setArt({ ...art, clipped: false });
     setPcEdit(false);
+  };
+  /** Extrai do PowerClip: em edição com camada recortada selecionada, só ela; senão tudo. */
+  const pcExtractSmart = () => {
+    const one = pcEdit && selLayer ? curLayers.find((l) => l.id === selLayer && l.clipped) : undefined;
+    if (one) {
+      setViewLayers(curLayers.map((l) => (l.id === one.id ? { ...l, clipped: false } : l)), "pc-out:" + Date.now());
+      return;
+    }
+    if (hasClipped) setViewLayers(curLayers.map((l) => (l.clipped ? { ...l, clipped: false } : l)), "pc-out-all:" + Date.now());
+    if (art && art.clipped !== false) setArt({ ...art, clipped: false });
+    setPcEdit(false);
+    setSelLayer(null);
   };
   const pcRemove = () => {
     if (art) setArt({ ...art, ...(art.pre ?? {}), clipped: false });
@@ -1726,7 +1730,8 @@ function Index() {
       const W = isBody ? m.bodyWidth : m.sleeveWidth;
       const H = isBody ? m.bodyHeight : m.sleeveHeight;
       const path = buildPath(shapes[view], W, H);
-      let img = "";
+      const fbC = pathBounds(offsetPathD(path, BLEED_OFFSET_CM, TECHNICAL_OFFSET_OPTIONS)) ?? { minX: -W / 2 - PLOTTER_MARGIN, minY: -PLOTTER_MARGIN, maxX: W / 2 + PLOTTER_MARGIN, maxY: H + PLOTTER_MARGIN };
+      let img = `<clipPath id="c"><rect x="${fbC.minX}" y="${fbC.minY}" width="${fbC.maxX - fbC.minX}" height="${fbC.maxY - fbC.minY}"/></clipPath>`;
       if (art) {
         const aw = art.w * W;
         const ah = aw * art.ratio;
@@ -1734,9 +1739,10 @@ function Index() {
         const y = art.cy * H - ah / 2;
         const im = `<image href="${art.src}" x="${x}" y="${y}" width="${aw}" height="${ah}" transform="${artTransform(art, x + aw / 2, y + ah / 2)}" opacity="${art.opacity ?? 1}" preserveAspectRatio="none"/>`;
         const fb = pathBounds(offsetPathD(path, BLEED_OFFSET_CM, TECHNICAL_OFFSET_OPTIONS)) ?? { minX: -W / 2 - PLOTTER_MARGIN, minY: -PLOTTER_MARGIN, maxX: W / 2 + PLOTTER_MARGIN, maxY: H + PLOTTER_MARGIN };
-        img = `<clipPath id="c"><rect x="${fb.minX}" y="${fb.minY}" width="${fb.maxX - fb.minX}" height="${fb.maxY - fb.minY}"/></clipPath>${art.clipped === false ? im : `<g clip-path="url(#c)">${im}</g>`}`;
+        void fb;
+        img += art.clipped === false ? im : `<g clip-path="url(#c)">${im}</g>`;
       }
-      const objs = curLayers.map((l) => layerMarkup(l, W, H)).join("");
+      const objs = curLayers.map((l) => (l.clipped ? `<g clip-path="url(#c)">${layerMarkup(l, W, H)}</g>` : layerMarkup(l, W, H))).join("");
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W + 2}cm" height="${H + 2}cm" viewBox="${-W / 2 - 1} -1 ${W + 2} ${H + 2}"><path d="${path}" fill="${st.fill ?? "none"}"/>${img}${objs}${textMarkup(texts[view])}<path d="${path}" fill="none" stroke="${st.stroke ?? "#000"}" stroke-width="0.05"/></svg>`;
       const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
       setTimeout(() => {
@@ -1790,7 +1796,7 @@ function Index() {
       img = art.clipped === false ? im : `<g clip-path="url(#moldeClip)">${im}</g>`;
     }
 
-    const objs = curLayers.map((l) => layerMarkup(l, W, H)).join("");
+    const objs = curLayers.map((l) => (l.clipped ? `<g clip-path="url(#moldeClip)">${layerMarkup(l, W, H)}</g>` : layerMarkup(l, W, H))).join("");
     const body = `<path d="${path}" fill="${st.fill ?? "none"}"/>`;
     const outline = o.hideTechnical
       ? ""
@@ -2488,6 +2494,7 @@ function Index() {
                             <span className={"flex-1 truncate " + (l.hidden ? "opacity-40" : "")} title={l.name}>
                               {l.name}
                             </span>
+                            {l.clipped && <span className="shrink-0 rounded bg-cyan/15 px-1 text-[9px] font-mono uppercase text-cyan">PowerClip</span>}
                             {(
                               [
                                 [l.hidden ? EyeOff : Eye, l.hidden ? "Mostrar" : "Ocultar", () => toggleHidden(l.id)],
@@ -2551,14 +2558,14 @@ function Index() {
                   {
                     title: "PowerClip",
                     items: [
-                      selObj
+                      selObj && !selObj.clipped
                         ? { label: "Inserir no PowerClip", run: () => setPcPick(selObj.id) }
                         : pcState === "free"
                           ? { label: "Inserir no PowerClip", run: () => { setSelPart("estampa"); setTimeout(() => setPcPick("art"), 0); } }
                           : null,
-                      pcState === "locked" ? { label: "Editar Conteúdo do PowerClip", run: pcEditStart } : null,
-                      pcState === "editing" ? { label: "Concluir Edição", run: pcApply } : null,
-                      pcState === "locked" || pcState === "editing" ? { label: "Extrair Conteúdo", run: pcExtract } : null,
+                      pcHasContent && !pcEdit ? { label: "Editar Conteúdo do PowerClip", run: pcEditStart } : null,
+                      pcEdit ? { label: "Concluir Edição", run: pcApply } : null,
+                      pcHasContent ? { label: "Extrair Conteúdo", run: pcExtractSmart } : null,
                     ].filter((i): i is CtxItem => !!i),
                   },
                   {
@@ -3427,6 +3434,20 @@ function PatternCanvas({
     </>
   );
 
+  const content = (l: Layer, aw: number, ah: number, hit: boolean) =>
+    l.src ? (
+      <image href={l.src} x={-aw / 2} y={-ah / 2} width={aw} height={ah} preserveAspectRatio="none" />
+    ) : (
+      <>
+        {hit && <rect x={-aw / 2} y={-ah / 2} width={aw} height={ah} fill="transparent" />}
+        <g transform={`translate(0 ${-ah / 2})`}>
+          {l.paths!.map((p, pi) => (
+            <path key={pi} d={layerPathD(p, aw, ah)} fill={p.fill ?? "none"} stroke={p.stroke ?? "none"} strokeWidth={p.sw * aw} fillRule={p.rule} />
+          ))}
+        </g>
+      </>
+    );
+
   const square = (p: Pt, key: string | number, cls: string, onDown?: (e: React.PointerEvent) => void) => (
     <rect
       key={key}
@@ -3495,6 +3516,10 @@ function PatternCanvas({
         }}
       />
 
+      {/* PowerClip: a máscara é sempre o retângulo da Plotter. */}
+      <clipPath id="outline-clip">
+        <rect x={frame.x} y={frame.y} width={frame.w} height={frame.h} />
+      </clipPath>
       {artwork && (() => {
         const aw = artwork.w * W;
         const ah = aw * artwork.ratio;
@@ -3523,9 +3548,6 @@ function PatternCanvas({
         return (
           <g>
             {/* PowerClip: a máscara é o retângulo da Plotter, nunca as linhas do molde. */}
-            <clipPath id="outline-clip">
-              <rect x={frame.x} y={frame.y} width={frame.w} height={frame.h} />
-            </clipPath>
             {(!clipped || editingNow) && (
               <image
                 {...imgProps}
@@ -3555,12 +3577,12 @@ function PatternCanvas({
         );
       })()}
 
-      {/* Objetos importados (camadas) */}
+      {/* Objetos importados (camadas); recortadas ficam dentro do PowerClip */}
       {layers.map((l) => {
         if (l.hidden) return null;
         const { c, aw, ah } = lg(l);
         const sel = l.id === selLayer;
-        const pickable = tool === "selecao" || tool === "forma";
+        const pickable = (tool === "selecao" || tool === "forma") && (!l.clipped || pcEdit);
         const down = (e: React.PointerEvent) => {
           if (!pickable && e.button !== 2) return;
           e.stopPropagation();
@@ -3570,24 +3592,20 @@ function PatternCanvas({
           setDrag({ k: "lmove", start: toNorm(svgPoint(e)), orig: l });
         };
         return (
-          <g key={l.id} transform={`translate(${c.x} ${c.y}) rotate(${l.rot})`}>
+          <g key={l.id} clipPath={l.clipped && !pcEdit ? "url(#outline-clip)" : undefined}>
+          {l.clipped && pcEdit && (
+            <g clipPath="url(#outline-clip)" style={{ pointerEvents: "none" }}>
+              <g transform={`translate(${c.x} ${c.y}) rotate(${l.rot})`}>{content(l, aw, ah, false)}</g>
+            </g>
+          )}
+          <g transform={`translate(${c.x} ${c.y}) rotate(${l.rot})`}>
             <g
-              className={tool === "selecao" ? "cursor-move" : ""}
+              className={tool === "selecao" && pickable ? "cursor-move" : ""}
               style={{ pointerEvents: pickable ? "all" : "none" }}
+              opacity={l.clipped && pcEdit ? 0.3 : undefined}
               onPointerDown={down}
             >
-              {l.src ? (
-                <image href={l.src} x={-aw / 2} y={-ah / 2} width={aw} height={ah} preserveAspectRatio="none" />
-              ) : (
-                <>
-                  <rect x={-aw / 2} y={-ah / 2} width={aw} height={ah} fill="transparent" />
-                  <g transform={`translate(0 ${-ah / 2})`}>
-                    {l.paths!.map((p, pi) => (
-                      <path key={pi} d={layerPathD(p, aw, ah)} fill={p.fill ?? "none"} stroke={p.stroke ?? "none"} strokeWidth={p.sw * aw} fillRule={p.rule} />
-                    ))}
-                  </g>
-                </>
-              )}
+              {content(l, aw, ah, true)}
             </g>
             {sel && tool !== "selecao" && (
               <rect x={-aw / 2} y={-ah / 2} width={aw} height={ah} className="fill-none stroke-amber pointer-events-none" strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
@@ -3653,6 +3671,7 @@ function PatternCanvas({
                 )}
               </g>
             )}
+          </g>
           </g>
         );
       })}

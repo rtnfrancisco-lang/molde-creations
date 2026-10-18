@@ -16,6 +16,8 @@ export type Layer = {
   ratio: number;
   rot: number;
   hidden?: boolean;
+  /** Dentro do PowerClip: recortada pelo retângulo da plotter. */
+  clipped?: boolean;
 };
 
 /** Converte nós normalizados (0..1) em um path SVG com largura w e altura h (x centrado). */
