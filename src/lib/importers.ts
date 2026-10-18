@@ -18,6 +18,8 @@ export type Layer = {
   hidden?: boolean;
   /** Dentro do PowerClip: recortada pelo retângulo da plotter. */
   clipped?: boolean;
+  /** Geometria ao entrar no PowerClip (para "Redefinir Posição e Tamanho"). */
+  init?: { cx: number; cy: number; w: number; ratio: number; rot: number };
 };
 
 /** Converte nós normalizados (0..1) em um path SVG com largura w e altura h (x centrado). */

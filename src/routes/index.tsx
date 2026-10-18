@@ -1678,7 +1678,12 @@ function Index() {
 
   const layerToPowerClip = (id: string) => {
     if (!curLayers.some((x) => x.id === id)) return;
-    setViewLayers(curLayers.map((l) => (l.id === id ? { ...l, clipped: true } : l)), "pc-layer:" + Date.now());
+    setViewLayers(
+      curLayers.map((l) =>
+        l.id === id ? { ...l, clipped: true, init: { cx: l.cx, cy: l.cy, w: l.w, ratio: l.ratio, rot: l.rot ?? 0 } } : l,
+      ),
+      "pc-layer:" + Date.now(),
+    );
     setSelLayer(null);
     setSize(mother);
     setPcEdit(false);
@@ -1766,7 +1771,8 @@ function Index() {
               }
             : null;
   const pcApply = () => {
-    if (art)
+    // Só aplica (recorta) a estampa fora da edição; "Concluir Edição" não recorta itens extraídos.
+    if (art && !pcEdit && art.clipped === false)
       setArt({
         ...art,
         clipped: true,
@@ -1827,12 +1833,6 @@ function Index() {
       setSelPart("estampa");
     }
   };
-  /** Botão "Extrair Arquivo" do painel: tira apenas a estampa. */
-  const pcExtractArt = () => {
-    if (!art || !artClipped) return;
-    commitView("pc-out-art:" + Date.now(), null, { ...art, clipped: false });
-    setSelPart("estampa");
-  };
   /** Extrai tudo (camadas recortadas + estampa) e sai da edição. */
   const pcExtractAll = () => {
     if (!pcHasContent) return;
@@ -1878,10 +1878,47 @@ function Index() {
     return false;
   };
   deleteSelectionRef.current = () => deleteSelection(false);
+  /** "Remover do PowerClip" do painel: só o item selecionado, sem sair da edição. */
   const pcRemove = () => {
-    if (art) setArt({ ...art, ...(art.pre ?? {}), clipped: false });
-    setPcEdit(false);
-    setSelPart("estampa");
+    if (selClippedLayer) {
+      const id = selClippedLayer.id;
+      commitView("pc-rm:" + Date.now(), curLayers.map((l) => (l.id === id ? { ...l, clipped: false } : l)), undefined);
+      setSelLayer(id);
+      return;
+    }
+    if (art && artClipped) {
+      commitView("pc-rm-art:" + Date.now(), null, { ...art, ...(art.pre ?? {}), clipped: false });
+      setSelPart("estampa");
+    }
+  };
+  /** Item recortado selecionado, adaptado para o painel Editor do PowerClip. */
+  const pcTarget: Artwork | null = selClippedArt && art
+    ? art
+    : selClippedLayer
+      ? {
+          src: selClippedLayer.src ?? vectorDataUrl(selClippedLayer),
+          name: selClippedLayer.name,
+          cx: selClippedLayer.cx,
+          cy: selClippedLayer.cy,
+          w: selClippedLayer.w,
+          ratio: selClippedLayer.ratio,
+          rot: selClippedLayer.rot ?? 0,
+          ...(selClippedLayer.init ? { init: selClippedLayer.init } : {}),
+        }
+      : null;
+  const pcTargetChange = (next: Artwork) => {
+    if (selClippedArt) return setArt(next);
+    const l = selClippedLayer;
+    if (!l) return;
+    const isImg = !!l.src;
+    setViewLayers(
+      curLayers.map((x) =>
+        x.id === l.id
+          ? { ...x, cx: next.cx, cy: next.cy, w: next.w, ratio: next.ratio, rot: next.rot ?? 0, ...(isImg ? { src: next.src, name: next.name ?? x.name } : {}) }
+          : x,
+      ),
+      "pc-edit:" + l.id,
+    );
   };
   const pcFrame = (() => {
     const b = pathBounds(offsetPathD(buildPath(shapes[view], pieceW, pieceH), BLEED_OFFSET_CM, TECHNICAL_OFFSET_OPTIONS)) ?? {
@@ -1890,8 +1927,9 @@ function Index() {
     return { x: b.minX, y: b.minY, w: b.maxX - b.minX, h: b.maxY - b.minY };
   })();
   const pcFileBase = `MOLDE_${partLabel(view).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, "_")}_TAMANHO_${size}`;
-  const showPcEditor = tool === "selecao" && !!art && art.clipped !== false && pcEdit && size === mother;
-  const pcState = !art ? "none" : art.clipped === false ? "free" : pcEdit ? "editing" : "locked";
+  const showPcEditor = tool === "selecao" && pcEdit && size === mother && !!pcTarget;
+  const pcState = pcEdit ? "editing" : pcHasContent ? "locked" : art ? "free" : "none";
+  const artFree = !!art && art.clipped === false;
 
   const onUpload = (file: File) => {
     const reader = new FileReader();
@@ -2502,7 +2540,7 @@ function Index() {
               >
                 <ImagePlus className="size-3.5" /> Carregar Estampa
               </button>
-              {art && (
+              {(art || hasClipped) && (
                 <>
                   <button
                     onClick={pcState === "free" ? pcApply : pcState === "locked" ? pcEditStart : pcApply}
@@ -2514,13 +2552,13 @@ function Index() {
                     <Crop className="size-3.5" />
                     {pcState === "free" ? "Aplicar PowerClip" : pcState === "locked" ? "Editar Conteúdo do PowerClip" : "Concluir Edição"}
                   </button>
-                  <button
+                  {!!art && <button
                     onClick={() => setArt(null)}
                     aria-label="Remover estampa"
                     className="p-1.5 rounded-md text-muted-foreground hover:text-destructive"
                   >
                     <Trash2 className="size-3.5" />
-                  </button>
+                  </button>}
                 </>
               )}
               <button
@@ -2620,17 +2658,26 @@ function Index() {
                 />
                 <div id="text-panel-host" className="pointer-events-none absolute inset-0 z-20" />
                 {(tool === "caneta" || tool === "formas") && <DrawOptionsPanel mode={tool} opts={drawOpts} onChange={setDrawOpts} />}
-                {showPcEditor && art && (
+                {showPcEditor && pcTarget && (
                   <PowerClipEditor
-                    art={art}
+                    key={selClippedLayer?.id ?? "estampa"}
+                    art={pcTarget}
                     frame={pcFrame}
                     W={pieceW}
                     H={pieceH}
                     fileBase={pcFileBase}
-                    onChange={setArt}
+                    onChange={pcTargetChange}
                     onRemove={pcRemove}
-                    onExtract={pcExtractArt}
-                    onClose={() => setPcEdit(false)}
+                    onExtract={pcExtractSelected}
+                    onClose={() => {
+                      setSelLayer(null);
+                      setSelPart(null);
+                    }}
+                    features={
+                      selClippedLayer
+                        ? { flip: false, opacity: false, replace: !!selClippedLayer.src, reset: !!selClippedLayer.init }
+                        : {}
+                    }
                   />
                 )}
                 {imgEditOpen && art && (
@@ -2722,7 +2769,7 @@ function Index() {
                   )}
                 </div>
                 <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between gap-4 text-[10px] font-mono text-faint pointer-events-none">
-                  <span>{pcState === "editing" ? "Editando conteúdo do PowerClip · arraste a estampa e a alça do canto · clique em Concluir Edição para travar" : TOOL_HINTS[tool]}</span>
+                  <span>{pcState === "editing" ? (pcTarget ? "Editando conteúdo do PowerClip · arraste o item e a alça do canto · clique em Concluir Edição para travar" : "Editando PowerClip · clique em um item para editá-lo · Concluir Edição trava") : TOOL_HINTS[tool]}</span>
                   <button
                     onClick={() => updateShapes({ ...shapes, [view]: DEFAULT_SHAPES[view] })}
                     className="pointer-events-auto flex items-center gap-1 text-muted-foreground hover:text-cyan whitespace-nowrap"
@@ -2754,7 +2801,7 @@ function Index() {
                     items: [
                       selObj && !selObj.clipped
                         ? { label: "Inserir no PowerClip", run: () => setPcPick(selObj.id) }
-                        : pcState === "free"
+                        : artFree
                           ? { label: "Inserir no PowerClip", run: () => { setSelPart("estampa"); setTimeout(() => setPcPick("art"), 0); } }
                           : null,
                       pcHasContent && !pcEdit ? { label: "Editar Conteúdo do PowerClip", run: pcEditStart } : null,
@@ -2771,7 +2818,7 @@ function Index() {
                     title: "Arquivo",
                     items: [
                       { label: "Importar Arquivo…", run: () => importRef.current?.click() },
-                      pcState === "none"
+                      !art
                         ? { label: "Carregar Estampa…", run: () => fileRef.current?.click() }
                         : { label: "Remover Estampa", run: () => setArt(null) },
                     ],

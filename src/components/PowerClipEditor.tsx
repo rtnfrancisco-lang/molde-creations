@@ -79,6 +79,7 @@ export function PowerClipEditor({
   onRemove,
   onExtract,
   onClose,
+  features,
 }: {
   art: PcArt;
   frame: Frame;
@@ -89,7 +90,9 @@ export function PowerClipEditor({
   onRemove: () => void;
   onExtract?: () => void;
   onClose: () => void;
+  features?: { flip?: boolean; opacity?: boolean; replace?: boolean; reset?: boolean };
 }) {
+  const feat = { flip: true, opacity: true, replace: true, reset: true, ...features };
   const fileRef = useRef<HTMLInputElement>(null);
   const [askFormat, setAskFormat] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -181,7 +184,7 @@ export function PowerClipEditor({
         e.preventDefault();
         setDragOver(false);
         const f = e.dataTransfer.files?.[0];
-        if (f && f.type.startsWith("image/")) replace(f);
+        if (feat.replace && f && f.type.startsWith("image/")) replace(f);
       }}
     >
       <div className="flex items-center justify-between px-3 py-2">
@@ -205,7 +208,7 @@ export function PowerClipEditor({
       <Section title="Posicionamento">
         <button className={btn + " w-full"} onClick={center}><Crosshair className="size-3.5" /> Centralizar no Retângulo</button>
         <button className={btn + " w-full"} onClick={fit}><Maximize2 className="size-3.5" /> Ajustar Tamanho 100%</button>
-        <button className={btn + " w-full"} onClick={reset}><RotateCcw className="size-3.5" /> Redefinir Posição e Tamanho</button>
+        {feat.reset && <button className={btn + " w-full"} onClick={reset}><RotateCcw className="size-3.5" /> Redefinir Posição e Tamanho</button>}
       </Section>
 
       <Section title="Transformação">
@@ -217,17 +220,17 @@ export function PowerClipEditor({
           ))}
         </div>
         <NumField label="Rotação" value={rot} suffix="°" onChange={rotTo} />
-        <div className="grid grid-cols-2 gap-1">
+        {feat.flip && <div className="grid grid-cols-2 gap-1">
           <button className={btn + (art.flipX ? " border-primary text-primary" : "")} onClick={() => set({ flipX: !art.flipX })}>
             <FlipHorizontal2 className="size-3.5" /> Espelhar H
           </button>
           <button className={btn + (art.flipY ? " border-primary text-primary" : "")} onClick={() => set({ flipY: !art.flipY })}>
             <FlipVertical2 className="size-3.5" /> Espelhar V
           </button>
-        </div>
+        </div>}
       </Section>
 
-      <Section title="Propriedades">
+      {feat.opacity && <Section title="Propriedades">
         <label className="flex items-center gap-2">
           <span className="w-14 text-faint">Opacidade</span>
           <input
@@ -240,7 +243,7 @@ export function PowerClipEditor({
           />
           <span className="w-9 text-right font-mono text-foreground">{Math.round((art.opacity ?? 1) * 100)}%</span>
         </label>
-      </Section>
+      </Section>}
 
       <Section title="Arquivo">
         <input
@@ -254,10 +257,12 @@ export function PowerClipEditor({
             e.target.value = "";
           }}
         />
+        {feat.replace && <>
         <button className={btn + " w-full"} onClick={() => fileRef.current?.click()}>
           <Replace className="size-3.5" /> Substituir Imagem
         </button>
         <div className="text-[10px] text-faint text-center">ou arraste uma imagem para este painel</div>
+        </>}
         {askFormat ? (
           <div className="grid grid-cols-3 gap-1">
             {(["png", "jpg", "svg"] as const).map((f) => (
