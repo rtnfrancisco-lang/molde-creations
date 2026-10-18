@@ -16,6 +16,8 @@ export type ProjectData = {
   texts: unknown;
   profiles: unknown;
   activeProfile: string;
+  /** Lista do Time (ausente em arquivos antigos). */
+  roster?: unknown;
 };
 
 export type ProjectFile = {
