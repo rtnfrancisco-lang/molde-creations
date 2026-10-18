@@ -53,10 +53,11 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { TeamPanel } from "@/components/TeamPanel";
+import { TeamPanel, type TeamExportOpts } from "@/components/TeamPanel";
+import { rasterize, svgToPdf } from "@/lib/raster-export";
 import { sanitizeRoster, type Player } from "@/lib/roster";
 import { teamScale, resolveTeamText, measureText, fontsReady } from "@/lib/team-text";
-import { teamFileName, uniqueName } from "@/lib/team-export";
+import { teamFileName, uniqueName, TEAM_EXT, fitDpi, cmToPx } from "@/lib/team-export";
 import { buildProjectFile, parseProjectFile, nameFromFile, PROJECT_EXT } from "@/lib/project-file";
 import { hasFsAccess, pickSaveHandle, writeHandle, downloadText, openProjectFile, isAbort, type FileHandle } from "@/lib/file-access";
 import {
@@ -3031,6 +3032,7 @@ function Index() {
                 onView={(p) => startTeamView(p.id)}
                 teamViews={(["frente", "costas", "mangaEsq", "mangaDir"] as View[]).filter((v) => texts[v].some((t) => t.field === "nome" || t.field === "numero"))}
                 onExportTeam={exportTeam}
+                measurePieces={teamMaxPiece}
                 labelOf={(s) => sizesForGarment(clothingType).find((o) => o.id === s)?.label ?? s}
               />
               {(art || hasClipped || (selObj && !selObj.clipped)) && ((() => {
