@@ -72,6 +72,7 @@ import {
   layerMarkup,
   layerPathD,
   type Layer,
+  type LayerSlot,
 } from "@/lib/importers";
 import { activeView } from "@/lib/active-view";
 import {
