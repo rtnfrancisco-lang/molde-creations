@@ -2720,52 +2720,102 @@ function Index() {
                   <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-faint mb-2">
                     Formato do arquivo
                   </div>
-                  <div className="space-y-1.5">
-                    <button
-                      onClick={() => setExportFmt("pdf")}
-                      className={
-                        "w-full flex items-start gap-2.5 px-3 py-2.5 rounded-md border text-xs text-left transition-colors " +
-                        (exportFmt === "pdf"
-                          ? "border-cyan/50 bg-cyan/10 text-cyan"
-                          : "border-line text-muted-foreground hover:text-foreground")
-                      }
-                    >
-                      <span
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {([
+                      ["pdf", "PDF", "Vetor 1:1"],
+                      ["png", "PNG", "Imagem"],
+                      ["jpeg", "JPEG", "Imagem leve"],
+                    ] as const).map(([k, l, d]) => (
+                      <button
+                        key={k}
+                        onClick={() => setExportFmt(k)}
                         className={
-                          "mt-0.5 size-3 shrink-0 rounded-full border " +
-                          (exportFmt === "pdf" ? "border-cyan bg-cyan" : "border-line")
+                          "px-2 py-2 rounded-md border text-xs text-center transition-colors " +
+                          (exportFmt === k ? "border-cyan/50 bg-cyan/10 text-cyan font-semibold" : "border-line text-muted-foreground hover:text-foreground")
                         }
-                      />
-                      <span className="flex-1 leading-snug">
-                        PDF vetorial — escala real 1:1
-                        <span className="block text-[10px] font-mono text-faint">
-                          Vetor puro no tamanho exato do quadro de mídia
-                        </span>
-                      </span>
-                    </button>
-                    <button
-                      onClick={() => setExportFmt("png")}
-                      className={
-                        "w-full flex items-start gap-2.5 px-3 py-2.5 rounded-md border text-xs text-left transition-colors " +
-                        (exportFmt === "png"
-                          ? "border-cyan/50 bg-cyan/10 text-cyan"
-                          : "border-line text-muted-foreground hover:text-foreground")
-                      }
-                    >
-                      <span
-                        className={
-                          "mt-0.5 size-3 shrink-0 rounded-full border " +
-                          (exportFmt === "png" ? "border-cyan bg-cyan" : "border-line")
-                        }
-                      />
-                      <span className="flex-1 leading-snug">
-                        PNG — alta resolução 300 DPI
-                        <span className="block text-[10px] font-mono text-faint">
-                          Imagem raster no tamanho real para conferência
-                        </span>
-                      </span>
-                    </button>
+                      >
+                        {l}
+                        <span className="block text-[10px] font-mono text-faint font-normal">{d}</span>
+                      </button>
+                    ))}
                   </div>
+                  {exportFmt !== "pdf" && (
+                    <div className="mt-2 space-y-2">
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-muted-foreground w-20">Resolução</span>
+                        <div className="flex gap-1">
+                          {TEAM_DPIS.map((d) => (
+                            <button
+                              key={d}
+                              onClick={() => setExpDpi(d)}
+                              className={"px-2 py-1 rounded border text-[11px] font-mono " + (expDpi === d ? "border-cyan/50 bg-cyan/10 text-cyan" : "border-line text-muted-foreground")}
+                            >
+                              {d}
+                            </button>
+                          ))}
+                          <span className="self-center text-[10px] text-faint">DPI</span>
+                        </div>
+                      </div>
+                      {exportFmt === "jpeg" && (
+                        <label className="flex items-center gap-2 text-xs">
+                          <span className="text-muted-foreground w-20">Qualidade</span>
+                          <input type="range" min={60} max={100} value={expQuality} onChange={(e) => setExpQuality(+e.target.value)} className="flex-1 accent-cyan" />
+                          <span className="font-mono text-[11px] w-9 text-right">{expQuality}%</span>
+                        </label>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-faint mb-2">O que exportar</div>
+                  {(
+                    [
+                      {
+                        title: "Tamanhos",
+                        mode: expSizeMode,
+                        setMode: setExpSizeMode as (m: string) => void,
+                        opts: [["atual", `Apenas o atual (${sizeLabel(clothingType, size)})`], ["todos", "Todos"], ["escolher", "Escolher…"]],
+                        items: sizesForGarment(clothingType).map((o) => ({ id: o.id as string, label: o.label })),
+                        sel: expSizes as string[],
+                        toggle: (id: string) => setExpSizes((a) => (a.includes(id as Size) ? a.filter((x) => x !== id) : [...a, id as Size])),
+                      },
+                      {
+                        title: "Vistas",
+                        mode: expViewMode,
+                        setMode: setExpViewMode as (m: string) => void,
+                        opts: [["atual", "Apenas a atual"], ["todas", "Todas"], ["escolher", "Escolher…"]],
+                        items: VIEWS.map((v) => ({ id: v.key as string, label: v.label })),
+                        sel: expViews as string[],
+                        toggle: (id: string) => setExpViews((a) => (a.includes(id as View) ? a.filter((x) => x !== id) : [...a, id as View])),
+                      },
+                    ]
+                  ).map((g) => (
+                    <div key={g.title} className="mb-2">
+                      <div className="text-xs text-muted-foreground mb-1">{g.title}</div>
+                      <div className="flex flex-wrap gap-1">
+                        {g.opts.map(([k, l]) => (
+                          <button
+                            key={k}
+                            onClick={() => g.setMode(k!)}
+                            className={"px-2 py-1 rounded border text-[11px] " + (g.mode === k ? "border-cyan/50 bg-cyan/10 text-cyan" : "border-line text-muted-foreground")}
+                          >
+                            {l}
+                          </button>
+                        ))}
+                      </div>
+                      {g.mode === "escolher" && (
+                        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                          {g.items.map((it) => (
+                            <label key={it.id} className="flex items-center gap-1 text-[11px] cursor-pointer">
+                              <input type="checkbox" checked={g.sel.includes(it.id)} onChange={() => g.toggle(it.id)} className="accent-cyan" />
+                              {it.label}
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
 
                 <div>
