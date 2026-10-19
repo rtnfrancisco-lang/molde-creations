@@ -585,12 +585,114 @@ const ProfileDock = ({
   );
 };
 
-const saveLS = (k: string, v: unknown) => {
+/* ---------- Persistência: dados grandes no IndexedDB, preferências no localStorage ---------- */
+const BIG_KEYS = new Set([
+  "moldecore.camadas",
+  "moldecore.estampas",
+  "moldecore.textos",
+  "moldecore.formas",
+  "moldecore.cores",
+  "moldecore.time",
+]);
+const SAVE_FAIL_TOAST = "moldecore-save-fail";
+let saveFailed = false;
+const reportSave = (ok: boolean) => {
+  if (ok) {
+    if (saveFailed) toast.dismiss(SAVE_FAIL_TOAST);
+    saveFailed = false;
+  } else if (!saveFailed) {
+    saveFailed = true;
+    toast.error("Não foi possível salvar automaticamente. Salve o projeto em arquivo (Arquivo > Salvar)", {
+      id: SAVE_FAIL_TOAST,
+      duration: Infinity,
+    });
+  }
+};
+/** Só grava dados grandes depois que o carregamento inicial terminou. */
+let bigHydrated = false;
+let useIdb = true;
+const pending = new Map<string, unknown>();
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+const writeLS = (k: string, v: unknown) => {
   try {
     localStorage.setItem(k, JSON.stringify(v));
+    return true;
   } catch {
-    /* grande demais para o armazenamento local */
+    return false;
   }
+};
+const flushBig = async () => {
+  flushTimer = null;
+  const items = [...pending];
+  pending.clear();
+  let ok = true;
+  for (const [k, v] of items) {
+    if (useIdb) {
+      try {
+        await idb.set(k, v);
+        continue;
+      } catch {
+        ok = false;
+        continue;
+      }
+    }
+    if (!writeLS(k, v)) ok = false;
+  }
+  reportSave(ok);
+};
+const saveLS = (k: string, v: unknown) => {
+  if (BIG_KEYS.has(k)) {
+    if (!bigHydrated) return;
+    pending.set(k, v);
+    if (!flushTimer) flushTimer = setTimeout(() => void flushBig(), 200);
+    return;
+  }
+  if (!writeLS(k, v)) reportSave(false);
+};
+/** Lê uma chave grande; migra do localStorage para o IndexedDB quando preciso. */
+const loadBig = async (k: string): Promise<unknown> => {
+  const legacy = () => {
+    const raw = localStorage.getItem(k);
+    if (raw == null) return undefined;
+    try {
+      return JSON.parse(raw) as unknown;
+    } catch {
+      return undefined;
+    }
+  };
+  if (!useIdb) return legacy();
+  const v = await idb.get(k);
+  if (v !== undefined) return v;
+  const old = legacy();
+  if (old === undefined) return undefined;
+  try {
+    await idb.set(k, old);
+    if ((await idb.get(k)) !== undefined) localStorage.removeItem(k);
+  } catch {
+    /* mantém a chave antiga se a migração falhar */
+  }
+  return old;
+};
+/** Carrega todas as chaves grandes de uma vez e libera a gravação. */
+const loadAllBig = async (): Promise<Record<string, unknown>> => {
+  useIdb = idb.hasIdb();
+  if (useIdb) {
+    try {
+      await idb.keys();
+    } catch {
+      useIdb = false;
+    }
+  }
+  const out: Record<string, unknown> = {};
+  for (const k of BIG_KEYS) {
+    try {
+      out[k] = await loadBig(k);
+    } catch {
+      useIdb = false;
+      out[k] = await loadBig(k).catch(() => undefined);
+    }
+  }
+  return out;
 };
 
 const LIBRARY = [
