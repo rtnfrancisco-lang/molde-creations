@@ -187,7 +187,7 @@ export function TeamPanel({ open, onClose, roster, setRoster, options, garment, 
 
   return (
     <aside
-      className="fixed right-0 top-0 bottom-0 z-40 w-[420px] max-w-full bg-panel border-l border-border shadow-xl flex flex-col"
+      className="fixed right-0 top-0 bottom-0 z-40 w-[540px] max-w-full bg-panel border-l border-border shadow-xl flex flex-col"
       aria-label="Lista do Time"
       onKeyDown={(e) => e.stopPropagation()}
     >
