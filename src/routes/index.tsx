@@ -55,7 +55,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { TeamPanel, type TeamExportOpts } from "@/components/TeamPanel";
 import { embedFonts } from "@/lib/raster-export";
 import { sanitizeRoster, type Player } from "@/lib/roster";
-import { teamScale, resolveTeamText, measureText, fontsReady } from "@/lib/team-text";
+import { teamScale, resolveTeamText, measureText, fontsReady, teamTextOverflows, type ResolvedTeamText } from "@/lib/team-text";
 import { renderPiece, zipFiles, todayStamp, yieldFrame, MIME } from "@/lib/export-render";
 import { teamFileName, uniqueName, TEAM_EXT, TEAM_DPIS, fitDpi, cmToPx, type TeamFormat } from "@/lib/team-export";
 import { buildProjectFile, parseProjectFile, nameFromFile, PROJECT_EXT } from "@/lib/project-file";
@@ -144,6 +144,8 @@ type TextElement = {
   /** Largura máxima em cm, medida no tamanho do molde mãe. */
   fitWidth?: number | undefined;
   scaleWithSize?: boolean;
+  /** Ponto fixo do campo do time. Ausente = "centro". */
+  fieldAnchor?: "esquerda" | "centro" | "direita";
 };
 type ClothingType = "Camiseta" | "Moletom" | "Regata" | "Manga Longa" | "Camisa Infantil" | "Camisa Baby Look";
 type SizeOption = { id: Size; label: string };
@@ -735,13 +737,15 @@ const escXml = (v: string) =>
   v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 
 /* Textos para exportação: mesmo desenho do canvas (cm, x centrado em 0). */
-type TextResolve = (t: TextElement) => { text: string; x: number; y: number; fontSize: number } | null;
+type TextResolve = (t: TextElement) => ResolvedTeamText | null;
 const textMarkup = (items: TextElement[], opts?: { resolve?: TextResolve }) =>
   items
     .map((t) => {
       if (!opts?.resolve) return t;
       const r = opts.resolve(t);
-      return r ? { ...t, ...r } : null;
+      if (!r) return null;
+      const { left: _l, right: _r, ...rest } = r;
+      return { ...t, ...rest, align: r.align ?? t.align };
     })
     .filter((t): t is TextElement => !!t && t.text.trim().length > 0)
     .map((t) => {
@@ -867,7 +871,7 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
 
   const setField = (field: "fixo" | "nome" | "numero") => {
     const apply = (item: Omit<TextElement, "id" | "text" | "x" | "y"> | TextElement) => {
-      const { field: _f, upper: _u, fitWidth: _w, scaleWithSize: _s, ...rest } = item as TextElement;
+      const { field: _f, upper: _u, fitWidth: _w, scaleWithSize: _s, fieldAnchor: _a, ...rest } = item as TextElement;
       if (field === "fixo") return rest;
       return { ...rest, field, scaleWithSize: item.scaleWithSize ?? true,
         ...(field === "nome" ? { upper: item.upper ?? false, ...(item.fitWidth ? { fitWidth: item.fitWidth } : {}) } : {}) };
@@ -1067,6 +1071,11 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
                   <g className="pointer-events-none" data-screen-only>
                     <rect x={fb.x} y={fb.y} width={fb.w} height={fb.h} className="fill-none stroke-cyan" strokeWidth={1} strokeDasharray="3 2" vectorEffect="non-scaling-stroke" />
                     <text x={fb.x} y={fb.y - unit * 0.4} fontSize={unit * 1.1} className="fill-cyan font-mono">{item.field === "nome" ? "NOME" : "Nº"}</text>
+                    {(() => {
+                      const a = item.fieldAnchor ?? "centro";
+                      const ax = a === "esquerda" ? fb.x : a === "direita" ? fb.x + fb.w : fb.x + fb.w / 2;
+                      return <line x1={ax} x2={ax} y1={fb.y - unit * 0.8} y2={fb.y + fb.h + unit * 0.8} className="stroke-cyan" strokeWidth={2} vectorEffect="non-scaling-stroke" />;
+                    })()}
                   </g>
                 );
               })()}
@@ -1140,6 +1149,19 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
                 onClick={() => box && updateSelected({ fitWidth: Math.round(box.w * 10) / 10 })}
                 className="h-8 w-full rounded-md border border-line text-foreground disabled:opacity-50">Usar a largura atual do texto</button>
             </>
+          )}
+          {current.field && (
+            <div className="space-y-1">
+              <span className="text-faint">Ponto fixo</span>
+              <div className="grid grid-cols-3 gap-1">
+                {(["esquerda", "centro", "direita"] as const).map((a) => (
+                  <button key={a} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => updateSelected({ fieldAnchor: a })}
+                    className={"h-8 rounded-md border text-xs " + ((current.fieldAnchor ?? "centro") === a ? "border-primary text-primary" : "border-line text-foreground")}>
+                    {a === "esquerda" ? "Esquerda" : a === "centro" ? "Centro" : "Direita"}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
           {current.field && (
             <label className="flex items-center gap-2 text-foreground">
@@ -2085,17 +2107,24 @@ function Index() {
     if (teamView && (!viewPlayer || !playerSizeOk(viewPlayer))) exitTeamView();
     else if (viewPlayer && size !== viewPlayer.tamanho) setSize(viewPlayer.tamanho);
   }, [viewPlayer?.tamanho, viewPlayer?.id, clothingType]);
-  const teamPreviewTexts = useMemo<TextElement[] | null>(() => {
+  const teamPreview = useMemo<{ texts: TextElement[]; overflow: boolean } | null>(() => {
     if (!viewPlayer) return null;
     const { sx, sy } = teamScale(table, mother, viewPlayer.tamanho, view);
+    const W = pieceWidth(viewPlayer.tamanho as Size, view);
     const out: TextElement[] = [];
+    let overflow = false;
     for (const t of texts[view]) {
       const value = t.field === "nome" ? viewPlayer.nome : t.field === "numero" ? viewPlayer.numero : null;
       const r = resolveTeamText(t, { value, sx, sy, measure: measureText });
-      if (r && r.text.trim()) out.push({ ...t, ...r });
+      if (teamTextOverflows(r, W)) overflow = true;
+      if (r && r.text.trim()) {
+        const { left: _l, right: _r, ...rest } = r;
+        out.push({ ...t, ...rest, align: r.align ?? t.align });
+      }
     }
-    return out;
+    return { texts: out, overflow };
   }, [viewPlayer, table, mother, view, texts, fontsTick]);
+  const teamPreviewTexts = teamPreview?.texts ?? null;
 
   const selTextEl = selText ? texts[view].find((t) => t.id === selText) ?? null : null;
   const colorKind: "vetor" | "texto" | "imagem" | "molde" =
@@ -2419,6 +2448,13 @@ function Index() {
 
   const buildPlotterSvg = (o: { hideTechnical: boolean; crop: boolean }) => buildPlotterSvgFor({ ...o, view, size });
 
+  /** Largura da peça (cm) no tamanho e vista. */
+  function pieceWidth(sz: Size, v: View) {
+    const d = table[sz];
+    if (!d) return Infinity;
+    return v === "frente" || v === "costas" ? d.bodyWidth : d.sleeveWidth;
+  }
+
   const teamResolver = (p: Player, sz: Size, v: View): TextResolve => {
     const { sx, sy } = teamScale(table, mother, sz, v);
     return (t) => {
@@ -2459,6 +2495,10 @@ function Index() {
         const name = uniqueName(teamFileName(opt.template, { numero: p.numero, nome: p.nome, tamanho: label, vista: v }, ext), used);
         const r = await renderPiece(svg, cmW, cmH, opt.format, opt.dpi, opt.quality, name);
         if (r.reduced) warnings.push(`${label} (${v}) gerado a ${r.dpi} DPI para caber no navegador`);
+        const res = teamResolver(p, sz, v);
+        const W = pieceWidth(sz, v);
+        if (texts[v].some((t) => t.field && teamTextOverflows(res(t), W)))
+          warnings.push(`${p.numero || "—"} ${p.nome || "(sem nome)"} (${partLabel(v)}): o nome passa da largura da peça`);
         files[name] = r.bytes;
         n++;
         onProgress(n, total);
@@ -3211,6 +3251,7 @@ function Index() {
                     <span className="font-medium text-foreground">
                       Visualizando: {viewPlayer.numero || "—"} · {viewPlayer.nome || "(sem nome)"} ({sizesForGarment(clothingType).find((o) => o.id === viewPlayer.tamanho)?.label ?? viewPlayer.tamanho})
                     </span>
+                    {teamPreview?.overflow && <span className="text-destructive font-medium">⚠ O nome passa da largura da peça — defina a largura máxima do campo</span>}
                     <button onClick={() => stepPlayer(1)} aria-label="Próximo jogador" className="p-1 rounded hover:bg-muted"><ChevronRight className="size-3.5" /></button>
                     <button onClick={exitTeamView} className="ml-1 px-2 py-0.5 rounded bg-cyan text-primary-foreground hover:bg-cyan/90">Sair</button>
                   </div>
