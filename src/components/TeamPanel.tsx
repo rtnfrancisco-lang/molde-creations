@@ -120,9 +120,11 @@ export function TeamPanel({ open, onClose, roster, setRoster, options, garment, 
     setExpOpen(true);
   };
   const exportPlayers = (skipBad: boolean) => (skipBad ? roster.filter((p) => !badIds.has(p.id)) : roster);
-  const runTeamExport = async (skipBad: boolean) => {
+  const lacksImg = (p: Player) =>
+    (slotNeeds.nome && !(p.imgNome && imgById.has(p.imgNome))) || (slotNeeds.numero && !(p.imgNumero && imgById.has(p.imgNumero)));
+  const runTeamExport = async (skipBad: boolean, onlyComplete = false) => {
     if (!onExportTeam) return;
-    const players = exportPlayers(skipBad);
+    const players = exportPlayers(skipBad).filter((p) => !onlyComplete || !lacksImg(p));
     if (!players.length || !expViews.length) return;
     const sig = { cancelled: false };
     sigRef.current = sig;
@@ -150,6 +152,7 @@ export function TeamPanel({ open, onClose, roster, setRoster, options, garment, 
 
   const expPlayers = exportPlayers(badIds.size > 0);
   const fileCount = expPlayers.length * expViews.length;
+  const missingImg = expPlayers.filter(lacksImg);
   const bigJob = expDpi >= 300 && fileCount > 40;
   const piece = expOpen && measurePieces && expViews.length ? measurePieces(expPlayers, expViews) : null;
   const maxPx = piece && piece.cmW > 0 ? (() => { const d = fitDpi(piece.cmW, piece.cmH, expDpi); return `${cmToPx(piece.cmW, d)} × ${cmToPx(piece.cmH, d)} px${d < expDpi ? ` (${d} DPI)` : ""}`; })() : null;
@@ -303,6 +306,20 @@ export function TeamPanel({ open, onClose, roster, setRoster, options, garment, 
           {badIds.size > 0 && (
             <div className="flex gap-1 text-destructive"><AlertTriangle className="size-3 mt-px shrink-0" />{badIds.size} jogador(es) com número repetido, sem número ou tamanho inexistente em {garment}.</div>
           )}
+          {missingImg.length > 0 && (
+            <div className="flex gap-1 text-destructive" data-testid="faltam-imagens">
+              <AlertTriangle className="size-3 mt-px shrink-0" />
+              <span>
+                Sem imagem para o espaço marcado:{" "}
+                {missingImg
+                  .map((p) => {
+                    const f = [slotNeeds.nome && !(p.imgNome && imgById.has(p.imgNome)) && "nome", slotNeeds.numero && !(p.imgNumero && imgById.has(p.imgNumero)) && "número"].filter(Boolean).join(" e ");
+                    return `${p.numero || "—"} ${p.nome || "(sem nome)"} (${f})`;
+                  })
+                  .join(", ")}
+              </span>
+            </div>
+          )}
           {expProg && (
             <div className="h-1.5 rounded bg-border overflow-hidden"><div className="h-full bg-cyan transition-all" style={{ width: `${(expProg.done / expProg.total) * 100}%` }} /></div>
           )}
@@ -314,7 +331,12 @@ export function TeamPanel({ open, onClose, roster, setRoster, options, garment, 
           {expWarn.map((w) => <div key={w} className="text-destructive">{w}</div>)}
           <div className="flex justify-end gap-2">
             <Btn onClick={() => (expProg && sigRef.current ? (sigRef.current.cancelled = true) : setExpOpen(false))}>Cancelar</Btn>
-            {badIds.size > 0 ? (
+            {missingImg.length > 0 && (
+              <Btn onClick={() => void runTeamExport(badIds.size > 0, true)} disabled={!!expProg || !expViews.length || missingImg.length === expPlayers.length}>Exportar só quem está completo</Btn>
+            )}
+            {missingImg.length > 0 ? (
+              <Btn onClick={() => void runTeamExport(badIds.size > 0)} disabled={!!expProg || !expViews.length || !expPlayers.length} primary>Continuar sem essas imagens</Btn>
+            ) : badIds.size > 0 ? (
               <Btn onClick={() => void runTeamExport(true)} disabled={!!expProg || !expViews.length || badIds.size === roster.length} primary>Continuar sem esses jogadores</Btn>
             ) : (
               <Btn onClick={() => void runTeamExport(false)} disabled={!!expProg || !expViews.length} primary>{teamViews.length ? "Gerar ZIP" : "Gerar mesmo assim"}</Btn>
