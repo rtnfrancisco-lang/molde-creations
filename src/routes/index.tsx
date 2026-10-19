@@ -53,10 +53,10 @@ import {
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { TeamPanel, type TeamExportOpts } from "@/components/TeamPanel";
-import { rasterize, svgToPdf } from "@/lib/raster-export";
-import { sanitizeRoster, type Player } from "@/lib/roster";
-import { teamScale, resolveTeamText, measureText, fontsReady } from "@/lib/team-text";
-import { teamFileName, uniqueName, TEAM_EXT, fitDpi, cmToPx } from "@/lib/team-export";
+import { embedFonts } from "@/lib/raster-export";
+import { renderPiece, zipFiles, todayStamp, yieldFrame, MIME } from "@/lib/export-render";
+LINES57_58
+import { teamFileName, uniqueName, TEAM_EXT, fitDpi, cmToPx, TEAM_DPIS, type TeamFormat } from "@/lib/team-export";
 import { buildProjectFile, parseProjectFile, nameFromFile, PROJECT_EXT } from "@/lib/project-file";
 import { hasFsAccess, pickSaveHandle, writeHandle, downloadText, openProjectFile, isAbort, type FileHandle } from "@/lib/file-access";
 import {
@@ -1222,7 +1222,15 @@ function Index() {
   const [showBleed, setShowBleed] = useState(true);
   const [showSafety, setShowSafety] = useState(true);
   const [plotterOpen, setPlotterOpen] = useState(false);
-  const [exportFmt, setExportFmt] = useState<"pdf" | "png">("pdf");
+  const [exportFmt, setExportFmt] = useState<TeamFormat>("pdf");
+  const [expDpi, setExpDpi] = useState(300);
+  const [expQuality, setExpQuality] = useState(92);
+  const [expSizeMode, setExpSizeMode] = useState<"atual" | "todos" | "escolher">("atual");
+  const [expSizes, setExpSizes] = useState<Size[]>([]);
+  const [expViewMode, setExpViewMode] = useState<"atual" | "todas" | "escolher">("atual");
+  const [expViews, setExpViews] = useState<View[]>([]);
+  const [expProgress, setExpProgress] = useState<{ done: number; total: number } | null>(null);
+  const expSignal = useRef<{ cancelled: boolean }>({ cancelled: false });
   const [hideTech, setHideTech] = useState(false);
   const [cropRect, setCropRect] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -2327,38 +2335,6 @@ function Index() {
 
 
 
-  const exportAll = () => {
-    const isBody = view === "frente" || view === "costas";
-    const st = styles[view];
-    SIZES.forEach((sz, idx) => {
-      const m = table[sz];
-      const W = isBody ? m.bodyWidth : m.sleeveWidth;
-      const H = isBody ? m.bodyHeight : m.sleeveHeight;
-      const path = buildPath(shapes[view], W, H);
-      const fbC = pathBounds(offsetPathD(path, BLEED_OFFSET_CM, TECHNICAL_OFFSET_OPTIONS)) ?? { minX: -W / 2 - PLOTTER_MARGIN, minY: -PLOTTER_MARGIN, maxX: W / 2 + PLOTTER_MARGIN, maxY: H + PLOTTER_MARGIN };
-      let img = `<clipPath id="c"><rect x="${fbC.minX}" y="${fbC.minY}" width="${fbC.maxX - fbC.minX}" height="${fbC.maxY - fbC.minY}"/></clipPath>`;
-      if (art) {
-        const aw = art.w * W;
-        const ah = aw * art.ratio;
-        const x = (art.cx - 0.5) * W - aw / 2;
-        const y = art.cy * H - ah / 2;
-        const im = `<image href="${art.src}" x="${x}" y="${y}" width="${aw}" height="${ah}" transform="${artTransform(art, x + aw / 2, y + ah / 2)}" opacity="${art.opacity ?? 1}" preserveAspectRatio="none"/>`;
-        const fb = pathBounds(offsetPathD(path, BLEED_OFFSET_CM, TECHNICAL_OFFSET_OPTIONS)) ?? { minX: -W / 2 - PLOTTER_MARGIN, minY: -PLOTTER_MARGIN, maxX: W / 2 + PLOTTER_MARGIN, maxY: H + PLOTTER_MARGIN };
-        void fb;
-        img += art.clipped === false ? im : `<g clip-path="url(#c)">${im}</g>`;
-      }
-      const objs = curLayers.map((l) => (l.clipped ? `<g clip-path="url(#c)">${layerMarkup(l, W, H)}</g>` : layerMarkup(l, W, H))).join("");
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W + 2}cm" height="${H + 2}cm" viewBox="${-W / 2 - 1} -1 ${W + 2} ${H + 2}"><path d="${path}" fill="${st.fill ?? "none"}"/>${img}${objs}${textMarkup(texts[view])}<path d="${path}" fill="none" stroke="${st.stroke ?? "#000"}" stroke-width="0.05"/></svg>`;
-      const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
-      setTimeout(() => {
-        const el = document.createElement("a");
-        el.href = url;
-        el.download = `${exportName(clothingType, sz, view)}.svg`;
-        el.click();
-        URL.revokeObjectURL(url);
-      }, idx * 250);
-    });
-  };
 
   /* ================= Exportação inteligente para Plotter ================= */
 
@@ -2474,7 +2450,6 @@ function Index() {
 
   const exportTeam = async (opt: TeamExportOpts, onProgress: (done: number, total: number) => void, signal: { cancelled: boolean }) => {
     await fontsReady();
-    const { zipSync } = await import("fflate");
     const files: Record<string, Uint8Array> = {};
     const used = new Set<string>();
     const warnings: string[] = [];
@@ -2489,26 +2464,18 @@ function Index() {
         const { svg, cmW, cmH } = buildPlotterSvgFor({ view: v, size: sz, hideTechnical: opt.hideTechnical, crop: true, player: p });
         const label = sizeLabel(clothingType, sz);
         const name = uniqueName(teamFileName(opt.template, { numero: p.numero, nome: p.nome, tamanho: label, vista: v }, ext), used);
-        const dpi = fitDpi(cmW, cmH, opt.dpi);
-        if (dpi < opt.dpi) warnings.push(`${label} (${v}) gerado a ${dpi} DPI para caber no navegador`);
-        const pxW = cmToPx(cmW, dpi);
-        const pxH = cmToPx(cmH, dpi);
-        const q = opt.quality / 100;
-        files[name] =
-          opt.format === "pdf"
-            ? await svgToPdf(svg, cmW, cmH, pxW, pxH, q, name)
-            : new Uint8Array(await (await rasterize(svg, pxW, pxH, opt.format === "jpeg" ? "image/jpeg" : "image/png", opt.format === "jpeg" ? q : undefined)).arrayBuffer());
+        const r = await renderPiece(svg, cmW, cmH, opt.format, opt.dpi, opt.quality, name);
+        if (r.reduced) warnings.push(`${label} (${v}) gerado a ${r.dpi} DPI para caber no navegador`);
+        files[name] = r.bytes;
         n++;
         onProgress(n, total);
-        await new Promise((r) => setTimeout(r, 0));
+        await yieldFrame();
       }
     }
     if (signal.cancelled) return null;
-    const zip = zipSync(files, { level: opt.format === "png" ? 0 : 3 });
+    const zip = await zipFiles(files, opt.format);
     if (signal.cancelled) return null;
-    const d = new Date();
-    const pad = (x: number) => String(x).padStart(2, "0");
-    downloadBlob(new Blob([zip as BlobPart], { type: "application/zip" }), `Time_${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.zip`);
+    downloadBlob(new Blob([zip as BlobPart], { type: "application/zip" }), `Time_${todayStamp()}.zip`);
     return { players: opt.players.length, files: n, warnings: [...new Set(warnings)] };
   };
 
@@ -2521,14 +2488,9 @@ function Index() {
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   };
 
-  const rasterizeSvg = (svg: string, pxW: number, pxH: number) => rasterize(svg, pxW, pxH, "image/png");
-
   const printVectorPdf = (svg: string, cmW: number, cmH: number, name: string) => {
     const win = window.open("", "_blank", "width=900,height=720");
-    if (!win) {
-      downloadBlob(new Blob([svg], { type: "image/svg+xml" }), name + ".svg");
-      return false;
-    }
+    if (!win) return false;
     win.document.write(
       `<!doctype html><html><head><meta charset="utf-8"><title>${name}</title>` +
         `<style>@page{size:${cmW}cm ${cmH}cm;margin:0}html,body{margin:0;padding:0}svg{display:block;width:${cmW}cm;height:${cmH}cm}</style>` +
@@ -2538,31 +2500,85 @@ function Index() {
     return true;
   };
 
+  const ALL_VIEWS: View[] = ["frente", "costas", "mangaEsq", "mangaDir"];
+  const exportTargets = () => {
+    const allSizes = sizeIdsForGarment(clothingType);
+    const sizes = expSizeMode === "atual" ? [size] : expSizeMode === "todos" ? [...allSizes] : allSizes.filter((s) => expSizes.includes(s));
+    const views = expViewMode === "atual" ? [view] : expViewMode === "todas" ? ALL_VIEWS : ALL_VIEWS.filter((v) => expViews.includes(v));
+    return { sizes, views, count: sizes.length * views.length };
+  };
+  const exportMaxPiece = () => {
+    const { sizes, views } = exportTargets();
+    let best = { cmW: 0, cmH: 0 };
+    for (const s of sizes) for (const v of views) {
+      if (!(s in table)) continue;
+      const { cmW, cmH } = buildPlotterSvgFor({ view: v, size: s, hideTechnical: hideTech, crop: cropRect });
+      if (cmW * cmH > best.cmW * best.cmH) best = { cmW, cmH };
+    }
+    return best;
+  };
+
+  const flash = (m: string, ms = 4500) => {
+    setSavedMsg(m);
+    setTimeout(() => setSavedMsg(""), ms);
+  };
+
   const runExport = async () => {
+    const { sizes, views, count } = exportTargets();
+    if (!count) return flash("Escolha ao menos um tamanho e uma vista", 3500);
+    const sig = { cancelled: false };
+    expSignal.current = sig;
     setExporting(true);
     try {
-      const { svg, cmW, cmH } = buildPlotterSvg({ hideTechnical: hideTech, crop: cropRect });
-      const base = `moldecore-plotter-${view}-${size}`;
-      if (exportFmt === "pdf") {
-        const ok = printVectorPdf(svg, cmW, cmH, base);
-        setSavedMsg(
-          ok
-            ? "Arquivo 1:1 pronto — na janela de impressão escolha Salvar como PDF"
-            : "Vetor 1:1 baixado como SVG",
-        );
-      } else {
-        const px = (cm: number) => Math.round((cm / 2.54) * 300);
-        const blob = await rasterizeSvg(svg, px(cmW), px(cmH));
-        downloadBlob(blob, `${base}-300dpi.png`);
-        setSavedMsg("PNG 300 DPI gerado no tamanho real");
+      await fontsReady();
+      const ext = TEAM_EXT[exportFmt];
+      if (count === 1) {
+        const [s] = sizes;
+        const [v] = views;
+        const { svg, cmW, cmH } = buildPlotterSvgFor({ view: v, size: s, hideTechnical: hideTech, crop: cropRect });
+        const base = exportName(clothingType, s, v);
+        if (exportFmt === "pdf") {
+          if (printVectorPdf(await embedFonts(svg), cmW, cmH, base)) flash("Arquivo 1:1 pronto — na janela de impressão escolha Salvar como PDF");
+          else {
+            const r = await renderPiece(svg, cmW, cmH, "pdf", expDpi, expQuality, base);
+            downloadBlob(new Blob([r.bytes as BlobPart], { type: MIME.pdf }), `${base}.pdf`);
+            flash("Janela de impressão bloqueada — PDF gerado em alta resolução");
+          }
+        } else {
+          const r = await renderPiece(svg, cmW, cmH, exportFmt, expDpi, expQuality, base);
+          downloadBlob(new Blob([r.bytes as BlobPart], { type: MIME[exportFmt] }), `${base}.${ext}`);
+          flash(`${exportFmt.toUpperCase()} ${r.dpi} DPI gerado no tamanho real` + (r.reduced ? " (DPI reduzido para caber no navegador)" : ""));
+        }
+        setPlotterOpen(false);
+        return;
       }
-      setTimeout(() => setSavedMsg(""), 4500);
+      const files: Record<string, Uint8Array> = {};
+      const used = new Set<string>();
+      const warnings: string[] = [];
+      let n = 0;
+      setExpProgress({ done: 0, total: count });
+      for (const s of sizes) for (const v of views) {
+        if (sig.cancelled) return flash("Exportação cancelada", 3000);
+        const { svg, cmW, cmH } = buildPlotterSvgFor({ view: v, size: s, hideTechnical: hideTech, crop: cropRect });
+        const name = uniqueName(`${exportName(clothingType, s, v)}.${ext}`, used);
+        const r = await renderPiece(svg, cmW, cmH, exportFmt, expDpi, expQuality, name);
+        if (r.reduced) warnings.push(`${sizeLabel(clothingType, s)} ${partLabel(v)} a ${r.dpi} DPI`);
+        files[name] = r.bytes;
+        n++;
+        setExpProgress({ done: n, total: count });
+        await yieldFrame();
+      }
+      if (sig.cancelled) return flash("Exportação cancelada", 3000);
+      const zip = await zipFiles(files, exportFmt);
+      if (sig.cancelled) return flash("Exportação cancelada", 3000);
+      downloadBlob(new Blob([zip as BlobPart], { type: "application/zip" }), `MoldeCore_${clothingType.replace(/\s+/g, "_")}_${todayStamp()}.zip`);
+      flash(`${n} arquivos ${exportFmt.toUpperCase()} no ZIP` + (warnings.length ? ` · DPI reduzido: ${warnings.join(", ")}` : ""), warnings.length ? 9000 : 4500);
       setPlotterOpen(false);
     } catch {
-      setSavedMsg("Não foi possível gerar o arquivo de exportação");
-      setTimeout(() => setSavedMsg(""), 3500);
+      flash("Não foi possível gerar o arquivo de exportação", 3500);
     } finally {
       setExporting(false);
+      setExpProgress(null);
     }
   };
 
