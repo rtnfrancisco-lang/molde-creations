@@ -3426,7 +3426,7 @@ function Index() {
                     </div>
                   );
                   return (
-                    <div className="absolute top-3 left-3 z-20 w-64 space-y-2 rounded-md border border-cyan/40 bg-panel p-2.5 text-xs shadow-lg">
+                    <div className="absolute top-16 left-3 z-20 w-64 space-y-2 rounded-md border border-cyan/40 bg-panel p-2.5 text-xs shadow-lg">
                       <div className="flex items-center gap-1.5 font-medium text-cyan"><Tag className="size-3.5" /> Espaço de imagem do time</div>
                       <div className="flex items-center justify-between gap-2"><span className="text-faint">Tipo</span>{seg("kind", [["nome", "Nome"], ["numero", "Número"]])}</div>
                       <div className="space-y-1"><span className="text-faint">Ponto fixo horizontal</span>{seg("h", [["esquerda", "Esquerda"], ["centro", "Centro"], ["direita", "Direita"]])}</div>
