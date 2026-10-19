@@ -2804,24 +2804,48 @@ function Index() {
                   </div>
                 </div>
 
-                <div className="rounded-md border border-line bg-panel2 p-2.5 text-[10px] font-mono text-muted-foreground leading-snug">
-                  SAÍDA · {view.toUpperCase()} · TAMANHO {size} · {fmt(activeDims().cmW)} × {fmt(activeDims().cmH)} cm
-                  {exportFmt === "png"
-                    ? ` · ${Math.round((activeDims().cmW / 2.54) * 300)} × ${Math.round((activeDims().cmH / 2.54) * 300)} px`
-                    : " · vetor 1:1"}
-                </div>
+                {(() => {
+                  const t = exportTargets();
+                  const multi = t.count > 1;
+                  const vector = exportFmt === "pdf" && !multi;
+                  const mp = exportMaxPiece();
+                  const d = fitDpi(mp.cmW, mp.cmH, expDpi);
+                  return (
+                    <div className="rounded-md border border-line bg-panel2 p-2.5 text-[10px] font-mono text-muted-foreground leading-snug space-y-1">
+                      <div>
+                        SAÍDA · {t.count} {t.count === 1 ? "arquivo" : "arquivos"} {exportFmt.toUpperCase()}
+                        {multi ? " em ZIP" : ""} · {vector ? "vetor 1:1" : `maior peça ${fmt(mp.cmW)} × ${fmt(mp.cmH)} cm · ${cmToPx(mp.cmW, d)} × ${cmToPx(mp.cmH, d)} px`}
+                        {!vector && d < expDpi ? ` · DPI reduzido para ${d}` : ""}
+                      </div>
+                      {exportFmt === "pdf" && multi && (
+                        <div className="text-faint">PDF em lote usa imagem de alta resolução; para PDF vetorial exporte um arquivo por vez</div>
+                      )}
+                      {expProgress && (
+                        <div className="pt-1">
+                          <div className="h-1.5 rounded bg-line overflow-hidden">
+                            <div className="h-full bg-cyan transition-all" style={{ width: `${(expProgress.done / Math.max(1, expProgress.total)) * 100}%` }} />
+                          </div>
+                          <div className="mt-1">{expProgress.done} / {expProgress.total}</div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="px-4 py-3 border-t border-line flex gap-2">
                 <button
-                  onClick={() => setPlotterOpen(false)}
+                  onClick={() => {
+                    if (exporting) expSignal.current.cancelled = true;
+                    else setPlotterOpen(false);
+                  }}
                   className="flex-1 py-2.5 rounded-md border border-line text-sm font-medium text-muted-foreground hover:text-foreground"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={runExport}
-                  disabled={exporting}
+                  disabled={exporting || exportTargets().count === 0}
                   className="flex-1 py-2.5 rounded-md bg-cyan text-primary-foreground text-sm font-semibold hover:bg-cyan/90 disabled:opacity-60"
                 >
                   {exporting ? "Gerando…" : "Exportar"}
@@ -3049,12 +3073,6 @@ function Index() {
                 </>
                 );
               })())}
-              <button
-                onClick={exportAll}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap border border-line text-muted-foreground hover:text-foreground"
-              >
-                <Download className="size-3.5" /> Exportar Tamanhos
-              </button>
               <label className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground cursor-pointer">
                 <input
                   type="checkbox"
