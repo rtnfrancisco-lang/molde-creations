@@ -20,6 +20,15 @@ export type Layer = {
   clipped?: boolean;
   /** Geometria ao entrar no PowerClip (para "Redefinir Posição e Tamanho"). */
   init?: { cx: number; cy: number; w: number; ratio: number; rot: number };
+  /** Espaço de imagem do time (só imagem/pdf): posição e caixa da imagem do jogador. */
+  slot?: LayerSlot;
+};
+
+export type LayerSlot = {
+  kind: "nome" | "numero";
+  h: "esquerda" | "centro" | "direita";
+  v: "topo" | "centro" | "base";
+  scale: boolean;
 };
 
 /** Converte nós normalizados (0..1) em um path SVG com largura w e altura h (x centrado). */

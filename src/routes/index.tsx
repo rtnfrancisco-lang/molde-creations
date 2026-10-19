@@ -23,6 +23,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Lock,
+  Tag,
   LockOpen,
   ChevronRight,
   ChevronLeft,
@@ -71,6 +72,7 @@ import {
   layerMarkup,
   layerPathD,
   type Layer,
+  type LayerSlot,
 } from "@/lib/importers";
 import { activeView } from "@/lib/active-view";
 import {
@@ -2135,6 +2137,15 @@ function Index() {
     setViewLayers(curLayers.filter((l) => l.id !== id), "del:" + Date.now());
     if (selLayer === id) setSelLayer(null);
   };
+  const setSlot = (id: string, slot: LayerSlot | undefined) =>
+    setViewLayers(
+      curLayers.map((l) => {
+        if (l.id !== id) return l;
+        const { slot: _old, ...rest } = l;
+        return slot && l.kind !== "vetor" ? { ...rest, slot } : rest;
+      }),
+      "slot:" + Date.now(),
+    );
   const toggleHidden = (id: string) =>
     setViewLayers(curLayers.map((l) => (l.id === id ? { ...l, hidden: !l.hidden } : l)), "hide:" + Date.now());
 
@@ -3404,6 +3415,26 @@ function Index() {
                     }}
                   />
                 )}
+                {selObj?.slot && selObj.kind !== "vetor" && !viewPlayer && (() => {
+                  const sl = selObj.slot;
+                  const up = (p: Partial<LayerSlot>) => setSlot(selObj.id, { ...sl, ...p });
+                  const seg = <K extends keyof LayerSlot>(k: K, opts: [LayerSlot[K], string][]) => (
+                    <div className="flex rounded border border-line overflow-hidden">
+                      {opts.map(([v, lbl]) => (
+                        <button key={String(v)} type="button" onClick={() => up({ [k]: v } as Partial<LayerSlot>)} className={"px-2 py-0.5 text-[11px] " + (sl[k] === v ? "bg-cyan/15 text-cyan font-semibold" : "text-muted-foreground hover:text-foreground")}>{lbl}</button>
+                      ))}
+                    </div>
+                  );
+                  return (
+                    <div className="absolute top-16 left-3 z-20 w-64 space-y-2 rounded-md border border-cyan/40 bg-panel p-2.5 text-xs shadow-lg">
+                      <div className="flex items-center gap-1.5 font-medium text-cyan"><Tag className="size-3.5" /> Espaço de imagem do time</div>
+                      <div className="flex items-center justify-between gap-2"><span className="text-faint">Tipo</span>{seg("kind", [["nome", "Nome"], ["numero", "Número"]])}</div>
+                      <div className="space-y-1"><span className="text-faint">Ponto fixo horizontal</span>{seg("h", [["esquerda", "Esquerda"], ["centro", "Centro"], ["direita", "Direita"]])}</div>
+                      <div className="space-y-1"><span className="text-faint">Ponto fixo vertical</span>{seg("v", [["topo", "Topo"], ["centro", "Centro"], ["base", "Base"]])}</div>
+                      <label className="flex items-center gap-2 text-foreground"><input type="checkbox" checked={sl.scale} onChange={(e) => up({ scale: e.target.checked })} className="accent-[var(--color-cyan)]" /> Escalar com o tamanho</label>
+                    </div>
+                  );
+                })()}
                 {selInfo && (
                   <SelectionPropsBar info={selInfo} locked={lockRatio} onToggleLock={() => setLockRatio((v) => !v)} />
                 )}
@@ -3448,6 +3479,7 @@ function Index() {
                             <span className={"flex-1 truncate " + (l.hidden ? "opacity-40" : "")} title={l.name}>
                               {l.name}
                             </span>
+                            {l.slot && <span title={l.slot.kind === "nome" ? "Espaço do nome" : "Espaço do número"}><Tag className="size-3 shrink-0 text-cyan" /></span>}
                             {l.clipped && <span className="shrink-0 rounded bg-cyan/15 px-1 text-[9px] font-mono uppercase text-cyan">PowerClip</span>}
                             {(
                               [
@@ -3523,6 +3555,17 @@ function Index() {
                       pcEdit && pcHasContent ? { label: "Extrair Selecionado", run: pcExtractSelected, disabled: !canExtractSelected } : null,
                       pcHasContent ? { label: "Extrair Tudo", run: pcExtractAll } : null,
                     ].filter((i): i is CtxItem => !!i),
+                  },
+                  {
+                    title: "Espaço do time",
+                    items:
+                      selObj && selObj.kind !== "vetor"
+                        ? [
+                            { label: "Definir como espaço do NOME", run: () => setSlot(selObj.id, { kind: "nome", h: "centro", v: "centro", scale: true }) },
+                            { label: "Definir como espaço do NÚMERO", run: () => setSlot(selObj.id, { kind: "numero", h: "centro", v: "centro", scale: true }) },
+                            ...(selObj.slot ? [{ label: "Remover marcação de espaço", run: () => setSlot(selObj.id, undefined) }] : []),
+                          ]
+                        : [],
                   },
                   {
                     title: "Objeto",
@@ -4578,6 +4621,23 @@ function PatternCanvas({
             >
               {content(l, aw, ah, true)}
             </g>
+            {l.slot && l.kind !== "vetor" && (
+              <g className="pointer-events-none" data-screen-only>
+                <rect x={-aw / 2} y={-ah / 2} width={aw} height={ah} className="fill-none stroke-cyan" strokeWidth={1} strokeDasharray="3 2" vectorEffect="non-scaling-stroke" />
+                <text x={-aw / 2} y={-ah / 2 - unit * 0.4} fontSize={unit * 1.1} className="fill-cyan font-mono">{l.slot.kind === "nome" ? "ESPAÇO NOME" : "ESPAÇO Nº"}</text>
+                {(() => {
+                  const ax = l.slot.h === "esquerda" ? -aw / 2 : l.slot.h === "direita" ? aw / 2 : 0;
+                  const ay = l.slot.v === "topo" ? -ah / 2 : l.slot.v === "base" ? ah / 2 : 0;
+                  const k = unit * 0.9;
+                  return (
+                    <>
+                      <line x1={ax} x2={ax} y1={ay - k} y2={ay + k} className="stroke-cyan" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+                      <line x1={ax - k} x2={ax + k} y1={ay} y2={ay} className="stroke-cyan" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+                    </>
+                  );
+                })()}
+              </g>
+            )}
             {sel && tool !== "selecao" && (
               <rect x={-aw / 2} y={-ah / 2} width={aw} height={ah} className="fill-none stroke-amber pointer-events-none" strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
             )}
