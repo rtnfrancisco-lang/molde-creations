@@ -54,6 +54,8 @@ import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { TeamPanel, type TeamExportOpts } from "@/components/TeamPanel";
 import { embedFonts } from "@/lib/raster-export";
+import { sanitizeRoster, type Player } from "@/lib/roster";
+import { teamScale, resolveTeamText, measureText, fontsReady } from "@/lib/team-text";
 import { renderPiece, zipFiles, todayStamp, yieldFrame, MIME } from "@/lib/export-render";
 import { teamFileName, uniqueName, TEAM_EXT, TEAM_DPIS, type TeamFormat } from "@/lib/team-export";
 import { buildProjectFile, parseProjectFile, nameFromFile, PROJECT_EXT } from "@/lib/project-file";
@@ -2517,14 +2519,14 @@ function Index() {
     return best;
   };
 
-  const flash = (m: string, ms = 4500) => {
+  const flashSaved = (m: string, ms = 4500) => {
     setSavedMsg(m);
     setTimeout(() => setSavedMsg(""), ms);
   };
 
   const runExport = async () => {
     const { sizes, views, count } = exportTargets();
-    if (!count) return flash("Escolha ao menos um tamanho e uma vista", 3500);
+    if (!count) return flashSaved("Escolha ao menos um tamanho e uma vista", 3500);
     const sig = { cancelled: false };
     expSignal.current = sig;
     setExporting(true);
@@ -2532,21 +2534,21 @@ function Index() {
       await fontsReady();
       const ext = TEAM_EXT[exportFmt];
       if (count === 1) {
-        const [s] = sizes;
-        const [v] = views;
+        const s = sizes[0];
+        const v = views[0];
         const { svg, cmW, cmH } = buildPlotterSvgFor({ view: v, size: s, hideTechnical: hideTech, crop: cropRect });
         const base = exportName(clothingType, s, v);
         if (exportFmt === "pdf") {
-          if (printVectorPdf(await embedFonts(svg), cmW, cmH, base)) flash("Arquivo 1:1 pronto — na janela de impressão escolha Salvar como PDF");
+          if (printVectorPdf(await embedFonts(svg), cmW, cmH, base)) flashSaved("Arquivo 1:1 pronto — na janela de impressão escolha Salvar como PDF");
           else {
             const r = await renderPiece(svg, cmW, cmH, "pdf", expDpi, expQuality, base);
             downloadBlob(new Blob([r.bytes as BlobPart], { type: MIME.pdf }), `${base}.pdf`);
-            flash("Janela de impressão bloqueada — PDF gerado em alta resolução");
+            flashSaved("Janela de impressão bloqueada — PDF gerado em alta resolução");
           }
         } else {
           const r = await renderPiece(svg, cmW, cmH, exportFmt, expDpi, expQuality, base);
           downloadBlob(new Blob([r.bytes as BlobPart], { type: MIME[exportFmt] }), `${base}.${ext}`);
-          flash(`${exportFmt.toUpperCase()} ${r.dpi} DPI gerado no tamanho real` + (r.reduced ? " (DPI reduzido para caber no navegador)" : ""));
+          flashSaved(`${exportFmt.toUpperCase()} ${r.dpi} DPI gerado no tamanho real` + (r.reduced ? " (DPI reduzido para caber no navegador)" : ""));
         }
         setPlotterOpen(false);
         return;
@@ -2557,7 +2559,7 @@ function Index() {
       let n = 0;
       setExpProgress({ done: 0, total: count });
       for (const s of sizes) for (const v of views) {
-        if (sig.cancelled) return flash("Exportação cancelada", 3000);
+        if (sig.cancelled) return flashSaved("Exportação cancelada", 3000);
         const { svg, cmW, cmH } = buildPlotterSvgFor({ view: v, size: s, hideTechnical: hideTech, crop: cropRect });
         const name = uniqueName(`${exportName(clothingType, s, v)}.${ext}`, used);
         const r = await renderPiece(svg, cmW, cmH, exportFmt, expDpi, expQuality, name);
@@ -2567,14 +2569,14 @@ function Index() {
         setExpProgress({ done: n, total: count });
         await yieldFrame();
       }
-      if (sig.cancelled) return flash("Exportação cancelada", 3000);
+      if (sig.cancelled) return flashSaved("Exportação cancelada", 3000);
       const zip = await zipFiles(files, exportFmt);
-      if (sig.cancelled) return flash("Exportação cancelada", 3000);
+      if (sig.cancelled) return flashSaved("Exportação cancelada", 3000);
       downloadBlob(new Blob([zip as BlobPart], { type: "application/zip" }), `MoldeCore_${clothingType.replace(/\s+/g, "_")}_${todayStamp()}.zip`);
-      flash(`${n} arquivos ${exportFmt.toUpperCase()} no ZIP` + (warnings.length ? ` · DPI reduzido: ${warnings.join(", ")}` : ""), warnings.length ? 9000 : 4500);
+      flashSaved(`${n} arquivos ${exportFmt.toUpperCase()} no ZIP` + (warnings.length ? ` · DPI reduzido: ${warnings.join(", ")}` : ""), warnings.length ? 9000 : 4500);
       setPlotterOpen(false);
     } catch {
-      flash("Não foi possível gerar o arquivo de exportação", 3500);
+      flashSaved("Não foi possível gerar o arquivo de exportação", 3500);
     } finally {
       setExporting(false);
       setExpProgress(null);
