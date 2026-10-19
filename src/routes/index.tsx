@@ -1570,8 +1570,8 @@ function Index() {
     setStyles(sn.styles);
     setLayers(sn.layers);
     localStorage.setItem(LS_GRADING, JSON.stringify(sn.table));
-    localStorage.setItem(LS_SHAPES, JSON.stringify(sn.shapes));
-    localStorage.setItem(LS_STYLES, JSON.stringify(sn.styles));
+    saveLS(LS_SHAPES, sn.shapes);
+    saveLS(LS_STYLES, sn.styles);
     saveLS(LS_ART, sn.artworks);
     saveLS(LS_LAYERS, sn.layers);
     setTexts(sn.texts);
