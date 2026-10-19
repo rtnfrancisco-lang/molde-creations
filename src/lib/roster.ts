@@ -3,7 +3,15 @@
 export const ROSTER_SIZES = ["PP", "P", "M", "G", "GG", "XG", "XG2"] as const;
 export type RosterSize = (typeof ROSTER_SIZES)[number];
 export type RosterSizeOption = { id: RosterSize; label: string };
-export type Player = { id: string; numero: string; nome: string; tamanho: RosterSize };
+export type Player = {
+  id: string;
+  numero: string;
+  nome: string;
+  tamanho: RosterSize;
+  /** Ids na biblioteca de imagens do time. */
+  imgNome?: string;
+  imgNumero?: string;
+};
 
 export const newPlayerId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
@@ -160,5 +168,7 @@ export function sanitizeRoster(v: unknown): Player[] {
       numero: String(p["numero"] ?? ""),
       nome: String(p["nome"] ?? ""),
       tamanho: p["tamanho"] as RosterSize,
+      ...(typeof p["imgNome"] === "string" && p["imgNome"] ? { imgNome: p["imgNome"] as string } : {}),
+      ...(typeof p["imgNumero"] === "string" && p["imgNumero"] ? { imgNumero: p["imgNumero"] as string } : {}),
     }));
 }
