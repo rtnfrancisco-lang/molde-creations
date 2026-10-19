@@ -26,4 +26,24 @@ describe("team-text", () => {
     expect(resolveTeamText(t, { value: "Alexandre Junior", sx: 1, sy: 1, measure })!.fontSize).toBeCloseTo((30 * 25) / 48);
     expect(resolveTeamText(t, { value: "Zé", sx: 1, sy: 1, measure })!.fontSize).toBe(30);
   });
+  it("ponto fixo centro: centraliza no eixo do exemplo alinhado à esquerda", () => {
+    // exemplo "NOME" a 3 cm => largura 12, de 2 a 14, centro 8
+    const t = { ...base, align: "left" as const, field: "nome" as const };
+    const a = resolveTeamText(t, { value: "Zé", sx: 1, sy: 1, measure })!;
+    const b = resolveTeamText(t, { value: "PEDRO RAIMUNDO", sx: 1, sy: 1, measure })!;
+    expect(a).toMatchObject({ x: 8, align: "center", left: 5, right: 11 });
+    expect(b.x).toBe(8);
+    expect(resolveTeamText({ ...t, scaleWithSize: true }, { value: "Zé", sx: 1.1, sy: 1, measure })!.x).toBeCloseTo(8.8);
+  });
+  it("ponto fixo esquerda e direita", () => {
+    const t = { ...base, align: "left" as const, field: "nome" as const };
+    expect(resolveTeamText({ ...t, fieldAnchor: "esquerda" }, { value: "ABCDEFGH", sx: 1, sy: 1, measure })).toMatchObject({ x: 2, align: "left", left: 2, right: 26 });
+    expect(resolveTeamText({ ...t, fieldAnchor: "direita" }, { value: "AB", sx: 1, sy: 1, measure })).toMatchObject({ x: 14, align: "right", left: 8 });
+  });
+  it("ao encolher mantém a linha de base", () => {
+    const t = { ...base, field: "nome" as const, fitWidth: 12 };
+    const r = resolveTeamText(t, { value: "ABCDEFGH", sx: 1, sy: 1, measure })!;
+    expect(r.fontSize).toBeCloseTo(15);
+    expect(r.y + r.fontSize / 10).toBeCloseTo(10 + 3);
+  });
 });
