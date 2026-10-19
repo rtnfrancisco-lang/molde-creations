@@ -18,6 +18,8 @@ export type ProjectData = {
   activeProfile: string;
   /** Lista do Time (ausente em arquivos antigos). */
   roster?: unknown;
+  /** Biblioteca de imagens do time (ausente em arquivos antigos). */
+  teamImages?: unknown;
 };
 
 export type ProjectFile = {
