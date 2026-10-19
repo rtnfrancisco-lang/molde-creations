@@ -51,6 +51,7 @@ import {
   AlignRight,
 } from "lucide-react";
 import { toast } from "sonner";
+import * as idb from "@/lib/idb";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { TeamPanel, type TeamExportOpts } from "@/components/TeamPanel";
 import { embedFonts } from "@/lib/raster-export";
@@ -585,12 +586,116 @@ const ProfileDock = ({
   );
 };
 
-const saveLS = (k: string, v: unknown) => {
+/* ---------- Persistência: dados grandes no IndexedDB, preferências no localStorage ---------- */
+const BIG_KEYS = new Set([
+  "moldecore.camadas",
+  "moldecore.estampas",
+  "moldecore.textos",
+  "moldecore.formas",
+  "moldecore.cores",
+  "moldecore.time",
+]);
+const SAVE_FAIL_TOAST = "moldecore-save-fail";
+let saveFailed = false;
+const reportSave = (ok: boolean) => {
+  if (ok) {
+    if (saveFailed) toast.dismiss(SAVE_FAIL_TOAST);
+    saveFailed = false;
+  } else if (!saveFailed) {
+    saveFailed = true;
+    toast.error("Não foi possível salvar automaticamente. Salve o projeto em arquivo (Arquivo > Salvar)", {
+      id: SAVE_FAIL_TOAST,
+      duration: Infinity,
+    });
+  }
+};
+/** Só grava dados grandes depois que o carregamento inicial terminou. */
+let bigHydrated = false;
+let useIdb = true;
+const pending = new Map<string, unknown>();
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+const writeLS = (k: string, v: unknown) => {
   try {
     localStorage.setItem(k, JSON.stringify(v));
+    return true;
   } catch {
-    /* grande demais para o armazenamento local */
+    return false;
   }
+};
+const flushBig = async () => {
+  flushTimer = null;
+  const items = [...pending];
+  pending.clear();
+  let ok = true;
+  for (const [k, v] of items) {
+    if (useIdb) {
+      try {
+        await idb.set(k, v);
+        continue;
+      } catch {
+        ok = false;
+        continue;
+      }
+    }
+    if (!writeLS(k, v)) ok = false;
+  }
+  reportSave(ok);
+};
+const saveLS = (k: string, v: unknown) => {
+  if (BIG_KEYS.has(k)) {
+    if (!bigHydrated) return;
+    pending.set(k, v);
+    if (!flushTimer) flushTimer = setTimeout(() => void flushBig(), 200);
+    return;
+  }
+  if (!writeLS(k, v)) reportSave(false);
+};
+/** Lê uma chave grande; migra do localStorage para o IndexedDB quando preciso. */
+const loadBig = async (k: string): Promise<unknown> => {
+  const legacy = () => {
+    const raw = localStorage.getItem(k);
+    if (raw == null) return undefined;
+    try {
+      return JSON.parse(raw) as unknown;
+    } catch {
+      return undefined;
+    }
+  };
+  if (!useIdb) return legacy();
+  const v = await idb.get(k);
+  if (v !== undefined) return v;
+  const old = legacy();
+  if (old === undefined) return undefined;
+  try {
+    await idb.set(k, old);
+    if ((await idb.get(k)) !== undefined) localStorage.removeItem(k);
+  } catch {
+    /* mantém a chave antiga se a migração falhar */
+  }
+  return old;
+};
+/** Carrega todas as chaves grandes de uma vez e libera a gravação. */
+let bigPromise: Promise<Record<string, unknown>> | null = null;
+const getBig = () => (bigPromise ??= loadAllBig());
+const loadAllBig = async (): Promise<Record<string, unknown>> => {
+  useIdb = idb.hasIdb();
+  if (useIdb) {
+    try {
+      await idb.keys();
+    } catch {
+      useIdb = false;
+    }
+  }
+  const out: Record<string, unknown> = {};
+  for (const k of BIG_KEYS) {
+    try {
+      out[k] = await loadBig(k);
+    } catch {
+      useIdb = false;
+      out[k] = await loadBig(k).catch(() => undefined);
+    }
+  }
+  return out;
 };
 
 const LIBRARY = [
@@ -1204,12 +1309,14 @@ function Index() {
     void fontsReady().then(() => setFontsTick((t) => t + 1));
   }, []);
   useEffect(() => {
-    try {
-      setRoster(sanitizeRoster(JSON.parse(localStorage.getItem(LS_TEAM) ?? "[]")));
-    } catch {
-      /* lista corrompida */
-    }
-    rosterLoaded.current = true;
+    void getBig().then((big) => {
+      try {
+        setRoster(sanitizeRoster(big[LS_TEAM] ?? []));
+      } catch {
+        /* lista corrompida */
+      }
+      rosterLoaded.current = true;
+    });
   }, []);
   useEffect(() => {
     if (!rosterLoaded.current) return;
@@ -1380,6 +1487,10 @@ function Index() {
 
   // Carregar do armazenamento local
   useEffect(() => {
+    let alive = true;
+    void getBig().then((big) => {
+    if (!alive) return;
+    const asObj = (v: unknown) => (v && typeof v === "object" ? (v as object) : null);
     try {
       const g = localStorage.getItem(LS_GRADING);
       if (g) {
@@ -1395,24 +1506,27 @@ function Index() {
       }
       const mm = localStorage.getItem(LS_MOTHER) as Size | null;
       if (mm && SIZES.includes(mm)) setMother(mm);
-      const a = localStorage.getItem(LS_ART);
-      if (a) setArtworks({ ...NO_ART, ...JSON.parse(a) });
-      const st = localStorage.getItem(LS_STYLES);
-      if (st) setStyles({ ...DEFAULT_STYLES, ...JSON.parse(st) });
-      const s = localStorage.getItem(LS_SHAPES);
-      if (s) setShapes({ ...DEFAULT_SHAPES, ...JSON.parse(s) });
-      const ly = localStorage.getItem(LS_LAYERS);
-      if (ly) setLayers({ ...NO_LAYERS, ...JSON.parse(ly) });
-      try {
-        const tx = JSON.parse(localStorage.getItem(LS_TEXTS) ?? "null");
-        if (tx && typeof tx === "object") setTexts({ ...NO_TEXTS, ...tx });
-      } catch { /* textos inválidos não impedem o desenho */ }
+      const a = asObj(big[LS_ART]);
+      if (a) setArtworks({ ...NO_ART, ...a });
+      const st = asObj(big[LS_STYLES]);
+      if (st) setStyles({ ...DEFAULT_STYLES, ...st });
+      const sh = asObj(big[LS_SHAPES]);
+      if (sh) setShapes({ ...DEFAULT_SHAPES, ...sh });
+      const ly = asObj(big[LS_LAYERS]);
+      if (ly) setLayers({ ...NO_LAYERS, ...ly });
+      const tx = asObj(big[LS_TEXTS]);
+      if (tx) setTexts({ ...NO_TEXTS, ...tx });
       textsHydrated.current = true;
       const sb = localStorage.getItem(LS_SIDEBARS);
       if (sb) setSidebars((cur) => ({ ...cur, ...JSON.parse(sb) }));
     } catch {
       /* ignora dados corrompidos */
     }
+    bigHydrated = true;
+    });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const toggleSidebar = (side: "left" | "right") =>
@@ -1456,8 +1570,8 @@ function Index() {
     setStyles(sn.styles);
     setLayers(sn.layers);
     localStorage.setItem(LS_GRADING, JSON.stringify(sn.table));
-    localStorage.setItem(LS_SHAPES, JSON.stringify(sn.shapes));
-    localStorage.setItem(LS_STYLES, JSON.stringify(sn.styles));
+    saveLS(LS_SHAPES, sn.shapes);
+    saveLS(LS_STYLES, sn.styles);
     saveLS(LS_ART, sn.artworks);
     saveLS(LS_LAYERS, sn.layers);
     setTexts(sn.texts);
@@ -1690,7 +1804,7 @@ function Index() {
   const updateShapes = (next: Shapes) => {
     checkpoint("shapes");
     setShapes(next);
-    localStorage.setItem(LS_SHAPES, JSON.stringify(next));
+    saveLS(LS_SHAPES, next);
   };
 
   /* Alimenta o desenho técnico do canvas com a vista ativa (a Costas tem buffer maior na barra). */
@@ -1801,7 +1915,7 @@ function Index() {
     checkpoint("art");
     setArtworks(next);
     try {
-      localStorage.setItem(LS_ART, JSON.stringify(next));
+      saveLS(LS_ART, next);
     } catch {
       /* imagem grande demais para o armazenamento local */
     }
@@ -2077,7 +2191,7 @@ function Index() {
     const nl = { ...layers, [view]: curLayers.filter((x) => x.id !== id) };
     setShapes(ns);
     setLayers(nl);
-    localStorage.setItem(LS_SHAPES, JSON.stringify(ns));
+    saveLS(LS_SHAPES, ns);
     saveLS(LS_LAYERS, nl);
     setSelLayer(null);
     setTool("forma");
@@ -2171,7 +2285,7 @@ function Index() {
     checkpoint("color:" + Date.now());
     const next = { ...styles, [view]: { ...styles[view], [t === "contorno" ? "stroke" : "fill"]: hex } };
     setStyles(next);
-    localStorage.setItem(LS_STYLES, JSON.stringify(next));
+    saveLS(LS_STYLES, next);
   };
 
   const setArt = (a: Artwork | null) => updateArtworks({ ...artworks, [view]: a });
@@ -2242,7 +2356,7 @@ function Index() {
       const all = { ...snapRef.current.artworks, [view]: nextArt };
       setArtworks(all);
       try {
-        localStorage.setItem(LS_ART, JSON.stringify(all));
+        saveLS(LS_ART, all);
       } catch {
         /* imagem grande demais */
       }
