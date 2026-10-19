@@ -60,7 +60,7 @@ export function TeamPanel({ open, onClose, roster, setRoster, options, garment, 
     for (const f of list) {
       try {
         const r = await readTeamImage(f, trimPng);
-        const same = lib.find((i) => i.src === r.src);
+        const same = lib.find((i) => i.src === r.src && i.nome === r.nome);
         if (same) got.push(same);
         else {
           const img = { id: newImageId(), ...r };
