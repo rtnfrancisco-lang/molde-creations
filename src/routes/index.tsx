@@ -57,7 +57,7 @@ import { embedFonts } from "@/lib/raster-export";
 import { sanitizeRoster, type Player } from "@/lib/roster";
 import { teamScale, resolveTeamText, measureText, fontsReady } from "@/lib/team-text";
 import { renderPiece, zipFiles, todayStamp, yieldFrame, MIME } from "@/lib/export-render";
-import { teamFileName, uniqueName, TEAM_EXT, TEAM_DPIS, type TeamFormat } from "@/lib/team-export";
+import { teamFileName, uniqueName, TEAM_EXT, TEAM_DPIS, fitDpi, cmToPx, type TeamFormat } from "@/lib/team-export";
 import { buildProjectFile, parseProjectFile, nameFromFile, PROJECT_EXT } from "@/lib/project-file";
 import { hasFsAccess, pickSaveHandle, writeHandle, downloadText, openProjectFile, isAbort, type FileHandle } from "@/lib/file-access";
 import {
@@ -2340,14 +2340,6 @@ function Index() {
   /* ================= Exportação inteligente para Plotter ================= */
 
 
-  const activeDims = () => {
-    const isBody = view === "frente" || view === "costas";
-    const mm = table[size];
-    const W = isBody ? mm.bodyWidth : mm.sleeveWidth;
-    const H = isBody ? mm.bodyHeight : mm.sleeveHeight;
-    const pad = cropRect ? 0 : 6;
-    return { W, H, pad, cmW: W + PLOTTER_MARGIN * 2 + pad * 2, cmH: H + PLOTTER_MARGIN * 2 + pad * 2 };
-  };
 
   const buildPlotterSvgFor = (o: { view: View; size: Size; hideTechnical: boolean; crop: boolean; player?: Player }) => {
     const { view, size } = o;
