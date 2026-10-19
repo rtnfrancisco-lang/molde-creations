@@ -57,6 +57,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { TeamPanel, type TeamExportOpts } from "@/components/TeamPanel";
 import { embedFonts } from "@/lib/raster-export";
 import { sanitizeRoster, type Player } from "@/lib/roster";
+import { sanitizeImages, type TeamImage } from "@/lib/team-images";
 import { teamScale, resolveTeamText, measureText, fontsReady, teamTextOverflows, type ResolvedTeamText } from "@/lib/team-text";
 import { renderPiece, zipFiles, todayStamp, yieldFrame, MIME } from "@/lib/export-render";
 import { teamFileName, uniqueName, TEAM_EXT, TEAM_DPIS, fitDpi, cmToPx, type TeamFormat } from "@/lib/team-export";
@@ -596,6 +597,7 @@ const BIG_KEYS = new Set([
   "moldecore.formas",
   "moldecore.cores",
   "moldecore.time",
+  "moldecore.time.imagens",
 ]);
 const SAVE_FAIL_TOAST = "moldecore-save-fail";
 let saveFailed = false;
@@ -837,6 +839,7 @@ function CanvasContextMenu({
 
 const LS_TEXTS = "moldecore.textos";
 const LS_TEAM = "moldecore.time";
+const LS_TEAM_IMGS = "moldecore.time.imagens";
 type TextsByView = Record<View, TextElement[]>;
 const NO_TEXTS: TextsByView = { frente: [], costas: [], mangaEsq: [], mangaDir: [] };
 
@@ -1303,6 +1306,7 @@ function Index() {
   const [layers, setLayers] = useState<Layers>(NO_LAYERS);
   const [texts, setTexts] = useState<TextsByView>(NO_TEXTS);
   const [roster, setRoster] = useState<Player[]>([]);
+  const [teamImages, setTeamImages] = useState<TeamImage[]>([]);
   const [teamOpen, setTeamOpen] = useState(false);
   const rosterLoaded = useRef(false);
   const [teamView, setTeamView] = useState<{ id: string; prev: Size } | null>(null);
@@ -1314,6 +1318,7 @@ function Index() {
     void getBig().then((big) => {
       try {
         setRoster(sanitizeRoster(big[LS_TEAM] ?? []));
+        setTeamImages(sanitizeImages(big[LS_TEAM_IMGS]));
       } catch {
         /* lista corrompida */
       }
@@ -1325,6 +1330,11 @@ function Index() {
     const t = setTimeout(() => saveLS(LS_TEAM, roster), 400);
     return () => clearTimeout(t);
   }, [roster]);
+  useEffect(() => {
+    if (!rosterLoaded.current) return;
+    const t = setTimeout(() => saveLS(LS_TEAM_IMGS, teamImages), 400);
+    return () => clearTimeout(t);
+  }, [teamImages]);
   const textsHydrated = useRef(false);
   const [selLayer, setSelLayer] = useState<string | null>(null);
   const [selText, setSelText] = useState<string | null>(null);
@@ -1635,7 +1645,7 @@ function Index() {
       if (Date.now() < cleanUntil.current) setSavedRev(n);
       return n;
     });
-  }, [table, shapes, artworks, styles, layers, texts, mother, clothingType, profiles, activeProfile, roster]);
+  }, [table, shapes, artworks, styles, layers, texts, mother, clothingType, profiles, activeProfile, roster, teamImages]);
   useEffect(() => {
     if (!dirty) return;
     const h = (e: BeforeUnloadEvent) => {
@@ -1647,7 +1657,7 @@ function Index() {
   }, [dirty]);
 
   const projectText = (name: string) =>
-    buildProjectFile(name, { grading: table, mother, clothingType, shapes, artworks, styles, layers, texts, profiles, activeProfile, roster });
+    buildProjectFile(name, { grading: table, mother, clothingType, shapes, artworks, styles, layers, texts, profiles, activeProfile, roster, teamImages });
 
   const saveProject = async (as: boolean): Promise<boolean> => {
     try {
@@ -1763,6 +1773,9 @@ function Index() {
       const nRoster = sanitizeRoster(d.roster);
       setRoster(nRoster);
       saveLS(LS_TEAM, nRoster);
+      const nImgs = sanitizeImages(d.teamImages);
+      setTeamImages(nImgs);
+      saveLS(LS_TEAM_IMGS, nImgs);
       setProfiles(merged);
       setActiveProfile(nActive);
       saveLS(LS_GRADING, grading);
@@ -3248,6 +3261,12 @@ function Index() {
                 teamViews={(["frente", "costas", "mangaEsq", "mangaDir"] as View[]).filter((v) => texts[v].some((t) => t.field === "nome" || t.field === "numero"))}
                 onExportTeam={exportTeam}
                 measurePieces={teamMaxPiece}
+                images={teamImages}
+                setImages={setTeamImages}
+                slotNeeds={{
+                  nome: Object.values(layers).some((ls) => ls.some((l) => l.slot?.kind === "nome")),
+                  numero: Object.values(layers).some((ls) => ls.some((l) => l.slot?.kind === "numero")),
+                }}
                 labelOf={(s) => sizesForGarment(clothingType).find((o) => o.id === s)?.label ?? s}
               />
               {(art || hasClipped || (selObj && !selObj.clipped)) && ((() => {

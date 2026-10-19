@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { ArrowDownWideNarrow, ClipboardPaste, Download, Plus, Trash2, Upload, Users, X, AlertTriangle, Eye, PackageOpen } from "lucide-react";
+import { ArrowDownWideNarrow, FolderOpen, ImagePlus, Images, Search, Unlink, ClipboardPaste, Download, Plus, Trash2, Upload, Users, X, AlertTriangle, Eye, PackageOpen } from "lucide-react";
 import {
   newPlayerId,
   parseRoster,
@@ -12,6 +12,7 @@ import {
   type RosterSize,
   type RosterSizeOption,
 } from "@/lib/roster";
+import { autoLink, linkReport, newImageId, readTeamImage, reportText, unlinkImage, type TeamImage } from "@/lib/team-images";
 import { DEFAULT_TEAM_TEMPLATE, TEAM_DPIS, cmToPx, fitDpi, type TeamFormat } from "@/lib/team-export";
 
 export type TeamExportView = "frente" | "costas" | "mangaEsq" | "mangaDir";
@@ -32,9 +33,60 @@ type Props = {
   teamViews?: TeamExportView[];
   onExportTeam?: (o: TeamExportOpts, onProgress: (done: number, total: number) => void, signal: { cancelled: boolean }) => Promise<TeamExportResult>;
   measurePieces?: (players: Player[], views: TeamExportView[]) => { cmW: number; cmH: number };
+  images?: TeamImage[];
+  setImages?: (i: TeamImage[]) => void;
+  /** Espaços marcados no molde mãe (avisar imagem faltando). */
+  slotNeeds?: { nome: boolean; numero: boolean };
 };
 
-export function TeamPanel({ open, onClose, roster, setRoster, options, garment, labelOf, viewingId, onView, teamViews = [], onExportTeam, measurePieces }: Props) {
+export function TeamPanel({ open, onClose, roster, setRoster, options, garment, labelOf, viewingId, onView, teamViews = [], onExportTeam, measurePieces, images = [], setImages, slotNeeds = { nome: false, numero: false } }: Props) {
+  const [trimPng, setTrimPng] = useState(true);
+  const [imgReport, setImgReport] = useState("");
+  const [imgBusy, setImgBusy] = useState(false);
+  const [libOpen, setLibOpen] = useState(false);
+  const [picker, setPicker] = useState<{ pid: string; kind: "imgNome" | "imgNumero" } | null>(null);
+  const [pickQ, setPickQ] = useState("");
+  const imgFilesRef = useRef<HTMLInputElement>(null);
+  const imgDirRef = useRef<HTMLInputElement>(null);
+  const imgOneRef = useRef<HTMLInputElement>(null);
+  const imgById = useMemo(() => new Map(images.map((i) => [i.id, i])), [images]);
+  /** Lê arquivos, evita duplicar imagens iguais e devolve as imagens (novas ou existentes). */
+  const addFiles = async (files: File[]) => {
+    const list = files.filter((f) => /\.(png|jpe?g)$/i.test(f.name) || /image\/(png|jpeg)/.test(f.type));
+    const lib = [...images];
+    const got: TeamImage[] = [];
+    const errs: string[] = [];
+    setImgBusy(true);
+    for (const f of list) {
+      try {
+        const r = await readTeamImage(f, trimPng);
+        const same = lib.find((i) => i.src === r.src && i.nome === r.nome);
+        if (same) got.push(same);
+        else {
+          const img = { id: newImageId(), ...r };
+          lib.push(img);
+          got.push(img);
+        }
+      } catch (e) {
+        errs.push(e instanceof Error ? e.message : f.name);
+      }
+    }
+    setImgBusy(false);
+    setImages?.(lib);
+    return { got, errs };
+  };
+  const importMany = async (files: File[]) => {
+    const { got, errs } = await addFiles(files);
+    const { roster: next, used } = autoLink(roster, got);
+    setRoster(next);
+    setImgReport([reportText(linkReport(next, got, used)), ...errs.map((e) => `rejeitado: ${e}`)].join(" · "));
+  };
+  const deleteImage = (img: TeamImage) => {
+    const linked = roster.some((p) => p.imgNome === img.id || p.imgNumero === img.id);
+    if (linked && !window.confirm(`"${img.nome}" está vinculada a jogadores. Excluir e remover os vínculos?`)) return;
+    setImages?.(images.filter((i) => i.id !== img.id));
+    if (linked) setRoster(unlinkImage(roster, img.id));
+  };
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const csvRef = useRef<HTMLInputElement>(null);
@@ -135,7 +187,7 @@ export function TeamPanel({ open, onClose, roster, setRoster, options, garment, 
 
   return (
     <aside
-      className="fixed right-0 top-0 bottom-0 z-40 w-[420px] max-w-full bg-panel border-l border-border shadow-xl flex flex-col"
+      className="fixed right-0 top-0 bottom-0 z-40 w-[540px] max-w-full bg-panel border-l border-border shadow-xl flex flex-col"
       aria-label="Lista do Time"
       onKeyDown={(e) => e.stopPropagation()}
     >
@@ -154,6 +206,39 @@ export function TeamPanel({ open, onClose, roster, setRoster, options, garment, 
         <Btn onClick={() => setPasteOpen((v) => !v)}><ClipboardPaste className="size-3.5" /> Colar lista</Btn>
         <Btn onClick={() => csvRef.current?.click()}><Upload className="size-3.5" /> Importar CSV</Btn>
         <Btn onClick={exportCsv} disabled={!roster.length}><Download className="size-3.5" /> Exportar CSV</Btn>
+        {setImages && (
+          <>
+            <Btn onClick={() => imgFilesRef.current?.click()} disabled={imgBusy}><ImagePlus className="size-3.5" /> Importar imagens…</Btn>
+            <Btn onClick={() => imgDirRef.current?.click()} disabled={imgBusy}><FolderOpen className="size-3.5" /> Importar pasta…</Btn>
+            <Btn onClick={() => setLibOpen((v) => !v)}><Images className="size-3.5" /> Biblioteca ({images.length})</Btn>
+            <label className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              <input type="checkbox" checked={trimPng} onChange={(e) => setTrimPng(e.target.checked)} className="accent-[var(--color-cyan)]" /> Remover margens transparentes
+            </label>
+            <input ref={imgFilesRef} type="file" multiple accept="image/png,image/jpeg" className="hidden" onChange={(e) => { const f = [...(e.target.files ?? [])]; e.target.value = ""; void importMany(f); }} />
+            <input
+              ref={(el) => { imgDirRef.current = el; el?.setAttribute("webkitdirectory", ""); }}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => { const f = [...(e.target.files ?? [])]; e.target.value = ""; void importMany(f); }}
+            />
+            <input
+              ref={imgOneRef}
+              type="file"
+              accept="image/png,image/jpeg"
+              className="hidden"
+              onChange={async (e) => {
+                const f = [...(e.target.files ?? [])];
+                e.target.value = "";
+                if (!picker) return;
+                const { got, errs } = await addFiles(f);
+                if (errs.length) setImgReport(errs.map((x) => `rejeitado: ${x}`).join(" · "));
+                if (got[0]) update(picker.pid, { [picker.kind]: got[0].id });
+                setPicker(null);
+              }}
+            />
+          </>
+        )}
         <Btn onClick={openExport} disabled={!roster.length || !onExportTeam} primary><PackageOpen className="size-3.5" /> Exportar time</Btn>
         <input
           ref={csvRef}
@@ -279,6 +364,56 @@ export function TeamPanel({ open, onClose, roster, setRoster, options, garment, 
         </div>
       )}
 
+      {(imgBusy || imgReport) && (
+        <div className="flex items-start gap-2 px-4 py-1.5 border-b border-border text-[11px] text-foreground bg-cyan/5" data-testid="relatorio-imagens">
+          <span className="flex-1">{imgBusy ? "Lendo imagens…" : imgReport}</span>
+          {!imgBusy && <button onClick={() => setImgReport("")} aria-label="Fechar relatório" className="text-muted-foreground"><X className="size-3" /></button>}
+        </div>
+      )}
+      {libOpen && (
+        <div className="max-h-56 overflow-auto border-b border-border px-4 py-2 space-y-1">
+          {!images.length && <p className="text-[11px] text-faint">Biblioteca vazia. Use "Importar imagens…" ou "Importar pasta…".</p>}
+          {images.map((img) => (
+            <div key={img.id} className="flex items-center gap-2">
+              <Thumb img={img} />
+              <input
+                value={img.nome}
+                onChange={(e) => setImages?.(images.map((i) => (i.id === img.id ? { ...i, nome: e.target.value } : i)))}
+                aria-label="Nome da imagem"
+                className="flex-1 min-w-0 rounded border border-border bg-background px-1.5 py-0.5 text-xs text-foreground"
+              />
+              <span className="text-[10px] font-mono text-faint">{img.w}×{img.h}</span>
+              <button onClick={() => deleteImage(img)} aria-label="Excluir imagem" className="p-1 rounded text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" /></button>
+            </div>
+          ))}
+        </div>
+      )}
+      {picker && (
+        <div className="absolute inset-x-3 top-24 z-10 max-h-[60%] flex flex-col rounded-md border border-cyan/40 bg-panel shadow-xl">
+          <div className="flex items-center gap-2 border-b border-border px-2 py-1.5">
+            <Search className="size-3.5 text-muted-foreground" />
+            <input autoFocus value={pickQ} onChange={(e) => setPickQ(e.target.value)} placeholder="Buscar imagem" className="flex-1 bg-transparent text-xs text-foreground outline-none" />
+            <button onClick={() => setPicker(null)} aria-label="Fechar seletor" className="text-muted-foreground"><X className="size-3.5" /></button>
+          </div>
+          <div className="flex-1 overflow-auto p-2 grid grid-cols-4 gap-2">
+            {images
+              .filter((i) => i.nome.toLowerCase().includes(pickQ.toLowerCase()))
+              .map((img) => (
+                <button
+                  key={img.id}
+                  onClick={() => { update(picker.pid, { [picker.kind]: img.id }); setPicker(null); }}
+                  className="flex flex-col items-center gap-1 rounded border border-border p-1 hover:border-cyan"
+                >
+                  <Thumb img={img} big />
+                  <span className="w-full truncate text-[10px] text-muted-foreground">{img.nome}</span>
+                </button>
+              ))}
+          </div>
+          <div className="flex gap-2 border-t border-border px-2 py-1.5">
+            <Btn onClick={() => imgOneRef.current?.click()}><Upload className="size-3.5" /> Enviar arquivo…</Btn>
+          </div>
+        </div>
+      )}
       <div ref={tableRef} className="flex-1 overflow-auto">
         <table className="w-full text-xs">
           <thead className="sticky top-0 bg-panel text-[11px] text-muted-foreground">
@@ -286,6 +421,8 @@ export function TeamPanel({ open, onClose, roster, setRoster, options, garment, 
               <th className="text-left px-3 py-1.5 w-16">Nº</th>
               <th className="text-left px-1 py-1.5">Nome</th>
               <th className="text-left px-1 py-1.5 w-28">Tamanho</th>
+              {setImages && <th className="text-left px-1 py-1.5 w-14">Nome (img)</th>}
+              {setImages && <th className="text-left px-1 py-1.5 w-14">Nº (img)</th>}
               <th className="w-16" />
             </tr>
           </thead>
@@ -351,6 +488,31 @@ export function TeamPanel({ open, onClose, roster, setRoster, options, garment, 
                       ))}
                     </select>
                   </td>
+                  {setImages &&
+                    (["imgNome", "imgNumero"] as const).map((k) => {
+                      const img = p[k] ? imgById.get(p[k]!) : undefined;
+                      const need = (k === "imgNome" ? slotNeeds.nome : slotNeeds.numero) && !img;
+                      return (
+                        <td key={k} className="px-1 py-1">
+                          <div className="flex items-center gap-0.5">
+                            <button
+                              onClick={() => { setPickQ(""); setPicker({ pid: p.id, kind: k }); }}
+                              title={img ? img.nome : "Escolher imagem"}
+                              aria-label={k === "imgNome" ? "Imagem do nome" : "Imagem do número"}
+                              className="rounded hover:ring-1 hover:ring-cyan"
+                            >
+                              {img ? <Thumb img={img} /> : <span className="block size-7 rounded border border-dashed border-border" />}
+                            </button>
+                            {img && (
+                              <button onClick={() => update(p.id, { [k]: undefined })} title="Remover vínculo" aria-label="Remover vínculo" className="text-muted-foreground hover:text-destructive"><Unlink className="size-3" /></button>
+                            )}
+                            {need && (
+                              <span title={k === "imgNome" ? "Falta a imagem do nome" : "Falta a imagem do número"}><AlertTriangle className="size-3 text-destructive" /></span>
+                            )}
+                          </div>
+                        </td>
+                      );
+                    })}
                   <td className="py-1 pr-2 whitespace-nowrap">
                     <button
                       onClick={() => onView?.(p)}
@@ -394,5 +556,13 @@ function Btn({ children, onClick, disabled, primary }: { children: React.ReactNo
     >
       {children}
     </button>
+  );
+}
+
+function Thumb({ img, big }: { img: TeamImage; big?: boolean }) {
+  return (
+    <span className={`grid place-items-center rounded border border-border bg-muted ${big ? "size-14" : "size-7"}`}>
+      <img src={img.src} alt={img.nome} className="max-h-full max-w-full object-contain" />
+    </span>
   );
 }
