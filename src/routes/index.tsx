@@ -58,6 +58,7 @@ import { TeamPanel, type TeamExportOpts } from "@/components/TeamPanel";
 import { embedFonts } from "@/lib/raster-export";
 import { sanitizeRoster, type Player } from "@/lib/roster";
 import { sanitizeImages, type TeamImage } from "@/lib/team-images";
+import { resolveTeamSlot, slotDpi } from "@/lib/team-slot";
 import { teamScale, resolveTeamText, measureText, fontsReady, teamTextOverflows, type ResolvedTeamText } from "@/lib/team-text";
 import { renderPiece, zipFiles, todayStamp, yieldFrame, MIME } from "@/lib/export-render";
 import { teamFileName, uniqueName, TEAM_EXT, TEAM_DPIS, fitDpi, cmToPx, type TeamFormat } from "@/lib/team-export";
@@ -2245,6 +2246,37 @@ function Index() {
     if (teamView && (!viewPlayer || !playerSizeOk(viewPlayer))) exitTeamView();
     else if (viewPlayer && size !== viewPlayer.tamanho) setSize(viewPlayer.tamanho);
   }, [viewPlayer?.tamanho, viewPlayer?.id, clothingType]);
+  /** Troca os espaços de imagem (Layer.slot) pelas imagens do jogador. */
+  const playerSlotLayers = (arr: Layer[], p: Player, sz: Size, v: View) => {
+    const isBody = v === "frente" || v === "costas";
+    const dims = (s: Size) => (isBody ? { W: table[s].bodyWidth, H: table[s].bodyHeight } : { W: table[s].sleeveWidth, H: table[s].sleeveHeight });
+    const { W, H } = dims(sz);
+    const Wm = dims(mother).W;
+    const missing = new Set<"nome" | "numero">();
+    const lowDpi: { kind: "nome" | "numero"; dpi: number }[] = [];
+    const out: Layer[] = [];
+    for (const l of arr) {
+      if (!l.slot || l.kind === "vetor") {
+        out.push(l);
+        continue;
+      }
+      const id = l.slot.kind === "nome" ? p.imgNome : p.imgNumero;
+      const img = id ? teamImages.find((i) => i.id === id) ?? null : null;
+      const r = resolveTeamSlot(l, { img, W, H, Wm });
+      if (!r) {
+        missing.add(l.slot.kind);
+        continue;
+      }
+      const dpi = slotDpi(img!.w, r.w * W);
+      if (dpi < 150) lowDpi.push({ kind: l.slot.kind, dpi: Math.round(dpi) });
+      out.push(r);
+    }
+    return { layers: out, missing, lowDpi };
+  };
+  const previewSlots = useMemo(
+    () => (viewPlayer ? playerSlotLayers(layers[view], viewPlayer, viewPlayer.tamanho as Size, view) : null),
+    [viewPlayer, layers, view, teamImages, table, mother],
+  );
   const teamPreview = useMemo<{ texts: TextElement[]; overflow: boolean } | null>(() => {
     if (!viewPlayer) return null;
     const { sx, sy } = teamScale(table, mother, viewPlayer.tamanho, view);
@@ -2511,7 +2543,7 @@ function Index() {
   const buildPlotterSvgFor = (o: { view: View; size: Size; hideTechnical: boolean; crop: boolean; player?: Player }) => {
     const { view, size } = o;
     const art = artworks[view];
-    const curLayers = layers[view];
+    const curLayers = o.player ? playerSlotLayers(layers[view], o.player, size, view).layers : layers[view];
     const isBody = view === "frente" || view === "costas";
     const mm = table[size];
     const W = isBody ? mm.bodyWidth : mm.sleeveWidth;
@@ -2637,6 +2669,12 @@ function Index() {
         const W = pieceWidth(sz, v);
         if (texts[v].some((t) => t.field && teamTextOverflows(res(t), W)))
           warnings.push(`${p.numero || "—"} ${p.nome || "(sem nome)"} (${partLabel(v)}): o nome passa da largura da peça`);
+        const sl = playerSlotLayers(layers[v], p, sz, v);
+        const who = `${p.numero || "—"} ${p.nome || "(sem nome)"}`;
+        if (sl.missing.size)
+          warnings.push(`${who}: falta a imagem ${[...sl.missing].map((k) => (k === "nome" ? "do nome" : "do número")).join(" e ")}`);
+        for (const d of sl.lowDpi)
+          warnings.push(`${who} (${partLabel(v)}): imagem ${d.kind === "nome" ? "do nome" : "do número"} com ${d.dpi} DPI (abaixo de 150)`);
         files[name] = r.bytes;
         n++;
         onProgress(n, total);
@@ -3370,12 +3408,14 @@ function Index() {
                   pcEdit={pcEdit}
                   partStyle={styles[view]}
                   onMenu={(x, y) => setMenu({ x, y })}
-                  layers={curLayers}
+                  layers={previewSlots ? previewSlots.layers : curLayers}
                   selLayer={selLayer}
                   onSelLayer={selectLayer}
                   selText={selText}
                   onSelText={selectText}
-                  onLayersChange={(arr) => setViewLayers(arr)}
+                  onLayersChange={(arr) => {
+                    if (!viewPlayer) setViewLayers(arr);
+                  }}
                   drawOpts={drawOpts}
                   showSeam={showSeam}
                   showBleed={showBleed}
@@ -3395,6 +3435,9 @@ function Index() {
                     <span className="font-medium text-foreground">
                       Visualizando: {viewPlayer.numero || "—"} · {viewPlayer.nome || "(sem nome)"} ({sizesForGarment(clothingType).find((o) => o.id === viewPlayer.tamanho)?.label ?? viewPlayer.tamanho})
                     </span>
+                    {previewSlots && previewSlots.missing.size > 0 && (
+                      <span className="text-destructive font-medium">⚠ Faltam: {[...previewSlots.missing].map((k) => (k === "nome" ? "imagem do nome" : "imagem do número")).join(" / ")}</span>
+                    )}
                     {teamPreview?.overflow && <span className="text-destructive font-medium">⚠ O nome passa da largura da peça — defina a largura máxima do campo</span>}
                     <button onClick={() => stepPlayer(1)} aria-label="Próximo jogador" className="p-1 rounded hover:bg-muted"><ChevronRight className="size-3.5" /></button>
                     <button onClick={exitTeamView} className="ml-1 px-2 py-0.5 rounded bg-cyan text-primary-foreground hover:bg-cyan/90">Sair</button>
