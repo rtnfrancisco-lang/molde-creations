@@ -53,10 +53,11 @@ import {
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { TeamPanel, type TeamExportOpts } from "@/components/TeamPanel";
-import { rasterize, svgToPdf } from "@/lib/raster-export";
+import { embedFonts } from "@/lib/raster-export";
 import { sanitizeRoster, type Player } from "@/lib/roster";
 import { teamScale, resolveTeamText, measureText, fontsReady } from "@/lib/team-text";
-import { teamFileName, uniqueName, TEAM_EXT, fitDpi, cmToPx } from "@/lib/team-export";
+import { renderPiece, zipFiles, todayStamp, yieldFrame, MIME } from "@/lib/export-render";
+import { teamFileName, uniqueName, TEAM_EXT, TEAM_DPIS, fitDpi, cmToPx, type TeamFormat } from "@/lib/team-export";
 import { buildProjectFile, parseProjectFile, nameFromFile, PROJECT_EXT } from "@/lib/project-file";
 import { hasFsAccess, pickSaveHandle, writeHandle, downloadText, openProjectFile, isAbort, type FileHandle } from "@/lib/file-access";
 import {
@@ -1222,7 +1223,15 @@ function Index() {
   const [showBleed, setShowBleed] = useState(true);
   const [showSafety, setShowSafety] = useState(true);
   const [plotterOpen, setPlotterOpen] = useState(false);
-  const [exportFmt, setExportFmt] = useState<"pdf" | "png">("pdf");
+  const [exportFmt, setExportFmt] = useState<TeamFormat>("pdf");
+  const [expDpi, setExpDpi] = useState(300);
+  const [expQuality, setExpQuality] = useState(92);
+  const [expSizeMode, setExpSizeMode] = useState<"atual" | "todos" | "escolher">("atual");
+  const [expSizes, setExpSizes] = useState<Size[]>([]);
+  const [expViewMode, setExpViewMode] = useState<"atual" | "todas" | "escolher">("atual");
+  const [expViews, setExpViews] = useState<View[]>([]);
+  const [expProgress, setExpProgress] = useState<{ done: number; total: number } | null>(null);
+  const expSignal = useRef<{ cancelled: boolean }>({ cancelled: false });
   const [hideTech, setHideTech] = useState(false);
   const [cropRect, setCropRect] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -2327,50 +2336,10 @@ function Index() {
 
 
 
-  const exportAll = () => {
-    const isBody = view === "frente" || view === "costas";
-    const st = styles[view];
-    SIZES.forEach((sz, idx) => {
-      const m = table[sz];
-      const W = isBody ? m.bodyWidth : m.sleeveWidth;
-      const H = isBody ? m.bodyHeight : m.sleeveHeight;
-      const path = buildPath(shapes[view], W, H);
-      const fbC = pathBounds(offsetPathD(path, BLEED_OFFSET_CM, TECHNICAL_OFFSET_OPTIONS)) ?? { minX: -W / 2 - PLOTTER_MARGIN, minY: -PLOTTER_MARGIN, maxX: W / 2 + PLOTTER_MARGIN, maxY: H + PLOTTER_MARGIN };
-      let img = `<clipPath id="c"><rect x="${fbC.minX}" y="${fbC.minY}" width="${fbC.maxX - fbC.minX}" height="${fbC.maxY - fbC.minY}"/></clipPath>`;
-      if (art) {
-        const aw = art.w * W;
-        const ah = aw * art.ratio;
-        const x = (art.cx - 0.5) * W - aw / 2;
-        const y = art.cy * H - ah / 2;
-        const im = `<image href="${art.src}" x="${x}" y="${y}" width="${aw}" height="${ah}" transform="${artTransform(art, x + aw / 2, y + ah / 2)}" opacity="${art.opacity ?? 1}" preserveAspectRatio="none"/>`;
-        const fb = pathBounds(offsetPathD(path, BLEED_OFFSET_CM, TECHNICAL_OFFSET_OPTIONS)) ?? { minX: -W / 2 - PLOTTER_MARGIN, minY: -PLOTTER_MARGIN, maxX: W / 2 + PLOTTER_MARGIN, maxY: H + PLOTTER_MARGIN };
-        void fb;
-        img += art.clipped === false ? im : `<g clip-path="url(#c)">${im}</g>`;
-      }
-      const objs = curLayers.map((l) => (l.clipped ? `<g clip-path="url(#c)">${layerMarkup(l, W, H)}</g>` : layerMarkup(l, W, H))).join("");
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W + 2}cm" height="${H + 2}cm" viewBox="${-W / 2 - 1} -1 ${W + 2} ${H + 2}"><path d="${path}" fill="${st.fill ?? "none"}"/>${img}${objs}${textMarkup(texts[view])}<path d="${path}" fill="none" stroke="${st.stroke ?? "#000"}" stroke-width="0.05"/></svg>`;
-      const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
-      setTimeout(() => {
-        const el = document.createElement("a");
-        el.href = url;
-        el.download = `${exportName(clothingType, sz, view)}.svg`;
-        el.click();
-        URL.revokeObjectURL(url);
-      }, idx * 250);
-    });
-  };
 
   /* ================= Exportação inteligente para Plotter ================= */
 
 
-  const activeDims = () => {
-    const isBody = view === "frente" || view === "costas";
-    const mm = table[size];
-    const W = isBody ? mm.bodyWidth : mm.sleeveWidth;
-    const H = isBody ? mm.bodyHeight : mm.sleeveHeight;
-    const pad = cropRect ? 0 : 6;
-    return { W, H, pad, cmW: W + PLOTTER_MARGIN * 2 + pad * 2, cmH: H + PLOTTER_MARGIN * 2 + pad * 2 };
-  };
 
   const buildPlotterSvgFor = (o: { view: View; size: Size; hideTechnical: boolean; crop: boolean; player?: Player }) => {
     const { view, size } = o;
@@ -2474,7 +2443,6 @@ function Index() {
 
   const exportTeam = async (opt: TeamExportOpts, onProgress: (done: number, total: number) => void, signal: { cancelled: boolean }) => {
     await fontsReady();
-    const { zipSync } = await import("fflate");
     const files: Record<string, Uint8Array> = {};
     const used = new Set<string>();
     const warnings: string[] = [];
@@ -2489,26 +2457,18 @@ function Index() {
         const { svg, cmW, cmH } = buildPlotterSvgFor({ view: v, size: sz, hideTechnical: opt.hideTechnical, crop: true, player: p });
         const label = sizeLabel(clothingType, sz);
         const name = uniqueName(teamFileName(opt.template, { numero: p.numero, nome: p.nome, tamanho: label, vista: v }, ext), used);
-        const dpi = fitDpi(cmW, cmH, opt.dpi);
-        if (dpi < opt.dpi) warnings.push(`${label} (${v}) gerado a ${dpi} DPI para caber no navegador`);
-        const pxW = cmToPx(cmW, dpi);
-        const pxH = cmToPx(cmH, dpi);
-        const q = opt.quality / 100;
-        files[name] =
-          opt.format === "pdf"
-            ? await svgToPdf(svg, cmW, cmH, pxW, pxH, q, name)
-            : new Uint8Array(await (await rasterize(svg, pxW, pxH, opt.format === "jpeg" ? "image/jpeg" : "image/png", opt.format === "jpeg" ? q : undefined)).arrayBuffer());
+        const r = await renderPiece(svg, cmW, cmH, opt.format, opt.dpi, opt.quality, name);
+        if (r.reduced) warnings.push(`${label} (${v}) gerado a ${r.dpi} DPI para caber no navegador`);
+        files[name] = r.bytes;
         n++;
         onProgress(n, total);
-        await new Promise((r) => setTimeout(r, 0));
+        await yieldFrame();
       }
     }
     if (signal.cancelled) return null;
-    const zip = zipSync(files, { level: opt.format === "png" ? 0 : 3 });
+    const zip = await zipFiles(files, opt.format);
     if (signal.cancelled) return null;
-    const d = new Date();
-    const pad = (x: number) => String(x).padStart(2, "0");
-    downloadBlob(new Blob([zip as BlobPart], { type: "application/zip" }), `Time_${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.zip`);
+    downloadBlob(new Blob([zip as BlobPart], { type: "application/zip" }), `Time_${todayStamp()}.zip`);
     return { players: opt.players.length, files: n, warnings: [...new Set(warnings)] };
   };
 
@@ -2521,14 +2481,9 @@ function Index() {
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   };
 
-  const rasterizeSvg = (svg: string, pxW: number, pxH: number) => rasterize(svg, pxW, pxH, "image/png");
-
   const printVectorPdf = (svg: string, cmW: number, cmH: number, name: string) => {
     const win = window.open("", "_blank", "width=900,height=720");
-    if (!win) {
-      downloadBlob(new Blob([svg], { type: "image/svg+xml" }), name + ".svg");
-      return false;
-    }
+    if (!win) return false;
     win.document.write(
       `<!doctype html><html><head><meta charset="utf-8"><title>${name}</title>` +
         `<style>@page{size:${cmW}cm ${cmH}cm;margin:0}html,body{margin:0;padding:0}svg{display:block;width:${cmW}cm;height:${cmH}cm}</style>` +
@@ -2538,31 +2493,85 @@ function Index() {
     return true;
   };
 
+  const ALL_VIEWS: View[] = ["frente", "costas", "mangaEsq", "mangaDir"];
+  const exportTargets = () => {
+    const allSizes = sizeIdsForGarment(clothingType);
+    const sizes = expSizeMode === "atual" ? [size] : expSizeMode === "todos" ? [...allSizes] : allSizes.filter((s) => expSizes.includes(s));
+    const views = expViewMode === "atual" ? [view] : expViewMode === "todas" ? ALL_VIEWS : ALL_VIEWS.filter((v) => expViews.includes(v));
+    return { sizes, views, count: sizes.length * views.length };
+  };
+  const exportMaxPiece = () => {
+    const { sizes, views } = exportTargets();
+    let best = { cmW: 0, cmH: 0 };
+    for (const s of sizes) for (const v of views) {
+      if (!(s in table)) continue;
+      const { cmW, cmH } = buildPlotterSvgFor({ view: v, size: s, hideTechnical: hideTech, crop: cropRect });
+      if (cmW * cmH > best.cmW * best.cmH) best = { cmW, cmH };
+    }
+    return best;
+  };
+
+  const flashSaved = (m: string, ms = 4500) => {
+    setSavedMsg(m);
+    setTimeout(() => setSavedMsg(""), ms);
+  };
+
   const runExport = async () => {
+    const { sizes, views, count } = exportTargets();
+    if (!count) return flashSaved("Escolha ao menos um tamanho e uma vista", 3500);
+    const sig = { cancelled: false };
+    expSignal.current = sig;
     setExporting(true);
     try {
-      const { svg, cmW, cmH } = buildPlotterSvg({ hideTechnical: hideTech, crop: cropRect });
-      const base = `moldecore-plotter-${view}-${size}`;
-      if (exportFmt === "pdf") {
-        const ok = printVectorPdf(svg, cmW, cmH, base);
-        setSavedMsg(
-          ok
-            ? "Arquivo 1:1 pronto — na janela de impressão escolha Salvar como PDF"
-            : "Vetor 1:1 baixado como SVG",
-        );
-      } else {
-        const px = (cm: number) => Math.round((cm / 2.54) * 300);
-        const blob = await rasterizeSvg(svg, px(cmW), px(cmH));
-        downloadBlob(blob, `${base}-300dpi.png`);
-        setSavedMsg("PNG 300 DPI gerado no tamanho real");
+      await fontsReady();
+      const ext = TEAM_EXT[exportFmt];
+      if (count === 1) {
+        const s = sizes[0]!;
+        const v = views[0]!;
+        const { svg, cmW, cmH } = buildPlotterSvgFor({ view: v, size: s, hideTechnical: hideTech, crop: cropRect });
+        const base = exportName(clothingType, s, v);
+        if (exportFmt === "pdf") {
+          if (printVectorPdf(await embedFonts(svg), cmW, cmH, base)) flashSaved("Arquivo 1:1 pronto — na janela de impressão escolha Salvar como PDF");
+          else {
+            const r = await renderPiece(svg, cmW, cmH, "pdf", expDpi, expQuality, base);
+            downloadBlob(new Blob([r.bytes as BlobPart], { type: MIME.pdf }), `${base}.pdf`);
+            flashSaved("Janela de impressão bloqueada — PDF gerado em alta resolução");
+          }
+        } else {
+          const r = await renderPiece(svg, cmW, cmH, exportFmt, expDpi, expQuality, base);
+          downloadBlob(new Blob([r.bytes as BlobPart], { type: MIME[exportFmt] }), `${base}.${ext}`);
+          flashSaved(`${exportFmt.toUpperCase()} ${r.dpi} DPI gerado no tamanho real` + (r.reduced ? " (DPI reduzido para caber no navegador)" : ""));
+        }
+        setPlotterOpen(false);
+        return;
       }
-      setTimeout(() => setSavedMsg(""), 4500);
+      const files: Record<string, Uint8Array> = {};
+      const used = new Set<string>();
+      const warnings: string[] = [];
+      let n = 0;
+      setExpProgress({ done: 0, total: count });
+      for (const s of sizes) for (const v of views) {
+        if (sig.cancelled) return flashSaved("Exportação cancelada", 3000);
+        const { svg, cmW, cmH } = buildPlotterSvgFor({ view: v, size: s, hideTechnical: hideTech, crop: cropRect });
+        const name = uniqueName(`${exportName(clothingType, s, v)}.${ext}`, used);
+        const r = await renderPiece(svg, cmW, cmH, exportFmt, expDpi, expQuality, name);
+        if (r.reduced) warnings.push(`${sizeLabel(clothingType, s)} ${partLabel(v)} a ${r.dpi} DPI`);
+        files[name] = r.bytes;
+        n++;
+        setExpProgress({ done: n, total: count });
+        await yieldFrame();
+      }
+      if (sig.cancelled) return flashSaved("Exportação cancelada", 3000);
+      const zip = await zipFiles(files, exportFmt);
+      if (sig.cancelled) return flashSaved("Exportação cancelada", 3000);
+      downloadBlob(new Blob([zip as BlobPart], { type: "application/zip" }), `MoldeCore_${clothingType.replace(/\s+/g, "_")}_${todayStamp()}.zip`);
+      flashSaved(`${n} arquivos ${exportFmt.toUpperCase()} no ZIP` + (warnings.length ? ` · DPI reduzido: ${warnings.join(", ")}` : ""), warnings.length ? 9000 : 4500);
       setPlotterOpen(false);
     } catch {
-      setSavedMsg("Não foi possível gerar o arquivo de exportação");
-      setTimeout(() => setSavedMsg(""), 3500);
+      flashSaved("Não foi possível gerar o arquivo de exportação", 3500);
     } finally {
       setExporting(false);
+      setExpProgress(null);
     }
   };
 
@@ -2703,52 +2712,102 @@ function Index() {
                   <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-faint mb-2">
                     Formato do arquivo
                   </div>
-                  <div className="space-y-1.5">
-                    <button
-                      onClick={() => setExportFmt("pdf")}
-                      className={
-                        "w-full flex items-start gap-2.5 px-3 py-2.5 rounded-md border text-xs text-left transition-colors " +
-                        (exportFmt === "pdf"
-                          ? "border-cyan/50 bg-cyan/10 text-cyan"
-                          : "border-line text-muted-foreground hover:text-foreground")
-                      }
-                    >
-                      <span
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {([
+                      ["pdf", "PDF", "Vetor 1:1"],
+                      ["png", "PNG", "Imagem"],
+                      ["jpeg", "JPEG", "Imagem leve"],
+                    ] as const).map(([k, l, d]) => (
+                      <button
+                        key={k}
+                        onClick={() => setExportFmt(k)}
                         className={
-                          "mt-0.5 size-3 shrink-0 rounded-full border " +
-                          (exportFmt === "pdf" ? "border-cyan bg-cyan" : "border-line")
+                          "px-2 py-2 rounded-md border text-xs text-center transition-colors " +
+                          (exportFmt === k ? "border-cyan/50 bg-cyan/10 text-cyan font-semibold" : "border-line text-muted-foreground hover:text-foreground")
                         }
-                      />
-                      <span className="flex-1 leading-snug">
-                        PDF vetorial — escala real 1:1
-                        <span className="block text-[10px] font-mono text-faint">
-                          Vetor puro no tamanho exato do quadro de mídia
-                        </span>
-                      </span>
-                    </button>
-                    <button
-                      onClick={() => setExportFmt("png")}
-                      className={
-                        "w-full flex items-start gap-2.5 px-3 py-2.5 rounded-md border text-xs text-left transition-colors " +
-                        (exportFmt === "png"
-                          ? "border-cyan/50 bg-cyan/10 text-cyan"
-                          : "border-line text-muted-foreground hover:text-foreground")
-                      }
-                    >
-                      <span
-                        className={
-                          "mt-0.5 size-3 shrink-0 rounded-full border " +
-                          (exportFmt === "png" ? "border-cyan bg-cyan" : "border-line")
-                        }
-                      />
-                      <span className="flex-1 leading-snug">
-                        PNG — alta resolução 300 DPI
-                        <span className="block text-[10px] font-mono text-faint">
-                          Imagem raster no tamanho real para conferência
-                        </span>
-                      </span>
-                    </button>
+                      >
+                        {l}
+                        <span className="block text-[10px] font-mono text-faint font-normal">{d}</span>
+                      </button>
+                    ))}
                   </div>
+                  {exportFmt !== "pdf" && (
+                    <div className="mt-2 space-y-2">
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-muted-foreground w-20">Resolução</span>
+                        <div className="flex gap-1">
+                          {TEAM_DPIS.map((d) => (
+                            <button
+                              key={d}
+                              onClick={() => setExpDpi(d)}
+                              className={"px-2 py-1 rounded border text-[11px] font-mono " + (expDpi === d ? "border-cyan/50 bg-cyan/10 text-cyan" : "border-line text-muted-foreground")}
+                            >
+                              {d}
+                            </button>
+                          ))}
+                          <span className="self-center text-[10px] text-faint">DPI</span>
+                        </div>
+                      </div>
+                      {exportFmt === "jpeg" && (
+                        <label className="flex items-center gap-2 text-xs">
+                          <span className="text-muted-foreground w-20">Qualidade</span>
+                          <input type="range" min={60} max={100} value={expQuality} onChange={(e) => setExpQuality(+e.target.value)} className="flex-1 accent-cyan" />
+                          <span className="font-mono text-[11px] w-9 text-right">{expQuality}%</span>
+                        </label>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-faint mb-2">O que exportar</div>
+                  {(
+                    [
+                      {
+                        title: "Tamanhos",
+                        mode: expSizeMode,
+                        setMode: setExpSizeMode as (m: string) => void,
+                        opts: [["atual", `Apenas o atual (${sizeLabel(clothingType, size)})`], ["todos", "Todos"], ["escolher", "Escolher…"]],
+                        items: sizesForGarment(clothingType).map((o) => ({ id: o.id as string, label: o.label })),
+                        sel: expSizes as string[],
+                        toggle: (id: string) => setExpSizes((a) => (a.includes(id as Size) ? a.filter((x) => x !== id) : [...a, id as Size])),
+                      },
+                      {
+                        title: "Vistas",
+                        mode: expViewMode,
+                        setMode: setExpViewMode as (m: string) => void,
+                        opts: [["atual", "Apenas a atual"], ["todas", "Todas"], ["escolher", "Escolher…"]],
+                        items: VIEWS.map((v) => ({ id: v.key as string, label: v.label })),
+                        sel: expViews as string[],
+                        toggle: (id: string) => setExpViews((a) => (a.includes(id as View) ? a.filter((x) => x !== id) : [...a, id as View])),
+                      },
+                    ]
+                  ).map((g) => (
+                    <div key={g.title} className="mb-2">
+                      <div className="text-xs text-muted-foreground mb-1">{g.title}</div>
+                      <div className="flex flex-wrap gap-1">
+                        {g.opts.map(([k, l]) => (
+                          <button
+                            key={k}
+                            onClick={() => g.setMode(k!)}
+                            className={"px-2 py-1 rounded border text-[11px] " + (g.mode === k ? "border-cyan/50 bg-cyan/10 text-cyan" : "border-line text-muted-foreground")}
+                          >
+                            {l}
+                          </button>
+                        ))}
+                      </div>
+                      {g.mode === "escolher" && (
+                        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                          {g.items.map((it) => (
+                            <label key={it.id} className="flex items-center gap-1 text-[11px] cursor-pointer">
+                              <input type="checkbox" checked={g.sel.includes(it.id)} onChange={() => g.toggle(it.id)} className="accent-cyan" />
+                              {it.label}
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
 
                 <div>
@@ -2787,24 +2846,48 @@ function Index() {
                   </div>
                 </div>
 
-                <div className="rounded-md border border-line bg-panel2 p-2.5 text-[10px] font-mono text-muted-foreground leading-snug">
-                  SAÍDA · {view.toUpperCase()} · TAMANHO {size} · {fmt(activeDims().cmW)} × {fmt(activeDims().cmH)} cm
-                  {exportFmt === "png"
-                    ? ` · ${Math.round((activeDims().cmW / 2.54) * 300)} × ${Math.round((activeDims().cmH / 2.54) * 300)} px`
-                    : " · vetor 1:1"}
-                </div>
+                {(() => {
+                  const t = exportTargets();
+                  const multi = t.count > 1;
+                  const vector = exportFmt === "pdf" && !multi;
+                  const mp = exportMaxPiece();
+                  const d = fitDpi(mp.cmW, mp.cmH, expDpi);
+                  return (
+                    <div className="rounded-md border border-line bg-panel2 p-2.5 text-[10px] font-mono text-muted-foreground leading-snug space-y-1">
+                      <div>
+                        SAÍDA · {t.count} {t.count === 1 ? "arquivo" : "arquivos"} {exportFmt.toUpperCase()}
+                        {multi ? " em ZIP" : ""} · {vector ? "vetor 1:1" : `maior peça ${fmt(mp.cmW)} × ${fmt(mp.cmH)} cm · ${cmToPx(mp.cmW, d)} × ${cmToPx(mp.cmH, d)} px`}
+                        {!vector && d < expDpi ? ` · DPI reduzido para ${d}` : ""}
+                      </div>
+                      {exportFmt === "pdf" && multi && (
+                        <div className="text-faint">PDF em lote usa imagem de alta resolução; para PDF vetorial exporte um arquivo por vez</div>
+                      )}
+                      {expProgress && (
+                        <div className="pt-1">
+                          <div className="h-1.5 rounded bg-line overflow-hidden">
+                            <div className="h-full bg-cyan transition-all" style={{ width: `${(expProgress.done / Math.max(1, expProgress.total)) * 100}%` }} />
+                          </div>
+                          <div className="mt-1">{expProgress.done} / {expProgress.total}</div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="px-4 py-3 border-t border-line flex gap-2">
                 <button
-                  onClick={() => setPlotterOpen(false)}
+                  onClick={() => {
+                    if (exporting) expSignal.current.cancelled = true;
+                    else setPlotterOpen(false);
+                  }}
                   className="flex-1 py-2.5 rounded-md border border-line text-sm font-medium text-muted-foreground hover:text-foreground"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={runExport}
-                  disabled={exporting}
+                  disabled={exporting || exportTargets().count === 0}
                   className="flex-1 py-2.5 rounded-md bg-cyan text-primary-foreground text-sm font-semibold hover:bg-cyan/90 disabled:opacity-60"
                 >
                   {exporting ? "Gerando…" : "Exportar"}
@@ -3032,12 +3115,6 @@ function Index() {
                 </>
                 );
               })())}
-              <button
-                onClick={exportAll}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap border border-line text-muted-foreground hover:text-foreground"
-              >
-                <Download className="size-3.5" /> Exportar Tamanhos
-              </button>
               <label className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground cursor-pointer">
                 <input
                   type="checkbox"
