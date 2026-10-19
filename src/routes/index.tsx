@@ -2534,8 +2534,8 @@ function Index() {
       await fontsReady();
       const ext = TEAM_EXT[exportFmt];
       if (count === 1) {
-        const s = sizes[0];
-        const v = views[0];
+        const s = sizes[0]!;
+        const v = views[0]!;
         const { svg, cmW, cmH } = buildPlotterSvgFor({ view: v, size: s, hideTechnical: hideTech, crop: cropRect });
         const base = exportName(clothingType, s, v);
         if (exportFmt === "pdf") {
