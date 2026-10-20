@@ -3310,7 +3310,6 @@ function Index() {
             <span className="text-sm font-medium text-foreground truncate max-w-[180px]" title={dirty ? "Alterações não salvas" : "Projeto salvo"}>
               {projectName}{dirty && <span className="text-amber-600 ml-1" aria-label="alterações não salvas">•</span>}
             </span>
-            {askUnsaved && (
               <AlertDialog open={!!typeConfirm} onOpenChange={(o) => !o && setTypeConfirm(null)}>
                 <AlertDialogContent>
                   <AlertDialogHeader>
@@ -3325,6 +3324,7 @@ function Index() {
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
+            {askUnsaved && (
               <div className="fixed inset-0 z-[100] flex items-center justify-center bg-foreground/30">
                 <div className="w-[380px] rounded-lg border border-line bg-panel p-5 shadow-xl">
                   <h2 className="text-sm font-semibold text-foreground">Alterações não salvas</h2>
