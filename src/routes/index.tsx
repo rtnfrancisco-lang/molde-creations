@@ -1,4 +1,5 @@
 import { sleeveShape, mirrorShape, migrateSleeveShapes, migrateSleeveWidths } from "@/lib/sleeve";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { DEFAULT_GUIDES, fmtCm, guidePaths, sanitizeGuides, type Guide, type GuideView, type Guides } from "@/lib/guides";
 import { GuidesPanel } from "@/components/GuidesPanel";
 import { createFileRoute } from "@tanstack/react-router";
@@ -2054,7 +2055,9 @@ function Index() {
       setArtworks(NO_ART);
       setTexts(NO_TEXTS);
       setStyles(DEFAULT_STYLES);
-      setSelObj(null);
+      setSelLayer(null);
+      setSelText(null);
+      setSelPart(null);
       saveLS(LS_SHAPES, nShapes);
       saveLS(LS_LAYERS, NO_LAYERS);
       saveLS(LS_ART, NO_ART);
@@ -2067,6 +2070,12 @@ function Index() {
     setSavedMsg(`Tabela de medidas de ${t} carregada · Molde Mãe: ${sizeLabel(t, nextMother)}`);
     setTimeout(() => setSavedMsg(""), 3500);
   };
+
+  /* Vista ativa sempre válida para o tipo de peça atual. */
+  useEffect(() => {
+    const vs = viewsFor(clothingType);
+    if (!vs.includes(view)) setView(vs[0]!);
+  }, [clothingType, view]);
 
   const artView: View = view;
   const art = artworks[view];
@@ -3302,6 +3311,20 @@ function Index() {
               {projectName}{dirty && <span className="text-amber-600 ml-1" aria-label="alterações não salvas">•</span>}
             </span>
             {askUnsaved && (
+              <AlertDialog open={!!typeConfirm} onOpenChange={(o) => !o && setTypeConfirm(null)}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Trocar tipo de peça</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Trocar para {typeConfirm} substitui os moldes das peças e remove desenhos, imagens, textos e cores do projeto atual. Você pode desfazer com Ctrl+Z. Dica: salve o projeto antes (Arquivo &gt; Salvar).
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => { const t = typeConfirm; setTypeConfirm(null); if (t) changeClothingType(t, true); }}>Trocar de tipo</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
               <div className="fixed inset-0 z-[100] flex items-center justify-center bg-foreground/30">
                 <div className="w-[380px] rounded-lg border border-line bg-panel p-5 shadow-xl">
                   <h2 className="text-sm font-semibold text-foreground">Alterações não salvas</h2>
