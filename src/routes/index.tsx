@@ -1,7 +1,7 @@
 import { sleeveShape, mirrorShape, migrateSleeveShapes, migrateSleeveWidths } from "@/lib/sleeve";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { DEFAULT_GUIDES, fmtCm, guidePaths, sanitizeGuides, type Guide, type GuideView, type Guides } from "@/lib/guides";
-import { GuidesPanel } from "@/components/GuidesPanel";
+import { GuidesPanel, type GuideGroup } from "@/components/GuidesPanel";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -350,6 +350,10 @@ type GarmentConfig = {
   viewLabels: Record<View, string>;
   /** Rótulo curto em maiúsculas usado no canvas e nos arquivos exportados. */
   partLabels: Record<View, string>;
+  /** Rótulo curto das vistas no painel de linhas-guia e nos avisos. */
+  shortLabels: Record<View, string>;
+  /** Grupos de "Aplicar em" do painel de linhas-guia. */
+  guideGroups: GuideGroup[];
   fields: { key: Field; label: string; group: string }[];
   defaultShapes: () => Shapes;
 };
@@ -376,7 +380,13 @@ const CAMISA_CONFIG: GarmentConfig = {
   family: "camisa",
   views: ["frente", "costas", "mangaEsq", "mangaDir"],
   viewLabels: { frente: "Frente", costas: "Costas", mangaEsq: "Manga Esquerda", mangaDir: "Manga Direita" },
+  shortLabels: { frente: "Frente", costas: "Costas", mangaEsq: "Manga Esq.", mangaDir: "Manga Dir." },
   partLabels: { frente: "FRENTE", costas: "COSTAS", mangaEsq: "MANGA ESQ", mangaDir: "MANGA DIR" },
+  guideGroups: [
+    { id: "frente", label: "Frente", views: ["frente"] },
+    { id: "costas", label: "Costas", views: ["costas"] },
+    { id: "mangas", label: "Mangas (esquerda e direita)", views: ["mangaEsq", "mangaDir"] },
+  ],
   fields: FIELDS,
   defaultShapes: () => DEFAULT_SHAPES,
 };
@@ -388,7 +398,12 @@ const GARMENT_CONFIG: Record<ClothingType, GarmentConfig> = {
     family: "short",
     views: ["frente", "costas"],
     viewLabels: { frente: "Perna Esquerda", costas: "Perna Direita", mangaEsq: "Perna Esquerda", mangaDir: "Perna Direita" },
+    shortLabels: { frente: "Perna Esquerda", costas: "Perna Direita", mangaEsq: "Perna Esquerda", mangaDir: "Perna Direita" },
     partLabels: { frente: "PERNA ESQUERDA", costas: "PERNA DIREITA", mangaEsq: "PERNA ESQUERDA", mangaDir: "PERNA DIREITA" },
+    guideGroups: [
+      { id: "pernaEsq", label: "Perna Esquerda", views: ["frente"] },
+      { id: "pernaDir", label: "Perna Direita", views: ["costas"] },
+    ],
     fields: [
       { key: "bodyWidth", label: "Largura da Perna", group: "Perna" },
       { key: "bodyHeight", label: "Altura da Perna", group: "Perna" },
@@ -397,6 +412,7 @@ const GARMENT_CONFIG: Record<ClothingType, GarmentConfig> = {
   },
 };
 const viewsFor = (t: ClothingType): View[] => GARMENT_CONFIG[t].views;
+const guideGroupsFor = (t: ClothingType) => GARMENT_CONFIG[t].guideGroups;
 const viewLabel = (t: ClothingType, v: View): string => GARMENT_CONFIG[t].viewLabels[v];
 const fieldsFor = (t: ClothingType) => GARMENT_CONFIG[t].fields;
 const defaultShapesFor = (t: ClothingType): Shapes => GARMENT_CONFIG[t].defaultShapes();
@@ -2944,8 +2960,8 @@ function Index() {
     }
   };
 
-  const VIEW_SHORT: Record<View, string> = { frente: "Frente", costas: "Costas", mangaEsq: "Manga Esq.", mangaDir: "Manga Dir." };
-  const safetyFailures = (["frente", "costas", "mangaEsq", "mangaDir"] as View[]).flatMap((v) => {
+  const VIEW_SHORT: Record<View, string> = GARMENT_CONFIG[clothingType].shortLabels;
+  const safetyFailures = viewsFor(clothingType).flatMap((v) => {
     const isB = v === "frente" || v === "costas";
     const bad = sizeIdsForGarment(clothingType)
       .filter((s) => {
@@ -3065,7 +3081,17 @@ function Index() {
               </button>
             ))}
           </div>
-          {guidesOpen && <GuidesPanel guides={guides} view={view} failures={safetyFailures.map((f) => f.text)} onApply={applyGuides} />}
+          {guidesOpen && (
+            <GuidesPanel
+              key={clothingType}
+              guides={guides}
+              view={view}
+              groups={guideGroupsFor(clothingType)}
+              names={VIEW_SHORT}
+              failures={safetyFailures.map((f) => f.text)}
+              onApply={applyGuides}
+            />
+          )}
         </div>
 
         {/* ===== Exportação para plotter ===== */}
