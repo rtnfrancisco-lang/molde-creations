@@ -154,15 +154,16 @@ type TextElement = {
   /** Ponto fixo do campo do time. Ausente = "centro". */
   fieldAnchor?: "esquerda" | "centro" | "direita";
 };
-type ClothingType = "Camiseta" | "Moletom" | "Regata" | "Manga Longa" | "Camisa Infantil" | "Camisa Baby Look";
+const CLOTHING_TYPES = ["Camisa Infantil", "Camisa Baby Look", "Camiseta"] as const;
+type ClothingType = (typeof CLOTHING_TYPES)[number];
+/* Tipos removidos (Moletom, Regata, Manga Longa) ou desconhecidos abrem como Camiseta. */
+const asClothingType = (v: unknown): ClothingType =>
+  typeof v === "string" && (CLOTHING_TYPES as readonly string[]).includes(v) ? (v as ClothingType) : "Camiseta";
 type SizeOption = { id: Size; label: string };
 
 /* Fonte única de verdade dos tamanhos disponíveis e dos rótulos exibidos. */
 const SIZES_BY_GARMENT: Record<ClothingType, readonly SizeOption[]> = {
   Camiseta: ["PP", "P", "M", "G", "GG", "XG"].map((id) => ({ id: id as Size, label: id })),
-  Moletom: ["PP", "P", "M", "G", "GG", "XG"].map((id) => ({ id: id as Size, label: id })),
-  Regata: ["PP", "P", "M", "G", "GG", "XG"].map((id) => ({ id: id as Size, label: id })),
-  "Manga Longa": ["PP", "P", "M", "G", "GG", "XG"].map((id) => ({ id: id as Size, label: id })),
   "Camisa Infantil": ["2ANOS", "4ANOS", "6ANOS", "8ANOS", "10ANOS", "12ANOS", "14ANOS"].map(
     (label, index) => ({
       id: (["PP", "P", "M", "G", "GG", "XG", "XG2"] as Size[])[index]!,
@@ -264,7 +265,6 @@ const migrateGradingSleeves = (g: Grading, only?: [Grading, Grading]): Grading =
 const OLD_FOR_TYPE = (t: string): [Grading, Grading] =>
   t === "Camisa Infantil" ? SLEEVE_MIGRATIONS[1]! : t === "Camisa Baby Look" ? SLEEVE_MIGRATIONS[2]! : SLEEVE_MIGRATIONS[0]!;
 
-const NEW_CLOTHING_TYPES: ClothingType[] = ["Camisa Infantil", "Camisa Baby Look"];
 
 const PRESET_TABLES: Partial<Record<ClothingType, Grading>> = {
   "Camisa Infantil": INFANTIL_TABLE,
@@ -282,9 +282,6 @@ const sizeLabel = (clothingType: ClothingType, size: Size): string =>
    Isso preserva referências existentes de estampas sem alterar sua posição. */
 const DEFAULT_MOTHER: Record<ClothingType, Size> = {
   Camiseta: "M",
-  Moletom: "M",
-  Regata: "M",
-  "Manga Longa": "M",
   "Camisa Infantil": "M",
   "Camisa Baby Look": "M",
 };
@@ -384,12 +381,15 @@ const cloneGrading = (grading: Grading): Grading =>
 
 const defaultTablesForProfiles = (): ProfileTables => ({
   Camiseta: cloneGrading(DEFAULT_TABLE),
-  Moletom: cloneGrading(DEFAULT_TABLE),
-  Regata: cloneGrading(DEFAULT_TABLE),
-  "Manga Longa": cloneGrading(DEFAULT_TABLE),
   "Camisa Infantil": cloneGrading(INFANTIL_TABLE),
   "Camisa Baby Look": cloneGrading(BABY_LOOK_TABLE),
 });
+
+/* Mantém só as tabelas dos tipos de peça atuais (descarta tipos removidos). */
+const pickTables = (raw: unknown): Partial<ProfileTables> => {
+  const o = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return Object.fromEntries(CLOTHING_TYPES.filter((t) => o[t] && typeof o[t] === "object").map((t) => [t, o[t]])) as Partial<ProfileTables>;
+};
 
 const readGradeProfiles = (): GradeProfile[] => {
   try {
@@ -402,7 +402,7 @@ const readGradeProfiles = (): GradeProfile[] => {
     return parsed.map((profile) => ({
       name: profile.name,
       tables: Object.fromEntries(
-        Object.entries({ ...defaultTablesForProfiles(), ...profile.tables }).map(([t, g]) => [t, migrateGradingSleeves(g as Grading, OLD_FOR_TYPE(t))]),
+        Object.entries({ ...defaultTablesForProfiles(), ...pickTables(profile.tables) }).map(([t, g]) => [t, migrateGradingSleeves(g as Grading, OLD_FOR_TYPE(t))]),
       ) as ProfileTables,
     }));
   } catch {
@@ -741,9 +741,6 @@ const loadAllBig = async (): Promise<Record<string, unknown>> => {
 
 const LIBRARY = [
   { name: "Camiseta Clássica — Sublimação", size: "M", active: true },
-  { name: "Moletom Oversized", size: "G" },
-  { name: "Regata Nadador", size: "P" },
-  { name: "Gola Careca — Manga Longa", size: "GG" },
 ];
 
 const fmt = (n: number) => n.toFixed(1).replace(".", ",");
@@ -1794,14 +1791,14 @@ function Index() {
       const nLayers = { ...NO_LAYERS, ...obj(d.layers) } as Layers;
       const nTexts = { ...NO_TEXTS, ...obj(d.texts) } as TextsByView;
       const nMother = (SIZES as readonly string[]).includes(d.mother ?? "") ? (d.mother as Size) : mother;
-      const nType = typeof d.clothingType === "string" && d.clothingType in PRESET_TABLES ? (d.clothingType as ClothingType) : clothingType;
+      const nType = asClothingType(d.clothingType);
       // Perfis: adiciona por nome, sem sobrescrever perfis locais.
       const incoming = Array.isArray(d.profiles) ? (d.profiles as GradeProfile[]) : [];
       const merged = [...profiles];
       for (const p of incoming) {
         if (!p || typeof p.name !== "string" || !p.name.trim()) continue;
         if (merged.some((m) => m.name.toLowerCase() === p.name.toLowerCase())) continue;
-        merged.push({ name: p.name, tables: { ...defaultTablesForProfiles(), ...obj(p.tables) } as ProfileTables });
+        merged.push({ name: p.name, tables: { ...defaultTablesForProfiles(), ...pickTables(p.tables) } as ProfileTables });
       }
       const nActive = typeof d.activeProfile === "string" && merged.some((m) => m.name === d.activeProfile) ? d.activeProfile : activeProfile;
 
@@ -2913,15 +2910,11 @@ function Index() {
               onChange={(e) => changeClothingType(e.target.value as ClothingType)}
               className="w-full appearance-none bg-panel2 border border-line rounded-md pl-3 pr-9 py-2.5 text-sm text-foreground font-medium focus:outline-none focus:border-cyan/60 cursor-pointer"
             >
-              {NEW_CLOTHING_TYPES.map((t) => (
+              {CLOTHING_TYPES.map((t) => (
                 <option key={t} value={t}>
                   {t}
                 </option>
               ))}
-              <option>Camiseta</option>
-              <option>Moletom</option>
-              <option>Regata</option>
-              <option>Manga Longa</option>
             </select>
             <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-cyan size-4" />
           </div>
