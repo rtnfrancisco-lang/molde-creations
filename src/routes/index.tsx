@@ -4350,8 +4350,17 @@ function PatternCanvas({
   onTextsChange,
   onCheckpoint,
   teamPreview = null,
+  multi = null,
+  onShiftPick,
+  onMultiMove,
+  onMultiBox,
 }: {
   teamPreview?: TextElement[] | null;
+  /** Conjunto da seleção múltipla (2+ itens, principal por último) ou null. */
+  multi?: SelItem[] | null;
+  onShiftPick?: (it: SelItem) => void;
+  onMultiMove?: (phase: "start" | "move", dx?: number, dy?: number) => void;
+  onMultiBox?: (b: { w: number; h: number } | null) => void;
   texts: TextsByView;
   onTextsChange: (t: TextsByView) => void;
   onCheckpoint: (key: string) => void;
@@ -4492,6 +4501,85 @@ function PatternCanvas({
     onPieceDims(Math.max(minW, nW), Math.max(minH, nH));
   };
   const selL = layers.find((l) => l.id === selLayer) ?? null;
+
+  /* ---------- Seleção múltipla ---------- */
+  const inMulti = (it: SelItem) => !!multi?.some((m) => sameSelItem(m, it));
+  const [mDrag, setMDrag] = useState<Pt | null>(null);
+  /** Shift+clique alterna o item; arrastar um membro move o conjunto. True = evento tratado. */
+  const multiPick = (e: React.PointerEvent, it: SelItem): boolean => {
+    if (tool !== "selecao") return false;
+    if (e.button === 0 && e.shiftKey && onShiftPick) {
+      e.stopPropagation();
+      onShiftPick(it);
+      return true;
+    }
+    if (!multi || !inMulti(it)) return false;
+    e.stopPropagation();
+    if (e.button !== 0) return true; // botão direito: mantém o conjunto para o menu
+    onMultiMove?.("start");
+    setMDrag(svgPoint(e));
+    return true;
+  };
+  useEffect(() => {
+    if (!mDrag) return;
+    const move = (ev: PointerEvent) => {
+      const p = svgPoint(ev);
+      onMultiMove?.("move", p.x - mDrag.x, p.y - mDrag.y);
+    };
+    const stop = () => setMDrag(null);
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", stop, { once: true });
+    return () => {
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", stop);
+    };
+  }, [mDrag]);
+  const onMultiMoveRef = useRef(onMultiMove);
+  onMultiMoveRef.current = onMultiMove;
+  /* Caixas de cada item (camada/estampa: caixa que cobre o objeto girado; texto: getBBox). */
+  const [mBoxes, setMBoxes] = useState<{ x: number; y: number; w: number; h: number; main: boolean }[]>([]);
+  useLayoutEffect(() => {
+    const out: { x: number; y: number; w: number; h: number; main: boolean }[] = [];
+    if (multi) {
+      const rotBox = (cx: number, cy: number, aw: number, ah: number, rot: number) => {
+        const t = (rot * Math.PI) / 180;
+        const bw = aw * Math.abs(Math.cos(t)) + ah * Math.abs(Math.sin(t));
+        const bh = aw * Math.abs(Math.sin(t)) + ah * Math.abs(Math.cos(t));
+        return { x: cx - bw / 2, y: cy - bh / 2, w: bw, h: bh };
+      };
+      multi.forEach((it, i) => {
+        const main = i === multi.length - 1;
+        if (it.kind === "layer") {
+          const l = layers.find((x) => x.id === it.id);
+          if (!l) return;
+          const { c, aw, ah } = lg(l);
+          out.push({ ...rotBox(c.x, c.y, aw, ah, l.rot ?? 0), main });
+        } else if (it.kind === "art") {
+          if (!artwork) return;
+          const aw = artwork.w * W;
+          const c = toSvg({ x: artwork.cx, y: artwork.cy });
+          out.push({ ...rotBox(c.x, c.y, aw, aw * artwork.ratio, artwork.rot ?? 0), main });
+        } else {
+          const el = svgRef.current?.querySelector(`[data-text-id="${CSS.escape(it.id)}"]`) as SVGTextElement | null;
+          if (!el) return;
+          try {
+            const b = el.getBBox();
+            out.push({ x: b.x, y: b.y, w: b.width, h: b.height, main });
+          } catch { /* ignora */ }
+        }
+      });
+    }
+    setMBoxes((prev) => (JSON.stringify(prev) === JSON.stringify(out) ? prev : out));
+  });
+  useEffect(() => {
+    if (!onMultiBox) return;
+    if (!multi || !mBoxes.length) return onMultiBox(null);
+    const x0 = Math.min(...mBoxes.map((b) => b.x));
+    const y0 = Math.min(...mBoxes.map((b) => b.y));
+    const x1 = Math.max(...mBoxes.map((b) => b.x + b.w));
+    const y1 = Math.max(...mBoxes.map((b) => b.y + b.h));
+    onMultiBox({ w: x1 - x0, h: y1 - y0 });
+  }, [mBoxes, !!multi]);
   const layerNodeMode = tool === "forma" && selL?.kind === "vetor" && !selL.hidden;
   const svgPoint = (e: { clientX: number; clientY: number }): Pt => {
     const svg = svgRef.current!;
@@ -4964,6 +5052,8 @@ function PatternCanvas({
         onPointerDown={(e) => {
           if (tool !== "selecao") return;
           e.stopPropagation();
+          // O molde nunca entra num conjunto com vários itens.
+          if (e.shiftKey || (multi && e.button === 2)) return;
           onSelPart("peca");
           if (e.button !== 0) return;
           capture(e);
@@ -4993,6 +5083,7 @@ function PatternCanvas({
           transform: artTransform(artwork, c.x, c.y),
         };
         const down = (e: React.PointerEvent) => {
+          if (multiPick(e, { kind: "art", id: "art" })) return;
           e.stopPropagation();
           onSelPart("estampa");
           if (e.button !== 0) return;
@@ -5018,7 +5109,7 @@ function PatternCanvas({
                 <image {...imgProps} opacity={artwork.opacity ?? 1} style={{ pointerEvents: "none" }} />
               </g>
             )}
-            {artSelected && (
+            {artSelected && !multi && (
               <g transform={`translate(${c.x} ${c.y}) rotate(${artwork.rot ?? 0})`}>
                 {selectionBox(aw, ah, "amber", (_, hx, hy) => setDrag({ k: "bscale", target: "art", hx, hy, orig: artwork }))}
               </g>
@@ -5040,6 +5131,7 @@ function PatternCanvas({
         const pickable = (tool === "selecao" || tool === "forma") && (!l.clipped || pcEdit);
         const down = (e: React.PointerEvent) => {
           if (!pickable && e.button !== 2) return;
+          if (pickable && multiPick(e, { kind: "layer", id: l.id })) return;
           e.stopPropagation();
           onSelLayer(l.id);
           if (e.button !== 0 || tool !== "selecao") return;
@@ -5082,7 +5174,7 @@ function PatternCanvas({
             {sel && tool !== "selecao" && (
               <rect x={-aw / 2} y={-ah / 2} width={aw} height={ah} className="fill-none stroke-amber pointer-events-none" strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
             )}
-            {sel && tool === "selecao" && (
+            {sel && tool === "selecao" && !multi && (
               <>
                 {selectionBox(aw, ah, "amber", (_, hx, hy) => setDrag({ k: "bscale", target: "layer", hx, hy, orig: l }))}
                 <line x1={0} y1={-ah / 2} x2={0} y2={-ah / 2 - unit * 3} className="stroke-amber pointer-events-none" strokeWidth={1} vectorEffect="non-scaling-stroke" />
@@ -5355,7 +5447,27 @@ function PatternCanvas({
       })()}
 
 
-      <TextWorkspace tool={tool} view={view} svgPoint={svgPoint} bounds={{ x: vx, y: vy, width: vw, height: vh }} texts={texts} setTexts={onTextsChange} checkpoint={onCheckpoint} selectedId={selText} onSelect={onSelText} unit={unit} selectionBox={selectionBox} preview={teamPreview} />
+      <TextWorkspace tool={tool} view={view} svgPoint={svgPoint} bounds={{ x: vx, y: vy, width: vw, height: vh }} texts={texts} setTexts={onTextsChange} checkpoint={onCheckpoint} selectedId={selText} onSelect={onSelText} unit={unit} selectionBox={selectionBox} preview={teamPreview} multiActive={!!multi} multiPick={multiPick} />
+
+      {/* Seleção múltipla: caixa tracejada por objeto, contínua no principal, e caixa do conjunto. */}
+      {multi && tool === "selecao" && mBoxes.length > 0 && (() => {
+        const x0 = Math.min(...mBoxes.map((b) => b.x));
+        const y0 = Math.min(...mBoxes.map((b) => b.y));
+        const x1 = Math.max(...mBoxes.map((b) => b.x + b.w));
+        const y1 = Math.max(...mBoxes.map((b) => b.y + b.h));
+        const g = unit * 0.6;
+        return (
+          <g className="pointer-events-none" data-screen-only>
+            {mBoxes.map((b, i) => (
+              <rect key={i} x={b.x} y={b.y} width={b.w} height={b.h} className="fill-none stroke-amber" strokeWidth={b.main ? 1.5 : 1} strokeDasharray={b.main ? undefined : "4 3"} vectorEffect="non-scaling-stroke" />
+            ))}
+            <rect x={x0 - g} y={y0 - g} width={x1 - x0 + g * 2} height={y1 - y0 + g * 2} className="fill-none stroke-amber" strokeWidth={0.75} strokeDasharray="2 2" opacity={0.8} vectorEffect="non-scaling-stroke" />
+            <text x={(x0 + x1) / 2} y={y0 - g - unit * 0.8} textAnchor="middle" fontSize={unit * 1.2} className="fill-amber font-mono">
+              {multi.length} objetos · {fmt(x1 - x0)} × {fmt(y1 - y0)} cm
+            </text>
+          </g>
+        );
+      })()}
 
       {/* Fita métrica */}
       {tape.a && tapeEnd && (
