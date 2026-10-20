@@ -4669,7 +4669,7 @@ function PatternCanvas({
   };
 
   const others = overlay ? SIZES.filter((s) => s !== size) : [];
-  const title = { frente: "FRENTE", costas: "COSTAS", mangaEsq: "MANGA ESQUERDA", mangaDir: "MANGA DIREITA" }[view];
+  const title = viewLabel(clothingType, view).toUpperCase();
   const showNodes = tool === "forma" && !layerNodeMode;
   const nodesInteractive = tool === "forma";
   const cursor = { selecao: "cursor-default", forma: "cursor-crosshair", caneta: "cursor-crosshair", formas: "cursor-crosshair", zoom: "cursor-zoom-in", fita: "cursor-crosshair", texto: "cursor-text" }[tool];
