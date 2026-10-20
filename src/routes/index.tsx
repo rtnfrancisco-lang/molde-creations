@@ -1013,11 +1013,19 @@ type TextWorkspaceProps = {
   ) => React.ReactNode;
   /** Pré-visualização do time: textos já resolvidos, somente leitura. */
   preview?: TextElement[] | null;
+  /** Seleção múltipla ativa (2+ objetos): sem alças e sem Delete próprio. */
+  multiActive?: boolean;
+  /** Shift+clique / arraste do conjunto; devolve true quando tratou o evento. */
+  multiPick?: (e: React.PointerEvent, it: SelItem) => boolean;
 };
+
+/** Item da seleção múltipla: camada importada, estampa ou texto. */
+type SelItem = { kind: "layer" | "art" | "text"; id: string };
+const sameSelItem = (a: SelItem, b: SelItem) => a.kind === b.kind && a.id === b.id;
 
 type TBox = { x: number; y: number; w: number; h: number };
 
-function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, checkpoint, selectedId, onSelect: setSelectedId, unit, selectionBox, preview }: TextWorkspaceProps) {
+function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, checkpoint, selectedId, onSelect: setSelectedId, unit, selectionBox, preview, multiActive = false, multiPick }: TextWorkspaceProps) {
   const selTextRef = useRef<SVGTextElement | null>(null);
   const [box, setBox] = useState<TBox | null>(null);
   const [fontsTick, setFontsTick] = useState(0);
@@ -1212,7 +1220,7 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
   // Delete/Backspace remove o texto selecionado (fora da edição e de campos).
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!selectedId || editingIdRef.current) return;
+      if (!selectedId || editingIdRef.current || multiActive) return;
       if (event.key !== "Delete" && event.key !== "Backspace") return;
       if (isTypingTarget(event.target)) return;
       event.preventDefault();
@@ -1224,7 +1232,7 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [selectedId, view]);
+  }, [selectedId, view, multiActive]);
 
   if (preview) {
     return (
@@ -1271,7 +1279,9 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
         ) : (() => {
           const active = tool === "selecao" || tool === "texto";
           const onDown = (event: React.PointerEvent) => {
-            if (!active || event.button !== 0) return;
+            if (!active) return;
+            if (multiPick?.(event, { kind: "text", id: item.id })) return;
+            if (event.button !== 0) return;
             event.stopPropagation();
             setSelectedId(item.id);
             checkpoint("text-move:" + Date.now());
@@ -1288,6 +1298,7 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
               )}
               <text
                 ref={(el) => { textEls.current[item.id] = el; if (isSel) selTextRef.current = el; }}
+                data-text-id={item.id}
                 x={item.x} y={item.y + fontSize} fill={item.color}
                 style={textStyle} textAnchor={item.align === "left" ? "start" : item.align === "center" ? "middle" : "end"}
                 className={active ? "cursor-move" : "pointer-events-none"}
@@ -1311,7 +1322,7 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
                   </g>
                 );
               })()}
-              {isSel && box && (
+              {isSel && box && !multiActive && (
                 <g transform={`translate(${box.x + box.w / 2} ${box.y + box.h / 2})`}>
                   {tool === "selecao"
                     ? selectionBox(box.w, box.h, "amber", startResize)
