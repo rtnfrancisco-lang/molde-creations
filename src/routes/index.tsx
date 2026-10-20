@@ -2179,6 +2179,7 @@ function Index() {
   const selectLayer = (id: string | null) => {
     // Fora de "Editar Conteúdo do PowerClip", camadas recortadas não são selecionáveis.
     if (id && !pcEdit && layers[view].find((l) => l.id === id)?.clipped) return;
+    setSelExtra([]);
     setSelLayer(id);
     if (id) {
       setSelPart(null);
@@ -2186,6 +2187,7 @@ function Index() {
     }
   };
   const selectPart = (p: "peca" | "estampa" | null) => {
+    setSelExtra([]);
     setSelPart(p);
     if (p) {
       setSelLayer(null);
@@ -2193,11 +2195,134 @@ function Index() {
     }
   };
   const selectText = (id: string | null) => {
+    setSelExtra([]);
     setSelText(id);
     if (id) {
       setSelLayer(null);
       setSelPart(null);
     }
+  };
+  /* ---------- Seleção múltipla (Shift+clique): principal = último selecionado ---------- */
+  const [selExtraRaw, setSelExtra] = useState<SelItem[]>([]);
+  const [multiBox, setMultiBox] = useState<{ w: number; h: number } | null>(null);
+  const principalItem: SelItem | null = selLayer
+    ? { kind: "layer", id: selLayer }
+    : selText
+      ? { kind: "text", id: selText }
+      : selPart === "estampa"
+        ? { kind: "art", id: "art" }
+        : null;
+  const selItemAlive = (it: SelItem) =>
+    it.kind === "layer"
+      ? layers[view].some((l) => l.id === it.id && !l.hidden && (!l.clipped || pcEdit))
+      : it.kind === "art"
+        ? !!art && size === mother && (art.clipped === false || pcEdit)
+        : texts[view].some((t) => t.id === it.id);
+  const selExtra = principalItem ? selExtraRaw.filter((it) => selItemAlive(it) && !sameSelItem(it, principalItem)) : [];
+  /** Conjunto selecionado em ordem: extras primeiro, principal (objeto ativo) por último. */
+  const selectionItems = (): SelItem[] => (principalItem ? [...selExtra, principalItem] : []);
+  const multiSel = selExtra.length > 0 ? selectionItems() : null;
+  useEffect(() => {
+    if (selExtra.length !== selExtraRaw.length) setSelExtra(selExtra);
+  }, [selExtra.length, selExtraRaw.length]);
+  useEffect(() => {
+    setSelExtra([]);
+  }, [view, size, clothingType, tool, teamView, pcEdit]);
+  const setPrincipal = (it: SelItem | null) => {
+    setSelLayer(it?.kind === "layer" ? it.id : null);
+    setSelText(it?.kind === "text" ? it.id : null);
+    setSelPart(it?.kind === "art" ? "estampa" : null);
+  };
+  const clearSelection = () => {
+    setSelExtra([]);
+    setPrincipal(null);
+  };
+  /** Shift+clique: adiciona (vira principal) ou remove (o último restante vira principal). */
+  const shiftPick = (it: SelItem) => {
+    if (!selItemAlive(it)) return;
+    const cur = selectionItems();
+    if (cur.some((c) => sameSelItem(c, it))) {
+      const rest = cur.filter((c) => !sameSelItem(c, it));
+      setSelExtra(rest.slice(0, -1));
+      setPrincipal(rest[rest.length - 1] ?? null);
+    } else {
+      setSelExtra(cur);
+      setPrincipal(it);
+    }
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || tool !== "selecao" || isTypingTarget(e.target)) return;
+      if (principalItem || selPart) clearSelection();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+  /** Arrastar o conjunto: todos com o mesmo delta em cm, um passo de desfazer por arrasto. */
+  const multiOrig = useRef<{ layers: Layer[]; art: Artwork | null; texts: TextElement[]; key: string; cp: boolean } | null>(null);
+  const multiMove = (phase: "start" | "move", dx = 0, dy = 0) => {
+    if (!multiSel) return;
+    if (phase === "start") {
+      multiOrig.current = { layers: layers[view], art, texts: texts[view], key: "multi-move:" + Date.now(), cp: false };
+      return;
+    }
+    const o = multiOrig.current;
+    if (!o || (!dx && !dy)) return;
+    if (!o.cp) {
+      checkpoint(o.key);
+      o.cp = true;
+    }
+    const ids = new Set(multiSel.filter((i) => i.kind === "layer").map((i) => i.id));
+    const tids = new Set(multiSel.filter((i) => i.kind === "text").map((i) => i.id));
+    const W = pieceW;
+    const H = pieceH;
+    if (ids.size) {
+      const all = { ...snapRef.current.layers, [view]: o.layers.map((l) => (ids.has(l.id) ? { ...l, cx: l.cx + dx / W, cy: l.cy + dy / H } : l)) };
+      setLayers(all);
+      saveLS(LS_LAYERS, all);
+    }
+    if (o.art && multiSel.some((i) => i.kind === "art")) {
+      const all = { ...snapRef.current.artworks, [view]: { ...o.art, cx: o.art.cx + dx / W, cy: o.art.cy + dy / H } };
+      setArtworks(all);
+      try { saveLS(LS_ART, all); } catch { /* imagem grande demais */ }
+    }
+    if (tids.size) {
+      setTexts((prev) => ({ ...prev, [view]: o.texts.map((t) => (tids.has(t.id) ? { ...t, x: t.x + dx, y: t.y + dy } : t)) }));
+    }
+  };
+  /** Apaga todos os itens do conjunto com um único passo de desfazer. O molde nunca. */
+  const deleteMulti = () => {
+    if (!multiSel) return false;
+    const ids = new Set(multiSel.filter((i) => i.kind === "layer").map((i) => i.id));
+    const tids = new Set(multiSel.filter((i) => i.kind === "text").map((i) => i.id));
+    checkpoint("multi-del:" + Date.now());
+    if (ids.size) {
+      const all = { ...snapRef.current.layers, [view]: layers[view].filter((l) => !ids.has(l.id)) };
+      setLayers(all);
+      saveLS(LS_LAYERS, all);
+    }
+    if (multiSel.some((i) => i.kind === "art")) {
+      const all = { ...snapRef.current.artworks, [view]: null };
+      setArtworks(all);
+      try { saveLS(LS_ART, all); } catch { /* ignora */ }
+    }
+    if (tids.size) setTexts((prev) => ({ ...prev, [view]: prev[view].filter((t) => !tids.has(t.id)) }));
+    clearSelection();
+    setMenu(null);
+    return true;
+  };
+  /** "Inserir no PowerClip" com vários: aplica a todas as camadas livres do conjunto. */
+  const multiToPowerClip = () => {
+    if (!multiSel) return;
+    const ids = new Set(multiSel.filter((i) => i.kind === "layer").map((i) => i.id));
+    commitView(
+      "pc-multi:" + Date.now(),
+      layers[view].map((l) => (ids.has(l.id) && !l.clipped ? { ...l, clipped: true, init: { cx: l.cx, cy: l.cy, w: l.w, ratio: l.ratio, rot: l.rot ?? 0 } } : l)),
+      undefined,
+    );
+    clearSelection();
+    setSize(mother);
+    setPcEdit(false);
   };
   const isBodyView = view === "frente" || view === "costas";
   const pieceW = isBodyView ? graded[size].bodyWidth : graded[size].sleeveWidth;
