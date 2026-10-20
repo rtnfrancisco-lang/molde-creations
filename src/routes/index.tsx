@@ -1,4 +1,6 @@
-import { sleeveShape, mirrorShape, migrateSleeveShapes, migrateSleeveWidths, safetyOffsetFor } from "@/lib/sleeve";
+import { sleeveShape, mirrorShape, migrateSleeveShapes, migrateSleeveWidths } from "@/lib/sleeve";
+import { DEFAULT_GUIDES, fmtCm, guidePaths, sanitizeGuides, type Guide, type GuideView, type Guides } from "@/lib/guides";
+import { GuidesPanel } from "@/components/GuidesPanel";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -51,6 +53,7 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
+  SlidersHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import * as idb from "@/lib/idb";
@@ -80,7 +83,6 @@ import {
 import { activeView } from "@/lib/active-view";
 import {
   offsetPathD,
-  BLEED_OFFSET_CM,
   TECHNICAL_OFFSET_OPTIONS,
 } from "@/lib/vector-offset";
 import { DirectTextEditor } from "@/components/DirectTextEditor";
@@ -361,6 +363,7 @@ const LS_MOTHER = "moldecore.moldeMae";
 const LS_ART = "moldecore.estampas";
 const LS_STYLES = "moldecore.cores";
 const LS_SHAPES = "moldecore.formas";
+const LS_GUIDES = "moldecore.guias";
 const LS_LAYERS = "moldecore.camadas";
 const LS_PROFILES = "moldecore.perfisGrades";
 const LS_SIDEBARS = "moldecore.barrasLaterais";
@@ -628,6 +631,7 @@ const BIG_KEYS = new Set([
   "moldecore.estampas",
   "moldecore.textos",
   "moldecore.formas",
+  "moldecore.guias",
   "moldecore.cores",
   "moldecore.time",
   "moldecore.time.imagens",
@@ -1396,6 +1400,8 @@ function Index() {
   const [showSeam, setShowSeam] = useState(true);
   const [showBleed, setShowBleed] = useState(true);
   const [showSafety, setShowSafety] = useState(true);
+  const [guides, setGuides] = useState<Guides>(DEFAULT_GUIDES);
+  const [guidesOpen, setGuidesOpen] = useState(false);
   const [plotterOpen, setPlotterOpen] = useState(false);
   const [exportFmt, setExportFmt] = useState<TeamFormat>("pdf");
   const [expDpi, setExpDpi] = useState(300);
@@ -1557,6 +1563,7 @@ function Index() {
       if (st) setStyles({ ...DEFAULT_STYLES, ...st });
       const sh = asObj(big[LS_SHAPES]);
       if (sh) setShapes(migrateSleeveShapes({ ...DEFAULT_SHAPES, ...sh } as Shapes));
+      if (big[LS_GUIDES]) setGuides(sanitizeGuides(big[LS_GUIDES]));
       const ly = asObj(big[LS_LAYERS]);
       if (ly) setLayers({ ...NO_LAYERS, ...ly });
       const tx = asObj(big[LS_TEXTS]);
@@ -1589,9 +1596,9 @@ function Index() {
   }, [texts]);
 
   /* ---------- Histórico (Desfazer / Refazer) ---------- */
-  type Snap = { table: Grading; shapes: Shapes; artworks: Artworks; styles: Styles; layers: Layers; texts: TextsByView };
-  const snapRef = useRef<Snap>({ table, shapes, artworks, styles, layers, texts });
-  snapRef.current = { table, shapes, artworks, styles, layers, texts };
+  type Snap = { table: Grading; guides: Guides; shapes: Shapes; artworks: Artworks; styles: Styles; layers: Layers; texts: TextsByView };
+  const snapRef = useRef<Snap>({ table, guides, shapes, artworks, styles, layers, texts });
+  snapRef.current = { table, guides, shapes, artworks, styles, layers, texts };
   const [past, setPast] = useState<Snap[]>([]);
   const [future, setFuture] = useState<Snap[]>([]);
   const lastCp = useRef({ key: "", t: 0 });
@@ -1611,6 +1618,8 @@ function Index() {
   const restore = (sn: Snap) => {
     setTable(sn.table);
     setShapes(sn.shapes);
+    setGuides(sn.guides);
+    saveLS(LS_GUIDES, sn.guides);
     setArtworks(sn.artworks);
     setStyles(sn.styles);
     setLayers(sn.layers);
@@ -1678,7 +1687,7 @@ function Index() {
       if (Date.now() < cleanUntil.current) setSavedRev(n);
       return n;
     });
-  }, [table, shapes, artworks, styles, layers, texts, mother, clothingType, profiles, activeProfile, roster, teamImages]);
+  }, [table, guides, shapes, artworks, styles, layers, texts, mother, clothingType, profiles, activeProfile, roster, teamImages]);
   useEffect(() => {
     if (!dirty) return;
     const h = (e: BeforeUnloadEvent) => {
@@ -1690,7 +1699,7 @@ function Index() {
   }, [dirty]);
 
   const projectText = (name: string) =>
-    buildProjectFile(name, { grading: table, mother, clothingType, shapes, artworks, styles, layers, texts, profiles, activeProfile, roster, teamImages });
+    buildProjectFile(name, { grading: table, mother, clothingType, guides, shapes, artworks, styles, layers, texts, profiles, activeProfile, roster, teamImages });
 
   const saveProject = async (as: boolean): Promise<boolean> => {
     try {
@@ -1739,6 +1748,8 @@ function Index() {
     setArtworks(NO_ART);
     setTexts(NO_TEXTS);
     setShapes(DEFAULT_SHAPES);
+    setGuides(DEFAULT_GUIDES);
+    saveLS(LS_GUIDES, DEFAULT_GUIDES);
     setStyles(DEFAULT_STYLES);
     saveLS(LS_LAYERS, NO_LAYERS);
     saveLS(LS_ART, NO_ART);
@@ -1802,6 +1813,9 @@ function Index() {
       setArtworks(nArt);
       setStyles(nStyles);
       setShapes(nShapes);
+      const nGuides = sanitizeGuides(d.guides);
+      setGuides(nGuides);
+      saveLS(LS_GUIDES, nGuides);
       setLayers(nLayers);
       setTexts(nTexts);
       const nRoster = sanitizeRoster(d.roster);
@@ -2556,7 +2570,7 @@ function Index() {
     );
   };
   const pcFrame = (() => {
-    const b = pathBounds(offsetPathD(buildPath(shapes[view], pieceW, pieceH), BLEED_OFFSET_CM, TECHNICAL_OFFSET_OPTIONS)) ?? {
+    const b = pathBounds(guidePaths(buildPath(shapes[view], pieceW, pieceH), pieceW, pieceH, guides[view]).frameSrc) ?? {
       minX: -pieceW / 2 - PLOTTER_MARGIN, minY: -PLOTTER_MARGIN, maxX: pieceW / 2 + PLOTTER_MARGIN, maxY: pieceH + PLOTTER_MARGIN,
     };
     return { x: b.minX, y: b.minY, w: b.maxX - b.minX, h: b.maxY - b.minY };
@@ -2588,11 +2602,12 @@ function Index() {
        da Linha de Costura, deslocado na perpendicular de cada segmento e de cada
        curva (src/lib/vector-offset.ts) e com o canto resolvido pela bissetriz
        exata de cada nó. Nada de escalar largura/altura. */
-    const bleedPath = offsetPathD(path, BLEED_OFFSET_CM, TECHNICAL_OFFSET_OPTIONS);
-    const safetyPath = offsetPathD(path, safetyOffsetFor(W, H), TECHNICAL_OFFSET_OPTIONS);
-    const bleed = `<path d="${bleedPath}" fill="none" stroke="#38bdf8" stroke-width="0.06" stroke-linejoin="round"/>`;
+    const gp = guidePaths(path, W, H, guides[view]);
+    const bleedPath = gp.frameSrc;
+    const safetyPath = gp.safety;
+    const bleed = !gp.bleed ? "" : `<path d="${bleedPath}" fill="none" stroke="#38bdf8" stroke-width="0.06" stroke-linejoin="round"/>`;
     const seamLine = `<path d="${path}" fill="none" stroke="#111827" stroke-width="0.06" stroke-linejoin="round"/>`;
-    const safety = `<path d="${safetyPath}" fill="none" stroke="#ef4444" stroke-width="0.06" stroke-dasharray="0.5 0.35" stroke-linejoin="round"/>`;
+    const safety = !safetyPath ? "" : `<path d="${safetyPath}" fill="none" stroke="#ef4444" stroke-width="0.06" stroke-dasharray="0.5 0.35" stroke-linejoin="round"/>`;
     const tech = o.hideTechnical ? "" : bleed + seamLine + safety;
 
     let img = "";
@@ -2646,7 +2661,7 @@ function Index() {
       frame +
       label +
       `</svg>`;
-    return { svg, cmW, cmH };
+    return { svg, cmW, cmH, safetyFailed: gp.safetyFailed };
   };
 
   const buildPlotterSvg = (o: { hideTechnical: boolean; crop: boolean }) => buildPlotterSvgFor({ ...o, view, size });
@@ -2693,8 +2708,9 @@ function Index() {
       for (const v of opt.views) {
         if (signal.cancelled) return null;
         const sz = p.tamanho as Size;
-        const { svg, cmW, cmH } = buildPlotterSvgFor({ view: v, size: sz, hideTechnical: opt.hideTechnical, crop: true, player: p });
+        const { svg, cmW, cmH, safetyFailed } = buildPlotterSvgFor({ view: v, size: sz, hideTechnical: opt.hideTechnical, crop: true, player: p });
         const label = sizeLabel(clothingType, sz);
+        if (safetyFailed && !opt.hideTechnical) warnings.push(`${label} ${partLabel(v)}: zona de segurança maior que a peça (linha não gerada)`);
         const name = uniqueName(teamFileName(opt.template, { numero: p.numero, nome: p.nome, tamanho: label, vista: v }, ext), used);
         const r = await renderPiece(svg, cmW, cmH, opt.format, opt.dpi, opt.quality, name);
         if (r.reduced) warnings.push(`${label} (${v}) gerado a ${r.dpi} DPI para caber no navegador`);
@@ -2801,7 +2817,8 @@ function Index() {
       setExpProgress({ done: 0, total: count });
       for (const s of sizes) for (const v of views) {
         if (sig.cancelled) return flashSaved("Exportação cancelada", 3000);
-        const { svg, cmW, cmH } = buildPlotterSvgFor({ view: v, size: s, hideTechnical: hideTech, crop: cropRect });
+        const { svg, cmW, cmH, safetyFailed } = buildPlotterSvgFor({ view: v, size: s, hideTechnical: hideTech, crop: cropRect });
+        if (safetyFailed && !hideTech) warnings.push(`${sizeLabel(clothingType, s)} ${partLabel(v)} sem zona de segurança (maior que a peça)`);
         const name = uniqueName(`${exportName(clothingType, s, v)}.${ext}`, used);
         const r = await renderPiece(svg, cmW, cmH, exportFmt, expDpi, expQuality, name);
         if (r.reduced) warnings.push(`${sizeLabel(clothingType, s)} ${partLabel(v)} a ${r.dpi} DPI`);
@@ -2814,7 +2831,7 @@ function Index() {
       const zip = await zipFiles(files, exportFmt);
       if (sig.cancelled) return flashSaved("Exportação cancelada", 3000);
       downloadBlob(new Blob([zip as BlobPart], { type: "application/zip" }), `MoldeCore_${clothingType.replace(/\s+/g, "_")}_${todayStamp()}.zip`);
-      flashSaved(`${n} arquivos ${exportFmt.toUpperCase()} no ZIP` + (warnings.length ? ` · DPI reduzido: ${warnings.join(", ")}` : ""), warnings.length ? 9000 : 4500);
+      flashSaved(`${n} arquivos ${exportFmt.toUpperCase()} no ZIP` + (warnings.length ? ` · Avisos: ${warnings.join(", ")}` : ""), warnings.length ? 9000 : 4500);
       setPlotterOpen(false);
     } catch {
       flashSaved("Não foi possível gerar o arquivo de exportação", 3500);
@@ -2824,10 +2841,32 @@ function Index() {
     }
   };
 
+  const VIEW_SHORT: Record<View, string> = { frente: "Frente", costas: "Costas", mangaEsq: "Manga Esq.", mangaDir: "Manga Dir." };
+  const safetyFailures = (["frente", "costas", "mangaEsq", "mangaDir"] as View[]).flatMap((v) => {
+    const isB = v === "frente" || v === "costas";
+    const bad = sizeIdsForGarment(clothingType)
+      .filter((s) => {
+        const m = table[s];
+        if (!m) return false;
+        const W = isB ? m.bodyWidth : m.sleeveWidth;
+        const H = isB ? m.bodyHeight : m.sleeveHeight;
+        return guidePaths(buildPath(shapes[v], W, H), W, H, { bleed: 0, safety: guides[v].safety }).safetyFailed;
+      })
+      .map((s) => sizeLabel(clothingType, s));
+    return bad.length ? [{ view: v, text: `${VIEW_SHORT[v]} (${bad.join(", ")})` }] : [];
+  });
+  const applyGuides = (vs: GuideView[], g: Guide) => {
+    checkpoint("guides:" + Date.now());
+    const next = { ...guides };
+    vs.forEach((v) => (next[v] = { ...g }));
+    setGuides(next);
+    saveLS(LS_GUIDES, next);
+  };
+
   const techRows = [
     { key: "seam", label: "Linha de Costura", dot: "bg-ink", on: showSeam, toggle: () => setShowSeam((v) => !v) },
-    { key: "bleed", label: "Margem de Sangria +1cm", dot: "bg-sky-400", on: showBleed, toggle: () => setShowBleed((v) => !v) },
-    { key: "safety", label: "Zona de Segurança -4cm", dot: "bg-red-500", on: showSafety, toggle: () => setShowSafety((v) => !v) },
+    { key: "bleed", label: `Margem de Sangria +${fmtCm(guides[view].bleed)} cm`, dot: "bg-sky-400", on: showBleed, toggle: () => setShowBleed((v) => !v) },
+    { key: "safety", label: `Zona de Segurança −${fmtCm(guides[view].safety)} cm`, warn: safetyFailures.some((f) => f.view === view), dot: "bg-red-500", on: showSafety, toggle: () => setShowSafety((v) => !v) },
   ];
 
   const VIEWS: { key: View; label: string }[] = [
@@ -2897,8 +2936,17 @@ function Index() {
 
         {/* ===== Camadas técnicas do canvas — olhos de visibilidade ===== */}
         <div className="px-5 pb-5 border-b border-line">
-          <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-faint mb-2">
-            Camadas Técnicas
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-faint">Camadas Técnicas</div>
+            <button
+              onClick={() => setGuidesOpen((o) => !o)}
+              title="Ajustar distâncias"
+              aria-label="Ajustar distâncias"
+              aria-pressed={guidesOpen}
+              className={"p-1 rounded hover:bg-panel2 " + (guidesOpen ? "text-cyan" : "text-faint")}
+            >
+              <SlidersHorizontal className="size-3.5" />
+            </button>
           </div>
           <div className="space-y-1">
             {techRows.map((row) => (
@@ -2916,10 +2964,14 @@ function Index() {
               >
                 <span className={"size-1.5 shrink-0 rounded-full " + row.dot} />
                 <span className="flex-1 leading-tight">{row.label}</span>
+                {"warn" in row && row.warn && (
+                  <span className="text-destructive" title="Distância maior que a peça nesta vista">⚠</span>
+                )}
                 {row.on ? <Eye className="size-3.5 text-cyan" /> : <EyeOff className="size-3.5" />}
               </button>
             ))}
           </div>
+          {guidesOpen && <GuidesPanel guides={guides} view={view} failures={safetyFailures.map((f) => f.text)} onApply={applyGuides} />}
         </div>
 
         {/* ===== Exportação para plotter ===== */}
@@ -3453,6 +3505,7 @@ function Index() {
                   showSeam={showSeam}
                   showBleed={showBleed}
                   showSafety={showSafety}
+                  guide={guides[view]}
                   selPart={selPart}
                   onSelPart={selectPart}
                   lockRatio={lockRatio}
@@ -3991,6 +4044,7 @@ function PatternCanvas({
   showSeam = true,
   showBleed = true,
   showSafety = true,
+  guide = DEFAULT_GUIDES.frente,
   clothingType,
   selPart,
   onSelPart,
@@ -4049,6 +4103,7 @@ function PatternCanvas({
   showSeam?: boolean;
   showBleed?: boolean;
   showSafety?: boolean;
+  guide?: Guide;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -4193,7 +4248,7 @@ function PatternCanvas({
      É o destino/máscara do PowerClip. */
   const frame = (() => {
     const bb =
-      pathBounds(offsetPathD(buildPath(nodes, W, H), BLEED_OFFSET_CM, TECHNICAL_OFFSET_OPTIONS)) ?? {
+      pathBounds(guidePaths(buildPath(nodes, W, H), W, H, guide).frameSrc) ?? {
         minX: -W / 2 - PLOTTER_MARGIN,
         minY: -PLOTTER_MARGIN,
         maxX: W / 2 + PLOTTER_MARGIN,
@@ -4815,15 +4870,14 @@ function PatternCanvas({
       {/* Mesma geometria vetorial do arquivo de produção, em centímetros reais. */}
       {(() => {
         const seam = buildPath(nodes, W, H);
-        const bleed = offsetPathD(seam, BLEED_OFFSET_CM, TECHNICAL_OFFSET_OPTIONS);
-        const safety = offsetPathD(seam, safetyOffsetFor(W, H), TECHNICAL_OFFSET_OPTIONS);
+        const { bleed, safety } = guidePaths(seam, W, H, guide);
         return (
           <g className="pointer-events-none">
-            {showBleed && <path d={bleed} className="fill-none stroke-sky-400" strokeWidth={1} vectorEffect="non-scaling-stroke" />}
+            {showBleed && bleed && <path d={bleed} className="fill-none stroke-sky-400" strokeWidth={1} vectorEffect="non-scaling-stroke" />}
             {showSeam && (
               <path d={seam} className="fill-none stroke-ink" strokeWidth={1} vectorEffect="non-scaling-stroke" />
             )}
-            {showSafety && (
+            {showSafety && safety && (
               <path d={safety} className="fill-none stroke-red-500" strokeWidth={1} vectorEffect="non-scaling-stroke" />
             )}
           </g>
