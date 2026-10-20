@@ -1,3 +1,4 @@
+import { sleeveShape, mirrorShape, migrateSleeveShapes, migrateSleeveWidths, safetyOffsetFor } from "@/lib/sleeve";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -80,7 +81,6 @@ import { activeView } from "@/lib/active-view";
 import {
   offsetPathD,
   BLEED_OFFSET_CM,
-  SAFETY_OFFSET_CM,
   TECHNICAL_OFFSET_OPTIONS,
 } from "@/lib/vector-offset";
 import { DirectTextEditor } from "@/components/DirectTextEditor";
@@ -192,7 +192,7 @@ const d = (a: number, b: number, c: number, e: number): Measurements => ({
   sleeveWidth: e,
 });
 
-const DEFAULT_TABLE: Grading = {
+const OLD_DEFAULT_TABLE: Grading = {
   PP: d(68, 48, 20, 18),
   P: d(70, 50, 21, 19),
   M: d(72, 52, 22, 20),
@@ -201,10 +201,19 @@ const DEFAULT_TABLE: Grading = {
   XG: d(78, 58, 25, 23),
   XG2: d(80, 60, 26, 24),
 };
+const DEFAULT_TABLE: Grading = {
+  PP: d(68, 48, 20, 36),
+  P: d(70, 50, 21, 38),
+  M: d(72, 52, 22, 40),
+  G: d(74, 54, 23, 42),
+  GG: d(76, 56, 24, 44),
+  XG: d(78, 58, 25, 46),
+  XG2: d(80, 60, 26, 48),
+};
 
 /* ================= Tabelas pré-definidas por tipo de peça (Molde Mãe = M) ================= */
 
-const INFANTIL_TABLE: Grading = {
+const OLD_INFANTIL_TABLE: Grading = {
   PP: d(42, 32, 13, 12),
   P: d(47, 35, 14.5, 13),
   M: d(51, 38, 16, 14),
@@ -213,8 +222,17 @@ const INFANTIL_TABLE: Grading = {
   XG: d(65, 47, 20.5, 17),
   XG2: d(69, 50, 22, 18),
 };
+const INFANTIL_TABLE: Grading = {
+  PP: d(42, 32, 13, 24.5),
+  P: d(47, 35, 14.5, 27.5),
+  M: d(51, 38, 16, 30.5),
+  G: d(56, 41, 17.5, 33),
+  GG: d(61, 44, 19, 36),
+  XG: d(65, 47, 20.5, 39),
+  XG2: d(69, 50, 22, 42),
+};
 
-const BABY_LOOK_TABLE: Grading = {
+const OLD_BABY_LOOK_TABLE: Grading = {
   PP: d(56, 38, 13, 13.5),
   P: d(58, 40, 14, 14.5),
   M: d(60, 43, 15, 15.5),
@@ -223,6 +241,26 @@ const BABY_LOOK_TABLE: Grading = {
   XG: d(66, 52, 18, 18.5),
   XG2: d(68, 55, 19, 19.5),
 };
+const BABY_LOOK_TABLE: Grading = {
+  PP: d(56, 38, 13, 24.5),
+  P: d(58, 40, 14, 26.5),
+  M: d(60, 43, 15, 28.5),
+  G: d(62, 46, 16, 30.5),
+  GG: d(64, 49, 17, 32.5),
+  XG: d(66, 52, 18, 34),
+  XG2: d(68, 55, 19, 36),
+};
+
+/* Migra larguras de manga ainda no padrão antigo (qualquer tipo de peça). */
+const SLEEVE_MIGRATIONS: [Grading, Grading][] = [
+  [OLD_DEFAULT_TABLE, DEFAULT_TABLE],
+  [OLD_INFANTIL_TABLE, INFANTIL_TABLE],
+  [OLD_BABY_LOOK_TABLE, BABY_LOOK_TABLE],
+];
+const migrateGradingSleeves = (g: Grading, only?: [Grading, Grading]): Grading =>
+  (only ? [only] : SLEEVE_MIGRATIONS).reduce((acc, [o, n]) => migrateSleeveWidths(acc, o, n), g);
+const OLD_FOR_TYPE = (t: string): [Grading, Grading] =>
+  t === "Camisa Infantil" ? SLEEVE_MIGRATIONS[1]! : t === "Camisa Baby Look" ? SLEEVE_MIGRATIONS[2]! : SLEEVE_MIGRATIONS[0]!;
 
 const NEW_CLOTHING_TYPES: ClothingType[] = ["Camisa Infantil", "Camisa Baby Look"];
 
@@ -289,21 +327,13 @@ const bodyShape = (neckDepth: number): Node[] => [
   { x: 0.08, y: 0.05, smooth: false },
 ];
 
-const sleeveShape = (): Node[] => [
-  { x: 0, y: 0.32, smooth: false },
-  { x: 0.22, y: 0.1, smooth: true },
-  { x: 0.5, y: 0, smooth: true },
-  { x: 0.78, y: 0.1, smooth: true },
-  { x: 1, y: 0.32, smooth: false },
-  { x: 0.9, y: 1, smooth: false },
-  { x: 0.1, y: 1, smooth: false },
-];
+
 
 const DEFAULT_SHAPES: Shapes = {
   frente: bodyShape(0.12),
   costas: bodyShape(0.04),
   mangaEsq: sleeveShape(),
-  mangaDir: sleeveShape().map((n) => ({ ...n, x: 1 - n.x })),
+  mangaDir: mirrorShape(sleeveShape()),
 };
 
 const TOOLS: { k: Tool; label: string; icon: typeof Ruler; key: string }[] = [
@@ -368,7 +398,9 @@ const readGradeProfiles = (): GradeProfile[] => {
     }
     return parsed.map((profile) => ({
       name: profile.name,
-      tables: { ...defaultTablesForProfiles(), ...profile.tables },
+      tables: Object.fromEntries(
+        Object.entries({ ...defaultTablesForProfiles(), ...profile.tables }).map(([t, g]) => [t, migrateGradingSleeves(g as Grading, OLD_FOR_TYPE(t))]),
+      ) as ProfileTables,
     }));
   } catch {
     return [{ name: DEFAULT_PROFILE_NAME, tables: defaultTablesForProfiles() }];
@@ -1515,7 +1547,7 @@ function Index() {
             if (row && typeof row === "object") merged[s] = { ...DEFAULT_TABLE[s], ...(row as object) };
           }
         }
-        setTable(merged);
+        setTable(migrateGradingSleeves(merged));
       }
       const mm = localStorage.getItem(LS_MOTHER) as Size | null;
       if (mm && SIZES.includes(mm)) setMother(mm);
@@ -1524,7 +1556,7 @@ function Index() {
       const st = asObj(big[LS_STYLES]);
       if (st) setStyles({ ...DEFAULT_STYLES, ...st });
       const sh = asObj(big[LS_SHAPES]);
-      if (sh) setShapes({ ...DEFAULT_SHAPES, ...sh });
+      if (sh) setShapes(migrateSleeveShapes({ ...DEFAULT_SHAPES, ...sh } as Shapes));
       const ly = asObj(big[LS_LAYERS]);
       if (ly) setLayers({ ...NO_LAYERS, ...ly });
       const tx = asObj(big[LS_TEXTS]);
@@ -1744,9 +1776,10 @@ function Index() {
         const row = g[s];
         if (row && typeof row === "object") grading[s] = { ...DEFAULT_TABLE[s], ...(row as object) };
       }
+      Object.assign(grading, migrateGradingSleeves(grading));
       const nArt = { ...NO_ART, ...obj(d.artworks) } as Artworks;
       const nStyles = { ...DEFAULT_STYLES, ...obj(d.styles) } as Styles;
-      const nShapes = { ...DEFAULT_SHAPES, ...obj(d.shapes) } as Shapes;
+      const nShapes = migrateSleeveShapes({ ...DEFAULT_SHAPES, ...obj(d.shapes) } as Shapes);
       const nLayers = { ...NO_LAYERS, ...obj(d.layers) } as Layers;
       const nTexts = { ...NO_TEXTS, ...obj(d.texts) } as TextsByView;
       const nMother = (SIZES as readonly string[]).includes(d.mother ?? "") ? (d.mother as Size) : mother;
@@ -2556,7 +2589,7 @@ function Index() {
        curva (src/lib/vector-offset.ts) e com o canto resolvido pela bissetriz
        exata de cada nó. Nada de escalar largura/altura. */
     const bleedPath = offsetPathD(path, BLEED_OFFSET_CM, TECHNICAL_OFFSET_OPTIONS);
-    const safetyPath = offsetPathD(path, SAFETY_OFFSET_CM, TECHNICAL_OFFSET_OPTIONS);
+    const safetyPath = offsetPathD(path, safetyOffsetFor(W, H), TECHNICAL_OFFSET_OPTIONS);
     const bleed = `<path d="${bleedPath}" fill="none" stroke="#38bdf8" stroke-width="0.06" stroke-linejoin="round"/>`;
     const seamLine = `<path d="${path}" fill="none" stroke="#111827" stroke-width="0.06" stroke-linejoin="round"/>`;
     const safety = `<path d="${safetyPath}" fill="none" stroke="#ef4444" stroke-width="0.06" stroke-dasharray="0.5 0.35" stroke-linejoin="round"/>`;
@@ -4783,7 +4816,7 @@ function PatternCanvas({
       {(() => {
         const seam = buildPath(nodes, W, H);
         const bleed = offsetPathD(seam, BLEED_OFFSET_CM, TECHNICAL_OFFSET_OPTIONS);
-        const safety = offsetPathD(seam, SAFETY_OFFSET_CM, TECHNICAL_OFFSET_OPTIONS);
+        const safety = offsetPathD(seam, safetyOffsetFor(W, H), TECHNICAL_OFFSET_OPTIONS);
         return (
           <g className="pointer-events-none">
             {showBleed && <path d={bleed} className="fill-none stroke-sky-400" strokeWidth={1} vectorEffect="non-scaling-stroke" />}
