@@ -2814,7 +2814,7 @@ function Index() {
         const { svg, cmW, cmH, safetyFailed } = buildPlotterSvgFor({ view: v, size: sz, hideTechnical: opt.hideTechnical, crop: true, player: p });
         const label = sizeLabel(clothingType, sz);
         if (safetyFailed && !opt.hideTechnical) warnings.push(`${label} ${partLabel(v, clothingType)}: zona de segurança maior que a peça (linha não gerada)`);
-        const name = uniqueName(teamFileName(opt.template, { numero: p.numero, nome: p.nome, tamanho: label, vista: v }, ext), used);
+        const name = uniqueName(teamFileName(opt.template, { numero: p.numero, nome: p.nome, tamanho: label, vista: garmentFamily(clothingType) === "camisa" ? v : slugLabel(viewLabel(clothingType, v)).toLowerCase().replace(/_/g, "-") }, ext), used);
         const r = await renderPiece(svg, cmW, cmH, opt.format, opt.dpi, opt.quality, name);
         if (r.reduced) warnings.push(`${label} (${v}) gerado a ${r.dpi} DPI para caber no navegador`);
         const res = teamResolver(p, sz, v);
