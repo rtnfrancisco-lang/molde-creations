@@ -355,21 +355,21 @@ type GarmentConfig = {
 };
 /* Perna esquerda do short (referência), sentido horário a partir do canto superior esquerdo. */
 const legLeftShape = (): Node[] => [
-  { x: 0.064, y: 0.128, smooth: false },
-  { x: 0.808, y: 0.0, smooth: false },
-  { x: 0.815, y: 0.25, smooth: true },
-  { x: 0.84, y: 0.46, smooth: true },
-  { x: 0.9, y: 0.56, smooth: true },
-  { x: 1.0, y: 0.628, smooth: false },
-  { x: 0.93, y: 0.94, smooth: false },
-  { x: 0.938, y: 1.0, smooth: false },
-  { x: 0.059, y: 1.0, smooth: false },
-  { x: 0.072, y: 0.96, smooth: false },
-  { x: 0.0, y: 0.654, smooth: false },
-  { x: 0.08, y: 0.615, smooth: true },
-  { x: 0.13, y: 0.53, smooth: true },
-  { x: 0.142, y: 0.4, smooth: true },
-  { x: 0.146, y: 0.135, smooth: false },
+  { x: 0.147, y: 0.13, smooth: false },
+  { x: 0.834, y: 0.0, smooth: false },
+  { x: 0.84, y: 0.31, smooth: true },
+  { x: 0.868, y: 0.456, smooth: true },
+  { x: 0.916, y: 0.548, smooth: true },
+  { x: 1.0, y: 0.63, smooth: false },
+  { x: 0.928, y: 0.937, smooth: false },
+  { x: 0.936, y: 1.0, smooth: false },
+  { x: 0.061, y: 1.0, smooth: false },
+  { x: 0.075, y: 0.96, smooth: false },
+  { x: 0.0, y: 0.652, smooth: false },
+  { x: 0.059, y: 0.62, smooth: true },
+  { x: 0.112, y: 0.54, smooth: true },
+  { x: 0.139, y: 0.4, smooth: true },
+  { x: 0.144, y: 0.25, smooth: true },
 ];
 const legRightShape = (): Node[] => legLeftShape().map((n) => ({ ...n, x: 1 - n.x })).reverse();
 const CAMISA_CONFIG: GarmentConfig = {
