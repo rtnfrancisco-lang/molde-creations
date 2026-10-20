@@ -3972,11 +3972,11 @@ function Index() {
                     </div>
                   );
                   return (
-                    <div className="absolute left-3 top-16 z-10 space-y-1.5 rounded-md border border-line bg-panel px-3 py-2 text-xs shadow-lg" onPointerDown={(e) => e.stopPropagation()}>
+                    <div className="absolute left-3 top-16 z-10 max-w-[calc(100%-17rem)] space-y-1.5 rounded-md border border-line bg-panel px-3 py-2 text-xs shadow-lg" onPointerDown={(e) => e.stopPropagation()}>
                       {group("Entre objetos", false, multiOk)}
                       {group("Ao molde", true, true)}
                       <div className="flex flex-wrap items-center gap-2 pt-0.5">
-                        <button type="button" className={btn + " w-auto px-2 gap-1"} onClick={() => runAlign("center", true)} title="Centro do molde (P)">
+                        <button type="button" className="flex h-7 items-center gap-1 rounded-md border border-line px-2 text-foreground hover:border-primary hover:text-primary" onClick={() => runAlign("center", true)} title="Centro do molde (P)">
                           <Crosshair className="size-3.5" /> Centro do molde
                         </button>
                         <label className="flex items-center gap-1 text-faint">Referência
