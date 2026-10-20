@@ -2759,6 +2759,7 @@ function Index() {
   const canDeleteSelection = !!selObj || artDeletable || !!selText;
   /** Decide o que apagar: camada, estampa (ou texto, só via menu). Molde nunca. */
   const deleteSelection = (includeText = false) => {
+    if (multiSel) return deleteMulti();
     if (selObj) {
       commitView("del:" + Date.now(), curLayers.filter((l) => l.id !== selObj.id), undefined);
       setSelLayer(null);
@@ -3785,6 +3786,10 @@ function Index() {
                   onTextsChange={setTexts}
                   onCheckpoint={checkpoint}
                   teamPreview={teamPreviewTexts}
+                  multi={multiSel}
+                  onShiftPick={shiftPick}
+                  onMultiMove={multiMove}
+                  onMultiBox={setMultiBox}
                 />
                 {viewPlayer && (
                   <div className="absolute top-3 left-1/2 z-30 -translate-x-1/2 flex items-center gap-1.5 rounded-md border border-cyan bg-panel px-2 py-1 text-xs shadow" role="status">
@@ -3854,7 +3859,18 @@ function Index() {
                     </div>
                   );
                 })()}
-                {selInfo && (
+                {multiSel && tool === "selecao" && (
+                  <div className="absolute top-3 left-3 z-10 flex items-center gap-2 rounded-md border border-line bg-panel px-3 py-2 shadow-lg text-xs" role="status">
+                    <span className="font-medium text-foreground">{multiSel.length} objetos selecionados</span>
+                    {multiBox && (
+                      <>
+                        <span className="h-5 w-px bg-line" />
+                        <span className="font-mono text-muted-foreground">L {fmt(multiBox.w)} × A {fmt(multiBox.h)} cm</span>
+                      </>
+                    )}
+                  </div>
+                )}
+                {selInfo && !multiSel && (
                   <SelectionPropsBar info={selInfo} locked={lockRatio} onToggleLock={() => setLockRatio((v) => !v)} />
                 )}
                 {/* Painel de camadas */}
@@ -3951,8 +3967,8 @@ function Index() {
               <CanvasContextMenu
                 x={menu.x}
                 y={menu.y}
-                disabled={!selObj}
-                deleteDisabled={!canDeleteSelection}
+                disabled={!selObj || !!multiSel}
+                deleteDisabled={!canDeleteSelection && !multiSel}
                 onCut={cutSelectedLayer}
                 onCopy={copySelectedLayer}
                 onPaste={pasteLayer}
@@ -3964,7 +3980,11 @@ function Index() {
                   {
                     title: "PowerClip",
                     items: [
-                      selObj && !selObj.clipped
+                      multiSel
+                        ? multiSel.some((i) => i.kind === "layer" && curLayers.some((l) => l.id === i.id && !l.clipped))
+                          ? { label: "Inserir no PowerClip", run: multiToPowerClip }
+                          : null
+                        : selObj && !selObj.clipped
                         ? { label: "Inserir no PowerClip", run: () => setPcPick(selObj.id) }
                         : artFree
                           ? { label: "Inserir no PowerClip", run: () => { setSelPart("estampa"); setTimeout(() => setPcPick("art"), 0); } }
