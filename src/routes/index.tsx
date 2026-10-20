@@ -1516,6 +1516,7 @@ function Index() {
 
 
   const deleteSelectionRef = useRef<() => boolean>(() => false);
+  const alignKeyRef = useRef<(e: KeyboardEvent) => boolean>(() => false);
   const selectedLayer = () => {
     if (!selLayer) return null;
     return layers[view].find((layer) => String((layer as Layer & { id?: string }).id) === selLayer) ?? null;
