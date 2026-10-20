@@ -1,6 +1,8 @@
 import { sleeveShape, mirrorShape, migrateSleeveShapes, migrateSleeveWidths } from "@/lib/sleeve";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { DEFAULT_GUIDES, fmtCm, guidePaths, sanitizeGuides, type Guide, type GuideView, type Guides } from "@/lib/guides";
+import { ALIGN_KEYS, alignDeltas, objectsRef, rotatedBox, type AlignOp, type AlignRefKind, type Box } from "@/lib/align";
+import { Crosshair, AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical } from "lucide-react";
 import { GuidesPanel, type GuideGroup } from "@/components/GuidesPanel";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -1514,6 +1516,7 @@ function Index() {
 
 
   const deleteSelectionRef = useRef<() => boolean>(() => false);
+  const alignKeyRef = useRef<(e: KeyboardEvent) => boolean>(() => false);
   const selectedLayer = () => {
     if (!selLayer) return null;
     return layers[view].find((layer) => String((layer as Layer & { id?: string }).id) === selLayer) ?? null;
@@ -1608,6 +1611,10 @@ function Index() {
         return;
       }
       if (typing || modifier) return;
+      if (alignKeyRef.current(e)) {
+        e.preventDefault();
+        return;
+      }
       const t = TOOLS.find((x) => x.key === e.key.toUpperCase());
       if (t) setTool(t.k);
     };
@@ -2323,6 +2330,78 @@ function Index() {
     clearSelection();
     setSize(mother);
     setPcEdit(false);
+  };
+  /* ---------- Alinhar (L R T B E C P), entre objetos ou ao retângulo do molde ---------- */
+  const [alignRef, setAlignRef] = useState<AlignRefKind>("last");
+  const [alignRect, setAlignRect] = useState<"molde" | "midia">("molde");
+  const itemBox = (it: SelItem): Box | null => {
+    if (it.kind === "layer") {
+      const l = layers[view].find((x) => x.id === it.id);
+      if (!l || l.hidden) return null;
+      const aw = l.w * pieceW;
+      return rotatedBox((l.cx - 0.5) * pieceW, l.cy * pieceH, aw, aw * l.ratio, l.rot ?? 0);
+    }
+    if (it.kind === "art") {
+      if (!art) return null;
+      const aw = art.w * pieceW;
+      return rotatedBox((art.cx - 0.5) * pieceW, art.cy * pieceH, aw, aw * art.ratio, art.rot ?? 0);
+    }
+    const el = document.querySelector(`[data-text-id="${CSS.escape(it.id)}"]`) as SVGTextElement | null;
+    if (!el) return null;
+    try {
+      const b = el.getBBox();
+      return { x0: b.x, y0: b.y, x1: b.x + b.width, y1: b.y + b.height };
+    } catch {
+      return null;
+    }
+  };
+  const moldRect = (): Box | null => {
+    const seam = buildPath(shapes[view], pieceW, pieceH);
+    const d = alignRect === "midia" ? guidePaths(seam, pieceW, pieceH, guides[view]).frameSrc || seam : seam;
+    const b = pathBounds(d);
+    return b ? { x0: b.minX, y0: b.minY, x1: b.maxX, y1: b.maxY } : null;
+  };
+  const runAlign = (op: AlignOp, toMold: boolean) => {
+    if (viewPlayer) return;
+    const pairs = selectionItems()
+      .map((it) => ({ it, box: itemBox(it) }))
+      .filter((p): p is { it: SelItem; box: Box } => !!p.box);
+    if (!pairs.length) return;
+    const mold = toMold || pairs.length < 2 || op === "center";
+    const boxes = pairs.map((p) => p.box);
+    const ref = mold ? moldRect() : objectsRef(boxes, alignRef);
+    if (!ref) return;
+    const ds = alignDeltas(boxes, op, mold ? "mold" : "objects", ref);
+    if (ds.every((d) => Math.abs(d.dx) < 1e-9 && Math.abs(d.dy) < 1e-9)) return;
+    checkpoint("align:" + Date.now());
+    const lm = new Map<string, { dx: number; dy: number }>();
+    const tm = new Map<string, { dx: number; dy: number }>();
+    let ad: { dx: number; dy: number } | null = null;
+    pairs.forEach((p, i) => {
+      const d = ds[i]!;
+      if (p.it.kind === "layer") lm.set(p.it.id, d);
+      else if (p.it.kind === "text") tm.set(p.it.id, d);
+      else ad = d;
+    });
+    if (lm.size) {
+      const all = { ...snapRef.current.layers, [view]: layers[view].map((l) => { const d = lm.get(l.id); return d ? { ...l, cx: l.cx + d.dx / pieceW, cy: l.cy + d.dy / pieceH } : l; }) };
+      setLayers(all);
+      saveLS(LS_LAYERS, all);
+    }
+    const a2 = ad as { dx: number; dy: number } | null;
+    if (a2 && art) {
+      const all = { ...snapRef.current.artworks, [view]: { ...art, cx: art.cx + a2.dx / pieceW, cy: art.cy + a2.dy / pieceH } };
+      setArtworks(all);
+      try { saveLS(LS_ART, all); } catch { /* imagem grande demais */ }
+    }
+    if (tm.size) setTexts((prev) => ({ ...prev, [view]: prev[view].map((t) => { const d = tm.get(t.id); return d ? { ...t, x: t.x + d.dx, y: t.y + d.dy } : t; }) }));
+  };
+  alignKeyRef.current = (e: KeyboardEvent) => {
+    if (e.altKey || tool !== "selecao" || viewPlayer || !principalItem) return false;
+    const op = ALIGN_KEYS[e.key.toLowerCase()];
+    if (!op) return false;
+    runAlign(op, e.shiftKey);
+    return true;
   };
   const isBodyView = view === "frente" || view === "costas";
   const pieceW = isBodyView ? graded[size].bodyWidth : graded[size].sleeveWidth;
@@ -3870,6 +3949,53 @@ function Index() {
                     )}
                   </div>
                 )}
+                {tool === "selecao" && principalItem && !viewPlayer && (() => {
+                  const multiOk = selectionItems().length >= 2;
+                  const ops: [AlignOp, typeof AlignStartVertical, string, string][] = [
+                    ["left", AlignStartVertical, "Alinhar à esquerda", "L"],
+                    ["centerX", AlignCenterVertical, "Centrar horizontalmente", "E"],
+                    ["right", AlignEndVertical, "Alinhar à direita", "R"],
+                    ["top", AlignStartHorizontal, "Alinhar ao topo", "T"],
+                    ["centerY", AlignCenterHorizontal, "Centrar verticalmente", "C"],
+                    ["bottom", AlignEndHorizontal, "Alinhar à base", "B"],
+                  ];
+                  const btn = "grid size-7 place-items-center rounded-md border border-line text-foreground hover:border-primary hover:text-primary disabled:pointer-events-none disabled:opacity-40";
+                  const group = (title: string, toMold: boolean, enabled: boolean) => (
+                    <div className="flex items-center gap-1">
+                      <span className="w-16 text-[10px] font-semibold uppercase tracking-wider text-faint">{title}</span>
+                      {ops.map(([op, Icon, name, k]) => (
+                        <button key={op} type="button" className={btn} disabled={!enabled} onClick={() => runAlign(op, toMold)}
+                          title={`${name} (${toMold && multiOk ? "Shift+" : ""}${k})`} aria-label={`${name} ${toMold ? "ao molde" : "entre objetos"}`}>
+                          <Icon className="size-3.5" />
+                        </button>
+                      ))}
+                    </div>
+                  );
+                  return (
+                    <div className="absolute left-3 top-16 z-10 max-w-[calc(100%-17rem)] space-y-1.5 rounded-md border border-line bg-panel px-3 py-2 text-xs shadow-lg" onPointerDown={(e) => e.stopPropagation()}>
+                      {group("Entre objetos", false, multiOk)}
+                      {group("Ao molde", true, true)}
+                      <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                        <button type="button" className="flex h-7 items-center gap-1 rounded-md border border-line px-2 text-foreground hover:border-primary hover:text-primary" onClick={() => runAlign("center", true)} title="Centro do molde (P)">
+                          <Crosshair className="size-3.5" /> Centro do molde
+                        </button>
+                        <label className="flex items-center gap-1 text-faint">Referência
+                          <select value={alignRef} onChange={(e) => setAlignRef(e.target.value as AlignRefKind)} className="h-7 rounded-md border border-input bg-panel2 px-1 text-xs text-foreground">
+                            <option value="last">Último selecionado</option>
+                            <option value="first">Primeiro selecionado</option>
+                            <option value="group">Conjunto (caixa de todos)</option>
+                          </select>
+                        </label>
+                        <label className="flex items-center gap-1 text-faint">Retângulo
+                          <select value={alignRect} onChange={(e) => setAlignRect(e.target.value as "molde" | "midia")} className="h-7 rounded-md border border-input bg-panel2 px-1 text-xs text-foreground">
+                            <option value="molde">Molde</option>
+                            <option value="midia">Quadro de mídia</option>
+                          </select>
+                        </label>
+                      </div>
+                    </div>
+                  );
+                })()}
                 {selInfo && !multiSel && (
                   <SelectionPropsBar info={selInfo} locked={lockRatio} onToggleLock={() => setLockRatio((v) => !v)} />
                 )}
