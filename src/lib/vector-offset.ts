@@ -921,7 +921,7 @@ export function offsetPathD(d: string, distance: number, options: OffsetOptions 
     if (firstOffset.length) candidates.push(...firstOffset);
   }
 
-  if (!candidates.length) return d;
+  if (!candidates.length) return distance < 0 ? "" : d;
 
   const smoothed: any[] = [];
   for (const candidate of candidates) {
@@ -931,10 +931,10 @@ export function offsetPathD(d: string, distance: number, options: OffsetOptions 
   }
 
   const selected = largestClipperPath(smoothed.length ? smoothed : candidates);
-  if (!selected || selected.length < 3) return d;
+  if (!selected || selected.length < 3) return distance < 0 ? "" : d;
 
   const points = dedupeRing(fromClipperPath(selected));
-  if (points.length < 3) return d;
+  if (points.length < 3) return distance < 0 ? "" : d;
   let result = `M ${fmt(points[0]!.x)} ${fmt(points[0]!.y)}`;
   for (let i = 1; i < points.length; i++) {
     result += ` L ${fmt(points[i]!.x)} ${fmt(points[i]!.y)}`;

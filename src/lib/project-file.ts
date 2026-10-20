@@ -20,6 +20,8 @@ export type ProjectData = {
   roster?: unknown;
   /** Biblioteca de imagens do time (ausente em arquivos antigos). */
   teamImages?: unknown;
+  /** Distâncias das linhas-guia por vista (ausente em arquivos antigos). */
+  guides?: unknown;
 };
 
 export type ProjectFile = {
