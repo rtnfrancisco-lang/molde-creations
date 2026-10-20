@@ -32,6 +32,8 @@ type Props = {
   onView?: (p: Player) => void;
   teamViews?: TeamExportView[];
   onExportTeam?: (o: TeamExportOpts, onProgress: (done: number, total: number) => void, signal: { cancelled: boolean }) => Promise<TeamExportResult>;
+  /** Vistas do tipo de peça atual, em ordem, com rótulos. */
+  viewOptions?: { key: TeamExportView; label: string }[];
   measurePieces?: (players: Player[], views: TeamExportView[]) => { cmW: number; cmH: number };
   images?: TeamImage[];
   setImages?: (i: TeamImage[]) => void;
@@ -39,7 +41,7 @@ type Props = {
   slotNeeds?: { nome: boolean; numero: boolean };
 };
 
-export function TeamPanel({ open, onClose, roster, setRoster, options, garment, labelOf, viewingId, onView, teamViews = [], onExportTeam, measurePieces, images = [], setImages, slotNeeds = { nome: false, numero: false } }: Props) {
+export function TeamPanel({ open, onClose, roster, setRoster, options, garment, labelOf, viewingId, onView, teamViews = [], onExportTeam, measurePieces, images = [], setImages, slotNeeds = { nome: false, numero: false }, viewOptions }: Props) {
   const [trimPng, setTrimPng] = useState(true);
   const [imgReport, setImgReport] = useState("");
   const [imgBusy, setImgBusy] = useState(false);
@@ -266,10 +268,10 @@ export function TeamPanel({ open, onClose, roster, setRoster, options, garment, 
           <div>
             <div className="text-muted-foreground mb-1">Vistas a incluir</div>
             <div className="grid grid-cols-2 gap-1">
-              {(Object.keys(VIEW_LABEL) as TeamExportView[]).map((v) => (
+              {(viewOptions ? viewOptions.map((o) => o.key) : (Object.keys(VIEW_LABEL) as TeamExportView[])).map((v) => (
                 <label key={v} className="flex items-center gap-1.5 text-foreground">
                   <input type="checkbox" checked={expViews.includes(v)} onChange={(e) => setExpViews(e.target.checked ? [...expViews, v] : expViews.filter((x) => x !== v))} />
-                  {VIEW_LABEL[v]}{teamViews.includes(v) && <span className="text-cyan">•</span>}
+                  {viewOptions?.find((o) => o.key === v)?.label ?? VIEW_LABEL[v]}{teamViews.includes(v) && <span className="text-cyan">•</span>}
                 </label>
               ))}
             </div>

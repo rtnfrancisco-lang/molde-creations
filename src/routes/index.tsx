@@ -1,4 +1,5 @@
 import { sleeveShape, mirrorShape, migrateSleeveShapes, migrateSleeveWidths } from "@/lib/sleeve";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { DEFAULT_GUIDES, fmtCm, guidePaths, sanitizeGuides, type Guide, type GuideView, type Guides } from "@/lib/guides";
 import { GuidesPanel } from "@/components/GuidesPanel";
 import { createFileRoute } from "@tanstack/react-router";
@@ -287,26 +288,15 @@ const DEFAULT_MOTHER: Record<ClothingType, Size> = {
 };
 
 /* Nome legível da parte do molde a partir da vista ativa */
-const partLabel = (view: View): string => {
-  switch (view) {
-    case "frente":
-      return "FRENTE";
-    case "costas":
-      return "COSTAS";
-    case "mangaEsq":
-      return "MANGA ESQ";
-    case "mangaDir":
-      return "MANGA DIR";
-  }
-};
+const partLabel = (view: View, t: ClothingType = "Camiseta"): string => GARMENT_CONFIG[t].partLabels[view];
 
 /* Texto do indicador técnico (canto superior esquerdo): [Tamanho] [Parte] */
 const techLabel = (clothingType: ClothingType, size: Size, view: View): string =>
-  `${sizeLabel(clothingType, size)} ${partLabel(view)}`;
+  `${sizeLabel(clothingType, size)} ${partLabel(view, clothingType)}`;
 
 /* Nome do arquivo exportado: MoldeCore_BL_M_FRENTE / MoldeCore_6ANOS_COSTAS */
 const exportName = (clothingType: ClothingType, size: Size, view: View): string =>
-  `MoldeCore_${techLabel(clothingType, size, view).replace(/\s+/g, "_")}`;
+  `MoldeCore_${slugLabel(techLabel(clothingType, size, view))}`;
 
 const bodyShape = (neckDepth: number): Node[] => [
   { x: 0.33, y: 0, smooth: false },
@@ -334,6 +324,42 @@ const DEFAULT_SHAPES: Shapes = {
   mangaEsq: sleeveShape(),
   mangaDir: mirrorShape(sleeveShape()),
 };
+
+/* ---------- Configuração por tipo de peça ----------
+   Vistas, rótulos, campos de medida e moldes padrão dependem do tipo de peça.
+   Os dados por vista (camadas, textos, guias…) continuam com os quatro ids. */
+type GarmentFamily = "camisa" | "short";
+type GarmentConfig = {
+  family: GarmentFamily;
+  views: View[];
+  viewLabels: Record<View, string>;
+  /** Rótulo curto em maiúsculas usado no canvas e nos arquivos exportados. */
+  partLabels: Record<View, string>;
+  fields: { key: Field; label: string; group: string }[];
+  defaultShapes: () => Shapes;
+};
+const CAMISA_CONFIG: GarmentConfig = {
+  family: "camisa",
+  views: ["frente", "costas", "mangaEsq", "mangaDir"],
+  viewLabels: { frente: "Frente", costas: "Costas", mangaEsq: "Manga Esquerda", mangaDir: "Manga Direita" },
+  partLabels: { frente: "FRENTE", costas: "COSTAS", mangaEsq: "MANGA ESQ", mangaDir: "MANGA DIR" },
+  fields: FIELDS,
+  defaultShapes: () => DEFAULT_SHAPES,
+};
+const GARMENT_CONFIG: Record<ClothingType, GarmentConfig> = {
+  Camiseta: CAMISA_CONFIG,
+  "Camisa Infantil": CAMISA_CONFIG,
+  "Camisa Baby Look": CAMISA_CONFIG,
+};
+const viewsFor = (t: ClothingType): View[] => GARMENT_CONFIG[t].views;
+const viewLabel = (t: ClothingType, v: View): string => GARMENT_CONFIG[t].viewLabels[v];
+const fieldsFor = (t: ClothingType) => GARMENT_CONFIG[t].fields;
+const defaultShapesFor = (t: ClothingType): Shapes => GARMENT_CONFIG[t].defaultShapes();
+const garmentFamily = (t: ClothingType): GarmentFamily => GARMENT_CONFIG[t].family;
+/* Rótulo sem acento e com "_" no lugar de espaços, para nomes de arquivo. */
+const slugLabel = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().replace(/\s+/g, "_");
+const LS_TYPE = "moldecore.tipoPeca";
+
 
 const TOOLS: { k: Tool; label: string; icon: typeof Ruler; key: string }[] = [
   { k: "selecao", label: "Ferramenta Seleção", icon: MousePointer2, key: "V" },
@@ -1593,9 +1619,9 @@ function Index() {
   }, [texts]);
 
   /* ---------- Histórico (Desfazer / Refazer) ---------- */
-  type Snap = { table: Grading; guides: Guides; shapes: Shapes; artworks: Artworks; styles: Styles; layers: Layers; texts: TextsByView };
-  const snapRef = useRef<Snap>({ table, guides, shapes, artworks, styles, layers, texts });
-  snapRef.current = { table, guides, shapes, artworks, styles, layers, texts };
+  type Snap = { clothingType: ClothingType; table: Grading; guides: Guides; shapes: Shapes; artworks: Artworks; styles: Styles; layers: Layers; texts: TextsByView };
+  const snapRef = useRef<Snap>({ clothingType, table, guides, shapes, artworks, styles, layers, texts });
+  snapRef.current = { clothingType, table, guides, shapes, artworks, styles, layers, texts };
   const [past, setPast] = useState<Snap[]>([]);
   const [future, setFuture] = useState<Snap[]>([]);
   const lastCp = useRef({ key: "", t: 0 });
@@ -1613,6 +1639,8 @@ function Index() {
   };
 
   const restore = (sn: Snap) => {
+    setClothingType(sn.clothingType);
+    localStorage.setItem(LS_TYPE, sn.clothingType);
     setTable(sn.table);
     setShapes(sn.shapes);
     setGuides(sn.guides);
@@ -1744,14 +1772,14 @@ function Index() {
     setLayers(NO_LAYERS);
     setArtworks(NO_ART);
     setTexts(NO_TEXTS);
-    setShapes(DEFAULT_SHAPES);
+    setShapes(defaultShapesFor(clothingType));
     setGuides(DEFAULT_GUIDES);
     saveLS(LS_GUIDES, DEFAULT_GUIDES);
     setStyles(DEFAULT_STYLES);
     saveLS(LS_LAYERS, NO_LAYERS);
     saveLS(LS_ART, NO_ART);
     saveLS(LS_TEXTS, NO_TEXTS);
-    saveLS(LS_SHAPES, DEFAULT_SHAPES);
+    saveLS(LS_SHAPES, defaultShapesFor(clothingType));
     saveLS(LS_STYLES, DEFAULT_STYLES);
     resetHistory();
     fileHandle.current = null;
@@ -1787,7 +1815,7 @@ function Index() {
       Object.assign(grading, migrateGradingSleeves(grading));
       const nArt = { ...NO_ART, ...obj(d.artworks) } as Artworks;
       const nStyles = { ...DEFAULT_STYLES, ...obj(d.styles) } as Styles;
-      const nShapes = migrateSleeveShapes({ ...DEFAULT_SHAPES, ...obj(d.shapes) } as Shapes);
+      const nShapes = migrateSleeveShapes({ ...defaultShapesFor(asClothingType(d.clothingType)), ...obj(d.shapes) } as Shapes);
       const nLayers = { ...NO_LAYERS, ...obj(d.layers) } as Layers;
       const nTexts = { ...NO_TEXTS, ...obj(d.texts) } as TextsByView;
       const nMother = (SIZES as readonly string[]).includes(d.mother ?? "") ? (d.mother as Size) : mother;
@@ -1807,6 +1835,7 @@ function Index() {
       setMother(nMother);
       setSize(nMother);
       setClothingType(nType);
+      localStorage.setItem(LS_TYPE, nType);
       setArtworks(nArt);
       setStyles(nStyles);
       setShapes(nShapes);
@@ -1878,7 +1907,9 @@ function Index() {
     const selected = storedProfiles.find((profile) => profile.name === storedActive) ?? storedProfiles[0]!;
     setProfiles(storedProfiles);
     setActiveProfile(selected.name);
-    setTable(cloneGrading(selected.tables[clothingType] ?? DEFAULT_TABLE));
+    const storedType = asClothingType(localStorage.getItem(LS_TYPE));
+    setClothingType(storedType);
+    setTable(cloneGrading(selected.tables[storedType] ?? PRESET_TABLES[storedType] ?? DEFAULT_TABLE));
   }, []);
 
   useEffect(() => {
@@ -1997,8 +2028,15 @@ function Index() {
 
   /* Troca o tipo de peça usando a mesma configuração da barra de tamanhos.
      Ao entrar na grade infantil, o molde mãe e o tamanho selecionado ficam em 6ANOS. */
-  const changeClothingType = (t: ClothingType) => {
+  const [typeConfirm, setTypeConfirm] = useState<ClothingType | null>(null);
+  const changeClothingType = (t: ClothingType, confirmed = false) => {
+    const crossFamily = garmentFamily(t) !== garmentFamily(clothingType);
+    if (crossFamily && !confirmed) {
+      setTypeConfirm(t);
+      return;
+    }
     setClothingType(t);
+    localStorage.setItem(LS_TYPE, t);
     const selectedProfile = profiles.find((profile) => profile.name === activeProfile);
     const profileTable = selectedProfile?.tables[t];
     const preset = profileTable ?? PRESET_TABLES[t];
@@ -2010,12 +2048,34 @@ function Index() {
     const nextMother = availableIds.includes(defaultMother) ? defaultMother : availableIds[0]!;
     setTable(preset);
     localStorage.setItem(LS_GRADING, JSON.stringify(preset));
+    if (crossFamily) {
+      const nShapes = defaultShapesFor(t);
+      setShapes(nShapes);
+      setLayers(NO_LAYERS);
+      setArtworks(NO_ART);
+      setTexts(NO_TEXTS);
+      setStyles(DEFAULT_STYLES);
+      setSelLayer(null);
+      setSelText(null);
+      setSelPart(null);
+      saveLS(LS_SHAPES, nShapes);
+      saveLS(LS_LAYERS, NO_LAYERS);
+      saveLS(LS_ART, NO_ART);
+      saveLS(LS_TEXTS, NO_TEXTS);
+      saveLS(LS_STYLES, DEFAULT_STYLES);
+    }
     setMother(nextMother);
     setSize(nextSize);
     localStorage.setItem(LS_MOTHER, nextMother);
     setSavedMsg(`Tabela de medidas de ${t} carregada · Molde Mãe: ${sizeLabel(t, nextMother)}`);
     setTimeout(() => setSavedMsg(""), 3500);
   };
+
+  /* Vista ativa sempre válida para o tipo de peça atual. */
+  useEffect(() => {
+    const vs = viewsFor(clothingType);
+    if (!vs.includes(view)) setView(vs[0]!);
+  }, [clothingType, view]);
 
   const artView: View = view;
   const art = artworks[view];
@@ -2410,7 +2470,7 @@ function Index() {
           ? boxInfo(art, "Estampa", setArt)
           : selPart === "peca"
             ? {
-                label: `Molde · ${partLabel(view)}`,
+                label: `Molde · ${partLabel(view, clothingType)}`,
                 w: pieceSpan.x * pieceW,
                 h: pieceSpan.y * pieceH,
                 set: (nw, nh) => setPieceDims(nw / pieceSpan.x, nh / pieceSpan.y),
@@ -2572,7 +2632,7 @@ function Index() {
     };
     return { x: b.minX, y: b.minY, w: b.maxX - b.minX, h: b.maxY - b.minY };
   })();
-  const pcFileBase = `MOLDE_${partLabel(view).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, "_")}_TAMANHO_${size}`;
+  const pcFileBase = `MOLDE_${partLabel(view, clothingType).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, "_")}_TAMANHO_${size}`;
   const showPcEditor = tool === "selecao" && pcEdit && size === mother && !!pcTarget;
   const pcState = pcEdit ? "editing" : pcHasContent ? "locked" : art ? "free" : "none";
   const artFree = !!art && art.clipped === false;
@@ -2707,20 +2767,20 @@ function Index() {
         const sz = p.tamanho as Size;
         const { svg, cmW, cmH, safetyFailed } = buildPlotterSvgFor({ view: v, size: sz, hideTechnical: opt.hideTechnical, crop: true, player: p });
         const label = sizeLabel(clothingType, sz);
-        if (safetyFailed && !opt.hideTechnical) warnings.push(`${label} ${partLabel(v)}: zona de segurança maior que a peça (linha não gerada)`);
+        if (safetyFailed && !opt.hideTechnical) warnings.push(`${label} ${partLabel(v, clothingType)}: zona de segurança maior que a peça (linha não gerada)`);
         const name = uniqueName(teamFileName(opt.template, { numero: p.numero, nome: p.nome, tamanho: label, vista: v }, ext), used);
         const r = await renderPiece(svg, cmW, cmH, opt.format, opt.dpi, opt.quality, name);
         if (r.reduced) warnings.push(`${label} (${v}) gerado a ${r.dpi} DPI para caber no navegador`);
         const res = teamResolver(p, sz, v);
         const W = pieceWidth(sz, v);
         if (texts[v].some((t) => t.field && teamTextOverflows(res(t), W)))
-          warnings.push(`${p.numero || "—"} ${p.nome || "(sem nome)"} (${partLabel(v)}): o nome passa da largura da peça`);
+          warnings.push(`${p.numero || "—"} ${p.nome || "(sem nome)"} (${partLabel(v, clothingType)}): o nome passa da largura da peça`);
         const sl = playerSlotLayers(layers[v], p, sz, v);
         const who = `${p.numero || "—"} ${p.nome || "(sem nome)"}`;
         if (sl.missing.size)
           warnings.push(`${who}: falta a imagem ${[...sl.missing].map((k) => (k === "nome" ? "do nome" : "do número")).join(" e ")}`);
         for (const d of sl.lowDpi)
-          warnings.push(`${who} (${partLabel(v)}): imagem ${d.kind === "nome" ? "do nome" : "do número"} com ${d.dpi} DPI (abaixo de 150)`);
+          warnings.push(`${who} (${partLabel(v, clothingType)}): imagem ${d.kind === "nome" ? "do nome" : "do número"} com ${d.dpi} DPI (abaixo de 150)`);
         files[name] = r.bytes;
         n++;
         onProgress(n, total);
@@ -2755,7 +2815,7 @@ function Index() {
     return true;
   };
 
-  const ALL_VIEWS: View[] = ["frente", "costas", "mangaEsq", "mangaDir"];
+  const ALL_VIEWS: View[] = viewsFor(clothingType);
   const exportTargets = () => {
     const allSizes = sizeIdsForGarment(clothingType);
     const sizes = expSizeMode === "atual" ? [size] : expSizeMode === "todos" ? [...allSizes] : allSizes.filter((s) => expSizes.includes(s));
@@ -2815,10 +2875,10 @@ function Index() {
       for (const s of sizes) for (const v of views) {
         if (sig.cancelled) return flashSaved("Exportação cancelada", 3000);
         const { svg, cmW, cmH, safetyFailed } = buildPlotterSvgFor({ view: v, size: s, hideTechnical: hideTech, crop: cropRect });
-        if (safetyFailed && !hideTech) warnings.push(`${sizeLabel(clothingType, s)} ${partLabel(v)} sem zona de segurança (maior que a peça)`);
+        if (safetyFailed && !hideTech) warnings.push(`${sizeLabel(clothingType, s)} ${partLabel(v, clothingType)} sem zona de segurança (maior que a peça)`);
         const name = uniqueName(`${exportName(clothingType, s, v)}.${ext}`, used);
         const r = await renderPiece(svg, cmW, cmH, exportFmt, expDpi, expQuality, name);
-        if (r.reduced) warnings.push(`${sizeLabel(clothingType, s)} ${partLabel(v)} a ${r.dpi} DPI`);
+        if (r.reduced) warnings.push(`${sizeLabel(clothingType, s)} ${partLabel(v, clothingType)} a ${r.dpi} DPI`);
         files[name] = r.bytes;
         n++;
         setExpProgress({ done: n, total: count });
@@ -2866,12 +2926,7 @@ function Index() {
     { key: "safety", label: `Zona de Segurança −${fmtCm(guides[view].safety)} cm`, warn: safetyFailures.some((f) => f.view === view), dot: "bg-red-500", on: showSafety, toggle: () => setShowSafety((v) => !v) },
   ];
 
-  const VIEWS: { key: View; label: string }[] = [
-    { key: "frente", label: "Frente" },
-    { key: "costas", label: "Costas" },
-    { key: "mangaEsq", label: "Manga Esquerda" },
-    { key: "mangaDir", label: "Manga Direita" },
-  ];
+  const VIEWS: { key: View; label: string }[] = viewsFor(clothingType).map((key) => ({ key, label: viewLabel(clothingType, key) }));
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground font-display antialiased flex">
@@ -3255,6 +3310,20 @@ function Index() {
             <span className="text-sm font-medium text-foreground truncate max-w-[180px]" title={dirty ? "Alterações não salvas" : "Projeto salvo"}>
               {projectName}{dirty && <span className="text-amber-600 ml-1" aria-label="alterações não salvas">•</span>}
             </span>
+              <AlertDialog open={!!typeConfirm} onOpenChange={(o) => !o && setTypeConfirm(null)}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Trocar tipo de peça</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Trocar para {typeConfirm} substitui os moldes das peças e remove desenhos, imagens, textos e cores do projeto atual. Você pode desfazer com Ctrl+Z. Dica: salve o projeto antes (Arquivo &gt; Salvar).
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => { const t = typeConfirm; setTypeConfirm(null); if (t) changeClothingType(t, true); }}>Trocar de tipo</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             {askUnsaved && (
               <div className="fixed inset-0 z-[100] flex items-center justify-center bg-foreground/30">
                 <div className="w-[380px] rounded-lg border border-line bg-panel p-5 shadow-xl">
@@ -3374,7 +3443,8 @@ function Index() {
                 garment={clothingType}
                 viewingId={teamView?.id ?? null}
                 onView={(p) => startTeamView(p.id)}
-                teamViews={(["frente", "costas", "mangaEsq", "mangaDir"] as View[]).filter((v) => texts[v].some((t) => t.field === "nome" || t.field === "numero"))}
+                viewOptions={VIEWS}
+                teamViews={viewsFor(clothingType).filter((v) => texts[v].some((t) => t.field === "nome" || t.field === "numero"))}
                 onExportTeam={exportTeam}
                 measurePieces={teamMaxPiece}
                 images={teamImages}
@@ -3658,7 +3728,7 @@ function Index() {
                 <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between gap-4 text-[10px] font-mono text-faint pointer-events-none">
                   <span>{pcState === "editing" ? (pcTarget ? "Editando conteúdo do PowerClip · arraste o item e a alça do canto · clique em Concluir Edição para travar" : "Editando PowerClip · clique em um item para editá-lo · Concluir Edição trava") : TOOL_HINTS[tool]}</span>
                   <button
-                    onClick={() => updateShapes({ ...shapes, [view]: DEFAULT_SHAPES[view] })}
+                    onClick={() => updateShapes({ ...shapes, [view]: defaultShapesFor(clothingType)[view] })}
                     className="pointer-events-auto flex items-center gap-1 text-muted-foreground hover:text-cyan whitespace-nowrap"
                   >
                     <RotateCcw className="size-3" /> Restaurar forma
@@ -3774,10 +3844,10 @@ function Index() {
                   <p className="text-[11px] text-faint mt-1 font-mono">Medidas do Tamanho {mother} · estampas são ancoradas aqui</p>
                 </div>
                 <div className="px-5 py-5 space-y-5 overflow-y-auto">
-                  {["Corpo", "Manga"].map((group) => (
+                  {[...new Set(fieldsFor(clothingType).map((f) => f.group))].map((group) => (
                     <div key={group} className="space-y-3">
                       <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-cyan">{group}</div>
-                      {FIELDS.filter((f) => f.group === group).map((f) => (
+                      {fieldsFor(clothingType).filter((f) => f.group === group).map((f) => (
                         <DimensionInput
                           key={f.key}
                           label={`${f.label} (cm)`}
@@ -3791,7 +3861,7 @@ function Index() {
                     <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-muted-foreground mb-2">
                       Tamanho {size} em exibição
                     </div>
-                    {FIELDS.map((f) => (
+                    {fieldsFor(clothingType).map((f) => (
                       <div key={f.key} className="flex justify-between text-[11px] font-mono py-0.5">
                         <span className="text-faint">{f.label}</span>
                         <span className="text-foreground">{fmt(graded[size][f.key])} cm</span>
@@ -3838,7 +3908,7 @@ function Index() {
                             {s}
                             {s === mother && <Crown className="inline size-3 ml-1 -mt-0.5" />}
                           </td>
-                          {FIELDS.map((f) => (
+                          {fieldsFor(clothingType).map((f) => (
                             <td key={f.key} className="p-0.5">
                               <input
                                 type="number"
