@@ -1013,11 +1013,19 @@ type TextWorkspaceProps = {
   ) => React.ReactNode;
   /** Pré-visualização do time: textos já resolvidos, somente leitura. */
   preview?: TextElement[] | null;
+  /** Seleção múltipla ativa (2+ objetos): sem alças e sem Delete próprio. */
+  multiActive?: boolean;
+  /** Shift+clique / arraste do conjunto; devolve true quando tratou o evento. */
+  multiPick?: (e: React.PointerEvent, it: SelItem) => boolean;
 };
+
+/** Item da seleção múltipla: camada importada, estampa ou texto. */
+type SelItem = { kind: "layer" | "art" | "text"; id: string };
+const sameSelItem = (a: SelItem, b: SelItem) => a.kind === b.kind && a.id === b.id;
 
 type TBox = { x: number; y: number; w: number; h: number };
 
-function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, checkpoint, selectedId, onSelect: setSelectedId, unit, selectionBox, preview }: TextWorkspaceProps) {
+function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, checkpoint, selectedId, onSelect: setSelectedId, unit, selectionBox, preview, multiActive = false, multiPick }: TextWorkspaceProps) {
   const selTextRef = useRef<SVGTextElement | null>(null);
   const [box, setBox] = useState<TBox | null>(null);
   const [fontsTick, setFontsTick] = useState(0);
@@ -1212,7 +1220,7 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
   // Delete/Backspace remove o texto selecionado (fora da edição e de campos).
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!selectedId || editingIdRef.current) return;
+      if (!selectedId || editingIdRef.current || multiActive) return;
       if (event.key !== "Delete" && event.key !== "Backspace") return;
       if (isTypingTarget(event.target)) return;
       event.preventDefault();
@@ -1224,7 +1232,7 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [selectedId, view]);
+  }, [selectedId, view, multiActive]);
 
   if (preview) {
     return (
@@ -1271,7 +1279,9 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
         ) : (() => {
           const active = tool === "selecao" || tool === "texto";
           const onDown = (event: React.PointerEvent) => {
-            if (!active || event.button !== 0) return;
+            if (!active) return;
+            if (multiPick?.(event, { kind: "text", id: item.id })) return;
+            if (event.button !== 0) return;
             event.stopPropagation();
             setSelectedId(item.id);
             checkpoint("text-move:" + Date.now());
@@ -1288,6 +1298,7 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
               )}
               <text
                 ref={(el) => { textEls.current[item.id] = el; if (isSel) selTextRef.current = el; }}
+                data-text-id={item.id}
                 x={item.x} y={item.y + fontSize} fill={item.color}
                 style={textStyle} textAnchor={item.align === "left" ? "start" : item.align === "center" ? "middle" : "end"}
                 className={active ? "cursor-move" : "pointer-events-none"}
@@ -1311,7 +1322,7 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
                   </g>
                 );
               })()}
-              {isSel && box && (
+              {isSel && box && !multiActive && (
                 <g transform={`translate(${box.x + box.w / 2} ${box.y + box.h / 2})`}>
                   {tool === "selecao"
                     ? selectionBox(box.w, box.h, "amber", startResize)
@@ -2168,6 +2179,7 @@ function Index() {
   const selectLayer = (id: string | null) => {
     // Fora de "Editar Conteúdo do PowerClip", camadas recortadas não são selecionáveis.
     if (id && !pcEdit && layers[view].find((l) => l.id === id)?.clipped) return;
+    setSelExtra([]);
     setSelLayer(id);
     if (id) {
       setSelPart(null);
@@ -2175,6 +2187,7 @@ function Index() {
     }
   };
   const selectPart = (p: "peca" | "estampa" | null) => {
+    setSelExtra([]);
     setSelPart(p);
     if (p) {
       setSelLayer(null);
@@ -2182,11 +2195,134 @@ function Index() {
     }
   };
   const selectText = (id: string | null) => {
+    setSelExtra([]);
     setSelText(id);
     if (id) {
       setSelLayer(null);
       setSelPart(null);
     }
+  };
+  /* ---------- Seleção múltipla (Shift+clique): principal = último selecionado ---------- */
+  const [selExtraRaw, setSelExtra] = useState<SelItem[]>([]);
+  const [multiBox, setMultiBox] = useState<{ w: number; h: number } | null>(null);
+  const principalItem: SelItem | null = selLayer
+    ? { kind: "layer", id: selLayer }
+    : selText
+      ? { kind: "text", id: selText }
+      : selPart === "estampa"
+        ? { kind: "art", id: "art" }
+        : null;
+  const selItemAlive = (it: SelItem) =>
+    it.kind === "layer"
+      ? layers[view].some((l) => l.id === it.id && !l.hidden && (!l.clipped || pcEdit))
+      : it.kind === "art"
+        ? !!art && size === mother && (art.clipped === false || pcEdit)
+        : texts[view].some((t) => t.id === it.id);
+  const selExtra = principalItem ? selExtraRaw.filter((it) => selItemAlive(it) && !sameSelItem(it, principalItem)) : [];
+  /** Conjunto selecionado em ordem: extras primeiro, principal (objeto ativo) por último. */
+  const selectionItems = (): SelItem[] => (principalItem ? [...selExtra, principalItem] : []);
+  const multiSel = selExtra.length > 0 ? selectionItems() : null;
+  useEffect(() => {
+    if (selExtra.length !== selExtraRaw.length) setSelExtra(selExtra);
+  }, [selExtra.length, selExtraRaw.length]);
+  useEffect(() => {
+    setSelExtra([]);
+  }, [view, size, clothingType, tool, teamView, pcEdit]);
+  const setPrincipal = (it: SelItem | null) => {
+    setSelLayer(it?.kind === "layer" ? it.id : null);
+    setSelText(it?.kind === "text" ? it.id : null);
+    setSelPart(it?.kind === "art" ? "estampa" : null);
+  };
+  const clearSelection = () => {
+    setSelExtra([]);
+    setPrincipal(null);
+  };
+  /** Shift+clique: adiciona (vira principal) ou remove (o último restante vira principal). */
+  const shiftPick = (it: SelItem) => {
+    if (!selItemAlive(it)) return;
+    const cur = selectionItems();
+    if (cur.some((c) => sameSelItem(c, it))) {
+      const rest = cur.filter((c) => !sameSelItem(c, it));
+      setSelExtra(rest.slice(0, -1));
+      setPrincipal(rest[rest.length - 1] ?? null);
+    } else {
+      setSelExtra(cur);
+      setPrincipal(it);
+    }
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || tool !== "selecao" || isTypingTarget(e.target)) return;
+      if (principalItem || selPart) clearSelection();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+  /** Arrastar o conjunto: todos com o mesmo delta em cm, um passo de desfazer por arrasto. */
+  const multiOrig = useRef<{ layers: Layer[]; art: Artwork | null; texts: TextElement[]; key: string; cp: boolean } | null>(null);
+  const multiMove = (phase: "start" | "move", dx = 0, dy = 0) => {
+    if (!multiSel) return;
+    if (phase === "start") {
+      multiOrig.current = { layers: layers[view], art, texts: texts[view], key: "multi-move:" + Date.now(), cp: false };
+      return;
+    }
+    const o = multiOrig.current;
+    if (!o || (!dx && !dy)) return;
+    if (!o.cp) {
+      checkpoint(o.key);
+      o.cp = true;
+    }
+    const ids = new Set(multiSel.filter((i) => i.kind === "layer").map((i) => i.id));
+    const tids = new Set(multiSel.filter((i) => i.kind === "text").map((i) => i.id));
+    const W = pieceW;
+    const H = pieceH;
+    if (ids.size) {
+      const all = { ...snapRef.current.layers, [view]: o.layers.map((l) => (ids.has(l.id) ? { ...l, cx: l.cx + dx / W, cy: l.cy + dy / H } : l)) };
+      setLayers(all);
+      saveLS(LS_LAYERS, all);
+    }
+    if (o.art && multiSel.some((i) => i.kind === "art")) {
+      const all = { ...snapRef.current.artworks, [view]: { ...o.art, cx: o.art.cx + dx / W, cy: o.art.cy + dy / H } };
+      setArtworks(all);
+      try { saveLS(LS_ART, all); } catch { /* imagem grande demais */ }
+    }
+    if (tids.size) {
+      setTexts((prev) => ({ ...prev, [view]: o.texts.map((t) => (tids.has(t.id) ? { ...t, x: t.x + dx, y: t.y + dy } : t)) }));
+    }
+  };
+  /** Apaga todos os itens do conjunto com um único passo de desfazer. O molde nunca. */
+  const deleteMulti = () => {
+    if (!multiSel) return false;
+    const ids = new Set(multiSel.filter((i) => i.kind === "layer").map((i) => i.id));
+    const tids = new Set(multiSel.filter((i) => i.kind === "text").map((i) => i.id));
+    checkpoint("multi-del:" + Date.now());
+    if (ids.size) {
+      const all = { ...snapRef.current.layers, [view]: layers[view].filter((l) => !ids.has(l.id)) };
+      setLayers(all);
+      saveLS(LS_LAYERS, all);
+    }
+    if (multiSel.some((i) => i.kind === "art")) {
+      const all = { ...snapRef.current.artworks, [view]: null };
+      setArtworks(all);
+      try { saveLS(LS_ART, all); } catch { /* ignora */ }
+    }
+    if (tids.size) setTexts((prev) => ({ ...prev, [view]: prev[view].filter((t) => !tids.has(t.id)) }));
+    clearSelection();
+    setMenu(null);
+    return true;
+  };
+  /** "Inserir no PowerClip" com vários: aplica a todas as camadas livres do conjunto. */
+  const multiToPowerClip = () => {
+    if (!multiSel) return;
+    const ids = new Set(multiSel.filter((i) => i.kind === "layer").map((i) => i.id));
+    commitView(
+      "pc-multi:" + Date.now(),
+      layers[view].map((l) => (ids.has(l.id) && !l.clipped ? { ...l, clipped: true, init: { cx: l.cx, cy: l.cy, w: l.w, ratio: l.ratio, rot: l.rot ?? 0 } } : l)),
+      undefined,
+    );
+    clearSelection();
+    setSize(mother);
+    setPcEdit(false);
   };
   const isBodyView = view === "frente" || view === "costas";
   const pieceW = isBodyView ? graded[size].bodyWidth : graded[size].sleeveWidth;
@@ -2623,6 +2759,7 @@ function Index() {
   const canDeleteSelection = !!selObj || artDeletable || !!selText;
   /** Decide o que apagar: camada, estampa (ou texto, só via menu). Molde nunca. */
   const deleteSelection = (includeText = false) => {
+    if (multiSel) return deleteMulti();
     if (selObj) {
       commitView("del:" + Date.now(), curLayers.filter((l) => l.id !== selObj.id), undefined);
       setSelLayer(null);
@@ -3649,6 +3786,10 @@ function Index() {
                   onTextsChange={setTexts}
                   onCheckpoint={checkpoint}
                   teamPreview={teamPreviewTexts}
+                  multi={multiSel}
+                  onShiftPick={shiftPick}
+                  onMultiMove={multiMove}
+                  onMultiBox={setMultiBox}
                 />
                 {viewPlayer && (
                   <div className="absolute top-3 left-1/2 z-30 -translate-x-1/2 flex items-center gap-1.5 rounded-md border border-cyan bg-panel px-2 py-1 text-xs shadow" role="status">
@@ -3718,7 +3859,18 @@ function Index() {
                     </div>
                   );
                 })()}
-                {selInfo && (
+                {multiSel && tool === "selecao" && (
+                  <div className="absolute top-3 left-3 z-10 flex items-center gap-2 rounded-md border border-line bg-panel px-3 py-2 shadow-lg text-xs" role="status">
+                    <span className="font-medium text-foreground">{multiSel.length} objetos selecionados</span>
+                    {multiBox && (
+                      <>
+                        <span className="h-5 w-px bg-line" />
+                        <span className="font-mono text-muted-foreground">L {fmt(multiBox.w)} × A {fmt(multiBox.h)} cm</span>
+                      </>
+                    )}
+                  </div>
+                )}
+                {selInfo && !multiSel && (
                   <SelectionPropsBar info={selInfo} locked={lockRatio} onToggleLock={() => setLockRatio((v) => !v)} />
                 )}
                 {/* Painel de camadas */}
@@ -3815,8 +3967,8 @@ function Index() {
               <CanvasContextMenu
                 x={menu.x}
                 y={menu.y}
-                disabled={!selObj}
-                deleteDisabled={!canDeleteSelection}
+                disabled={!selObj || !!multiSel}
+                deleteDisabled={!canDeleteSelection && !multiSel}
                 onCut={cutSelectedLayer}
                 onCopy={copySelectedLayer}
                 onPaste={pasteLayer}
@@ -3828,7 +3980,11 @@ function Index() {
                   {
                     title: "PowerClip",
                     items: [
-                      selObj && !selObj.clipped
+                      multiSel
+                        ? multiSel.some((i) => i.kind === "layer" && curLayers.some((l) => l.id === i.id && !l.clipped))
+                          ? { label: "Inserir no PowerClip", run: multiToPowerClip }
+                          : null
+                        : selObj && !selObj.clipped
                         ? { label: "Inserir no PowerClip", run: () => setPcPick(selObj.id) }
                         : artFree
                           ? { label: "Inserir no PowerClip", run: () => { setSelPart("estampa"); setTimeout(() => setPcPick("art"), 0); } }
@@ -4194,8 +4350,17 @@ function PatternCanvas({
   onTextsChange,
   onCheckpoint,
   teamPreview = null,
+  multi = null,
+  onShiftPick,
+  onMultiMove,
+  onMultiBox,
 }: {
   teamPreview?: TextElement[] | null;
+  /** Conjunto da seleção múltipla (2+ itens, principal por último) ou null. */
+  multi?: SelItem[] | null;
+  onShiftPick?: (it: SelItem) => void;
+  onMultiMove?: (phase: "start" | "move", dx?: number, dy?: number) => void;
+  onMultiBox?: (b: { w: number; h: number } | null) => void;
   texts: TextsByView;
   onTextsChange: (t: TextsByView) => void;
   onCheckpoint: (key: string) => void;
@@ -4336,6 +4501,85 @@ function PatternCanvas({
     onPieceDims(Math.max(minW, nW), Math.max(minH, nH));
   };
   const selL = layers.find((l) => l.id === selLayer) ?? null;
+
+  /* ---------- Seleção múltipla ---------- */
+  const inMulti = (it: SelItem) => !!multi?.some((m) => sameSelItem(m, it));
+  const [mDrag, setMDrag] = useState<Pt | null>(null);
+  /** Shift+clique alterna o item; arrastar um membro move o conjunto. True = evento tratado. */
+  const multiPick = (e: React.PointerEvent, it: SelItem): boolean => {
+    if (tool !== "selecao") return false;
+    if (e.button === 0 && e.shiftKey && onShiftPick) {
+      e.stopPropagation();
+      onShiftPick(it);
+      return true;
+    }
+    if (!multi || !inMulti(it)) return false;
+    e.stopPropagation();
+    if (e.button !== 0) return true; // botão direito: mantém o conjunto para o menu
+    onMultiMove?.("start");
+    setMDrag(svgPoint(e));
+    return true;
+  };
+  useEffect(() => {
+    if (!mDrag) return;
+    const move = (ev: PointerEvent) => {
+      const p = svgPoint(ev);
+      onMultiMove?.("move", p.x - mDrag.x, p.y - mDrag.y);
+    };
+    const stop = () => setMDrag(null);
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", stop, { once: true });
+    return () => {
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", stop);
+    };
+  }, [mDrag]);
+  const onMultiMoveRef = useRef(onMultiMove);
+  onMultiMoveRef.current = onMultiMove;
+  /* Caixas de cada item (camada/estampa: caixa que cobre o objeto girado; texto: getBBox). */
+  const [mBoxes, setMBoxes] = useState<{ x: number; y: number; w: number; h: number; main: boolean }[]>([]);
+  useLayoutEffect(() => {
+    const out: { x: number; y: number; w: number; h: number; main: boolean }[] = [];
+    if (multi) {
+      const rotBox = (cx: number, cy: number, aw: number, ah: number, rot: number) => {
+        const t = (rot * Math.PI) / 180;
+        const bw = aw * Math.abs(Math.cos(t)) + ah * Math.abs(Math.sin(t));
+        const bh = aw * Math.abs(Math.sin(t)) + ah * Math.abs(Math.cos(t));
+        return { x: cx - bw / 2, y: cy - bh / 2, w: bw, h: bh };
+      };
+      multi.forEach((it, i) => {
+        const main = i === multi.length - 1;
+        if (it.kind === "layer") {
+          const l = layers.find((x) => x.id === it.id);
+          if (!l) return;
+          const { c, aw, ah } = lg(l);
+          out.push({ ...rotBox(c.x, c.y, aw, ah, l.rot ?? 0), main });
+        } else if (it.kind === "art") {
+          if (!artwork) return;
+          const aw = artwork.w * W;
+          const c = toSvg({ x: artwork.cx, y: artwork.cy });
+          out.push({ ...rotBox(c.x, c.y, aw, aw * artwork.ratio, artwork.rot ?? 0), main });
+        } else {
+          const el = svgRef.current?.querySelector(`[data-text-id="${CSS.escape(it.id)}"]`) as SVGTextElement | null;
+          if (!el) return;
+          try {
+            const b = el.getBBox();
+            out.push({ x: b.x, y: b.y, w: b.width, h: b.height, main });
+          } catch { /* ignora */ }
+        }
+      });
+    }
+    setMBoxes((prev) => (JSON.stringify(prev) === JSON.stringify(out) ? prev : out));
+  });
+  useEffect(() => {
+    if (!onMultiBox) return;
+    if (!multi || !mBoxes.length) return onMultiBox(null);
+    const x0 = Math.min(...mBoxes.map((b) => b.x));
+    const y0 = Math.min(...mBoxes.map((b) => b.y));
+    const x1 = Math.max(...mBoxes.map((b) => b.x + b.w));
+    const y1 = Math.max(...mBoxes.map((b) => b.y + b.h));
+    onMultiBox({ w: x1 - x0, h: y1 - y0 });
+  }, [mBoxes, !!multi]);
   const layerNodeMode = tool === "forma" && selL?.kind === "vetor" && !selL.hidden;
   const svgPoint = (e: { clientX: number; clientY: number }): Pt => {
     const svg = svgRef.current!;
@@ -4808,6 +5052,8 @@ function PatternCanvas({
         onPointerDown={(e) => {
           if (tool !== "selecao") return;
           e.stopPropagation();
+          // O molde nunca entra num conjunto com vários itens.
+          if (e.shiftKey || (multi && e.button === 2)) return;
           onSelPart("peca");
           if (e.button !== 0) return;
           capture(e);
@@ -4837,6 +5083,7 @@ function PatternCanvas({
           transform: artTransform(artwork, c.x, c.y),
         };
         const down = (e: React.PointerEvent) => {
+          if (multiPick(e, { kind: "art", id: "art" })) return;
           e.stopPropagation();
           onSelPart("estampa");
           if (e.button !== 0) return;
@@ -4862,7 +5109,7 @@ function PatternCanvas({
                 <image {...imgProps} opacity={artwork.opacity ?? 1} style={{ pointerEvents: "none" }} />
               </g>
             )}
-            {artSelected && (
+            {artSelected && !multi && (
               <g transform={`translate(${c.x} ${c.y}) rotate(${artwork.rot ?? 0})`}>
                 {selectionBox(aw, ah, "amber", (_, hx, hy) => setDrag({ k: "bscale", target: "art", hx, hy, orig: artwork }))}
               </g>
@@ -4884,6 +5131,7 @@ function PatternCanvas({
         const pickable = (tool === "selecao" || tool === "forma") && (!l.clipped || pcEdit);
         const down = (e: React.PointerEvent) => {
           if (!pickable && e.button !== 2) return;
+          if (pickable && multiPick(e, { kind: "layer", id: l.id })) return;
           e.stopPropagation();
           onSelLayer(l.id);
           if (e.button !== 0 || tool !== "selecao") return;
@@ -4926,7 +5174,7 @@ function PatternCanvas({
             {sel && tool !== "selecao" && (
               <rect x={-aw / 2} y={-ah / 2} width={aw} height={ah} className="fill-none stroke-amber pointer-events-none" strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
             )}
-            {sel && tool === "selecao" && (
+            {sel && tool === "selecao" && !multi && (
               <>
                 {selectionBox(aw, ah, "amber", (_, hx, hy) => setDrag({ k: "bscale", target: "layer", hx, hy, orig: l }))}
                 <line x1={0} y1={-ah / 2} x2={0} y2={-ah / 2 - unit * 3} className="stroke-amber pointer-events-none" strokeWidth={1} vectorEffect="non-scaling-stroke" />
@@ -5199,7 +5447,27 @@ function PatternCanvas({
       })()}
 
 
-      <TextWorkspace tool={tool} view={view} svgPoint={svgPoint} bounds={{ x: vx, y: vy, width: vw, height: vh }} texts={texts} setTexts={onTextsChange} checkpoint={onCheckpoint} selectedId={selText} onSelect={onSelText} unit={unit} selectionBox={selectionBox} preview={teamPreview} />
+      <TextWorkspace tool={tool} view={view} svgPoint={svgPoint} bounds={{ x: vx, y: vy, width: vw, height: vh }} texts={texts} setTexts={onTextsChange} checkpoint={onCheckpoint} selectedId={selText} onSelect={onSelText} unit={unit} selectionBox={selectionBox} preview={teamPreview} multiActive={!!multi} multiPick={multiPick} />
+
+      {/* Seleção múltipla: caixa tracejada por objeto, contínua no principal, e caixa do conjunto. */}
+      {multi && tool === "selecao" && mBoxes.length > 0 && (() => {
+        const x0 = Math.min(...mBoxes.map((b) => b.x));
+        const y0 = Math.min(...mBoxes.map((b) => b.y));
+        const x1 = Math.max(...mBoxes.map((b) => b.x + b.w));
+        const y1 = Math.max(...mBoxes.map((b) => b.y + b.h));
+        const g = unit * 0.6;
+        return (
+          <g className="pointer-events-none" data-screen-only>
+            {mBoxes.map((b, i) => (
+              <rect key={i} x={b.x} y={b.y} width={b.w} height={b.h} className="fill-none stroke-amber" strokeWidth={b.main ? 1.5 : 1} strokeDasharray={b.main ? undefined : "4 3"} vectorEffect="non-scaling-stroke" />
+            ))}
+            <rect x={x0 - g} y={y0 - g} width={x1 - x0 + g * 2} height={y1 - y0 + g * 2} className="fill-none stroke-amber" strokeWidth={0.75} strokeDasharray="2 2" opacity={0.8} vectorEffect="non-scaling-stroke" />
+            <text x={(x0 + x1) / 2} y={y0 - g - unit * 0.8} textAnchor="middle" fontSize={unit * 1.2} className="fill-amber font-mono">
+              {multi.length} objetos · {fmt(x1 - x0)} × {fmt(y1 - y0)} cm
+            </text>
+          </g>
+        );
+      })()}
 
       {/* Fita métrica */}
       {tape.a && tapeEnd && (
