@@ -412,7 +412,7 @@ const GARMENT_CONFIG: Record<ClothingType, GarmentConfig> = {
   },
 };
 const viewsFor = (t: ClothingType): View[] => GARMENT_CONFIG[t].views;
-export const guideGroupsFor = (t: ClothingType) => GARMENT_CONFIG[t].guideGroups;
+const guideGroupsFor = (t: ClothingType) => GARMENT_CONFIG[t].guideGroups;
 const viewLabel = (t: ClothingType, v: View): string => GARMENT_CONFIG[t].viewLabels[v];
 const fieldsFor = (t: ClothingType) => GARMENT_CONFIG[t].fields;
 const defaultShapesFor = (t: ClothingType): Shapes => GARMENT_CONFIG[t].defaultShapes();
@@ -3086,7 +3086,7 @@ function Index() {
               key={clothingType}
               guides={guides}
               view={view}
-              groups={GARMENT_CONFIG[clothingType].guideGroups}
+              groups={guideGroupsFor(clothingType)}
               names={VIEW_SHORT}
               failures={safetyFailures.map((f) => f.text)}
               onApply={applyGuides}
