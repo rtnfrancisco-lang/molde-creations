@@ -155,7 +155,7 @@ type TextElement = {
   /** Ponto fixo do campo do time. Ausente = "centro". */
   fieldAnchor?: "esquerda" | "centro" | "direita";
 };
-const CLOTHING_TYPES = ["Camisa Infantil", "Camisa Baby Look", "Camiseta"] as const;
+const CLOTHING_TYPES = ["Camisa Infantil", "Camisa Baby Look", "Camiseta", "Short"] as const;
 type ClothingType = (typeof CLOTHING_TYPES)[number];
 /* Tipos removidos (Moletom, Regata, Manga Longa) ou desconhecidos abrem como Camiseta. */
 const asClothingType = (v: unknown): ClothingType =>
@@ -175,6 +175,7 @@ const SIZES_BY_GARMENT: Record<ClothingType, readonly SizeOption[]> = {
     id: id as Size,
     label: `BL ${id}`,
   })),
+  Short: ["PP", "P", "M", "G", "GG", "XG"].map((id) => ({ id: id as Size, label: id })),
 };
 
 const sizesForGarment = (clothingType: ClothingType): readonly SizeOption[] => SIZES_BY_GARMENT[clothingType];
@@ -255,6 +256,18 @@ const BABY_LOOK_TABLE: Grading = {
   XG2: d(68, 55, 19, 36),
 };
 
+/* Short: largura × altura da perna; campos de manga repetem o corpo só para satisfazer o tipo. */
+const sh = (w: number, h: number): Measurements => d(h, w, h, w);
+const SHORT_TABLE: Grading = {
+  PP: sh(34, 24.5),
+  P: sh(37, 26.5),
+  M: sh(40, 29),
+  G: sh(43, 31),
+  GG: sh(46, 33),
+  XG: sh(49, 35.5),
+  XG2: sh(52, 37.5),
+};
+
 /* Migra larguras de manga ainda no padrão antigo (qualquer tipo de peça). */
 const SLEEVE_MIGRATIONS: [Grading, Grading][] = [
   [OLD_DEFAULT_TABLE, DEFAULT_TABLE],
@@ -270,6 +283,7 @@ const OLD_FOR_TYPE = (t: string): [Grading, Grading] =>
 const PRESET_TABLES: Partial<Record<ClothingType, Grading>> = {
   "Camisa Infantil": INFANTIL_TABLE,
   "Camisa Baby Look": BABY_LOOK_TABLE,
+  Short: SHORT_TABLE,
 };
 
 /* ===== Nomenclatura dinâmica de tamanho / rótulo técnico ===== */
@@ -285,6 +299,7 @@ const DEFAULT_MOTHER: Record<ClothingType, Size> = {
   Camiseta: "M",
   "Camisa Infantil": "M",
   "Camisa Baby Look": "M",
+  Short: "M",
 };
 
 /* Nome legível da parte do molde a partir da vista ativa */
@@ -338,6 +353,25 @@ type GarmentConfig = {
   fields: { key: Field; label: string; group: string }[];
   defaultShapes: () => Shapes;
 };
+/* Perna esquerda do short (referência), sentido horário a partir do canto superior esquerdo. */
+const legLeftShape = (): Node[] => [
+  { x: 0.147, y: 0.13, smooth: false },
+  { x: 0.834, y: 0.0, smooth: false },
+  { x: 0.84, y: 0.31, smooth: true },
+  { x: 0.868, y: 0.456, smooth: true },
+  { x: 0.916, y: 0.548, smooth: true },
+  { x: 1.0, y: 0.63, smooth: false },
+  { x: 0.928, y: 0.937, smooth: false },
+  { x: 0.936, y: 1.0, smooth: false },
+  { x: 0.061, y: 1.0, smooth: false },
+  { x: 0.075, y: 0.96, smooth: false },
+  { x: 0.0, y: 0.652, smooth: false },
+  { x: 0.059, y: 0.62, smooth: true },
+  { x: 0.112, y: 0.54, smooth: true },
+  { x: 0.139, y: 0.4, smooth: true },
+  { x: 0.144, y: 0.25, smooth: true },
+];
+const legRightShape = (): Node[] => legLeftShape().map((n) => ({ ...n, x: 1 - n.x })).reverse();
 const CAMISA_CONFIG: GarmentConfig = {
   family: "camisa",
   views: ["frente", "costas", "mangaEsq", "mangaDir"],
@@ -350,6 +384,17 @@ const GARMENT_CONFIG: Record<ClothingType, GarmentConfig> = {
   Camiseta: CAMISA_CONFIG,
   "Camisa Infantil": CAMISA_CONFIG,
   "Camisa Baby Look": CAMISA_CONFIG,
+  Short: {
+    family: "short",
+    views: ["frente", "costas"],
+    viewLabels: { frente: "Perna Esquerda", costas: "Perna Direita", mangaEsq: "Perna Esquerda", mangaDir: "Perna Direita" },
+    partLabels: { frente: "PERNA ESQUERDA", costas: "PERNA DIREITA", mangaEsq: "PERNA ESQUERDA", mangaDir: "PERNA DIREITA" },
+    fields: [
+      { key: "bodyWidth", label: "Largura da Perna", group: "Perna" },
+      { key: "bodyHeight", label: "Altura da Perna", group: "Perna" },
+    ],
+    defaultShapes: () => ({ frente: legLeftShape(), costas: legRightShape(), mangaEsq: legLeftShape(), mangaDir: legRightShape() }),
+  },
 };
 const viewsFor = (t: ClothingType): View[] => GARMENT_CONFIG[t].views;
 const viewLabel = (t: ClothingType, v: View): string => GARMENT_CONFIG[t].viewLabels[v];
@@ -409,6 +454,7 @@ const defaultTablesForProfiles = (): ProfileTables => ({
   Camiseta: cloneGrading(DEFAULT_TABLE),
   "Camisa Infantil": cloneGrading(INFANTIL_TABLE),
   "Camisa Baby Look": cloneGrading(BABY_LOOK_TABLE),
+  Short: cloneGrading(SHORT_TABLE),
 });
 
 /* Mantém só as tabelas dos tipos de peça atuais (descarta tipos removidos). */
@@ -2768,7 +2814,7 @@ function Index() {
         const { svg, cmW, cmH, safetyFailed } = buildPlotterSvgFor({ view: v, size: sz, hideTechnical: opt.hideTechnical, crop: true, player: p });
         const label = sizeLabel(clothingType, sz);
         if (safetyFailed && !opt.hideTechnical) warnings.push(`${label} ${partLabel(v, clothingType)}: zona de segurança maior que a peça (linha não gerada)`);
-        const name = uniqueName(teamFileName(opt.template, { numero: p.numero, nome: p.nome, tamanho: label, vista: v }, ext), used);
+        const name = uniqueName(teamFileName(opt.template, { numero: p.numero, nome: p.nome, tamanho: label, vista: garmentFamily(clothingType) === "camisa" ? v : slugLabel(viewLabel(clothingType, v)).toLowerCase().replace(/_/g, "-") }, ext), used);
         const r = await renderPiece(svg, cmW, cmH, opt.format, opt.dpi, opt.quality, name);
         if (r.reduced) warnings.push(`${label} (${v}) gerado a ${r.dpi} DPI para caber no navegador`);
         const res = teamResolver(p, sz, v);
@@ -4623,7 +4669,7 @@ function PatternCanvas({
   };
 
   const others = overlay ? SIZES.filter((s) => s !== size) : [];
-  const title = { frente: "FRENTE", costas: "COSTAS", mangaEsq: "MANGA ESQUERDA", mangaDir: "MANGA DIREITA" }[view];
+  const title = viewLabel(clothingType, view).toUpperCase();
   const showNodes = tool === "forma" && !layerNodeMode;
   const nodesInteractive = tool === "forma";
   const cursor = { selecao: "cursor-default", forma: "cursor-crosshair", caneta: "cursor-crosshair", formas: "cursor-crosshair", zoom: "cursor-zoom-in", fita: "cursor-crosshair", texto: "cursor-text" }[tool];
