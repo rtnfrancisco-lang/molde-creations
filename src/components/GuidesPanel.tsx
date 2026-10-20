@@ -1,25 +1,36 @@
 import { useEffect, useState } from "react";
-import { BLEED_MAX, DEFAULT_GUIDE, GUIDE_VIEWS, SAFETY_MAX, fmtCm, isDefaultGuide, parseCm, type Guide, type GuideView, type Guides } from "@/lib/guides";
+import { BLEED_MAX, DEFAULT_GUIDE, SAFETY_MAX, fmtCm, isDefaultGuide, parseCm, type Guide, type GuideView, type Guides } from "@/lib/guides";
 
-const NAMES: Record<GuideView, string> = { frente: "Frente", costas: "Costas", mangaEsq: "Manga Esq.", mangaDir: "Manga Dir." };
-type Group = "frente" | "costas" | "mangas";
-const GROUP_VIEWS: Record<Group, GuideView[]> = { frente: ["frente"], costas: ["costas"], mangas: ["mangaEsq", "mangaDir"] };
+export type GuideGroup = { id: string; label: string; views: GuideView[] };
+
+const allOn = (groups: GuideGroup[], on: boolean) => Object.fromEntries(groups.map((g) => [g.id, on])) as Record<string, boolean>;
 
 export function GuidesPanel({
   guides,
   view,
+  groups,
+  names,
   failures,
   onApply,
 }: {
   guides: Guides;
   view: GuideView;
+  /** Grupos do tipo de peça atual (vistas ocultas não aparecem). */
+  groups: GuideGroup[];
+  /** Rótulos curtos das vistas. */
+  names: Record<GuideView, string>;
   /** Ex.: "Manga Esq. (PP, P)" — onde a segurança não pôde ser gerada. */
   failures: string[];
   onApply: (views: GuideView[], g: Guide) => void;
 }) {
   const [bleed, setBleed] = useState(fmtCm(guides[view].bleed));
   const [safety, setSafety] = useState(fmtCm(guides[view].safety));
-  const [sel, setSel] = useState<Record<Group, boolean>>({ frente: true, costas: true, mangas: true });
+  const [sel, setSel] = useState<Record<string, boolean>>(() => allOn(groups, true));
+  const groupKey = groups.map((g) => g.id).join("|");
+  useEffect(() => {
+    setSel(allOn(groups, true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupKey]);
   useEffect(() => {
     setBleed(fmtCm(guides[view].bleed));
     setSafety(fmtCm(guides[view].safety));
@@ -29,13 +40,13 @@ export function GuidesPanel({
 
   const b = parseCm(bleed, BLEED_MAX);
   const s = parseCm(safety, SAFETY_MAX);
-  const all = sel.frente && sel.costas && sel.mangas;
-  const targets = (Object.keys(sel) as Group[]).filter((k) => sel[k]).flatMap((k) => GROUP_VIEWS[k]);
+  const all = groups.every((g) => sel[g.id]);
+  const targets = groups.filter((g) => sel[g.id]).flatMap((g) => g.views);
   const canApply = b !== null && s !== null && targets.length > 0;
   const field = (bad: boolean) =>
     "w-full bg-panel2 border rounded-md px-2 py-1.5 text-sm font-mono focus:outline-none " + (bad ? "border-destructive text-destructive" : "border-line focus:border-cyan/60");
-  const check = (label: string, on: boolean, toggle: () => void) => (
-    <label className="flex items-center gap-2 text-[11px] cursor-pointer">
+  const check = (key: string, label: string, on: boolean, toggle: () => void) => (
+    <label key={key} className="flex items-center gap-2 text-[11px] cursor-pointer">
       <input type="checkbox" checked={on} onChange={toggle} className="accent-[var(--color-cyan)]" />
       {label}
     </label>
@@ -57,10 +68,8 @@ export function GuidesPanel({
       )}
       <div className="space-y-1">
         <div className="text-[10px] text-muted-foreground">Aplicar em</div>
-        {check("Tudo", all, () => setSel(all ? { frente: false, costas: false, mangas: false } : { frente: true, costas: true, mangas: true }))}
-        {check("Frente", sel.frente, () => setSel((c) => ({ ...c, frente: !c.frente })))}
-        {check("Costas", sel.costas, () => setSel((c) => ({ ...c, costas: !c.costas })))}
-        {check("Mangas (esquerda e direita)", sel.mangas, () => setSel((c) => ({ ...c, mangas: !c.mangas })))}
+        {check("__all", "Tudo", all, () => setSel(allOn(groups, !all)))}
+        {groups.map((g) => check(g.id, g.label, !!sel[g.id], () => setSel((c) => ({ ...c, [g.id]: !c[g.id] }))))}
       </div>
       <div className="flex gap-2">
         <button
@@ -83,26 +92,28 @@ export function GuidesPanel({
         </button>
       </div>
       <div className="space-y-0.5 border-t border-line pt-2">
-        {GUIDE_VIEWS.map((v) => {
-          const g = guides[v];
-          const diff = !isDefaultGuide(g);
-          return (
-            <button
-              key={v}
-              onClick={() => {
-                setBleed(fmtCm(g.bleed));
-                setSafety(fmtCm(g.safety));
-                setSel({ frente: v === "frente", costas: v === "costas", mangas: v === "mangaEsq" || v === "mangaDir" });
-              }}
-              className={"w-full flex justify-between px-1.5 py-0.5 rounded text-[10px] font-mono hover:bg-panel2 " + (diff ? "text-cyan font-semibold" : "text-muted-foreground")}
-            >
-              <span>{NAMES[v]}</span>
-              <span>
-                {fmtCm(g.bleed)} / {fmtCm(g.safety)} cm
-              </span>
-            </button>
-          );
-        })}
+        {groups.flatMap((grp) =>
+          grp.views.map((v) => {
+            const g = guides[v];
+            const diff = !isDefaultGuide(g);
+            return (
+              <button
+                key={v}
+                onClick={() => {
+                  setBleed(fmtCm(g.bleed));
+                  setSafety(fmtCm(g.safety));
+                  setSel(Object.fromEntries(groups.map((x) => [x.id, x.id === grp.id])));
+                }}
+                className={"w-full flex justify-between px-1.5 py-0.5 rounded text-[10px] font-mono hover:bg-panel2 " + (diff ? "text-cyan font-semibold" : "text-muted-foreground")}
+              >
+                <span>{names[v]}</span>
+                <span>
+                  {fmtCm(g.bleed)} / {fmtCm(g.safety)} cm
+                </span>
+              </button>
+            );
+          }),
+        )}
       </div>
     </div>
   );
