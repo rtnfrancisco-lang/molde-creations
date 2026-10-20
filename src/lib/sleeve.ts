@@ -46,8 +46,8 @@ export const isOldSleeve = (v: unknown, dir: boolean) => sameAs(v, dir ? OLD.map
 /** Troca mangas idênticas ao padrão antigo pelo novo; formas editadas ficam. */
 export function migrateSleeveShapes<T extends Record<string, unknown>>(shapes: T): T {
   const out: Record<string, unknown> = { ...shapes };
-  if (isOldSleeve(out.mangaEsq, false)) out.mangaEsq = sleeveShape();
-  if (isOldSleeve(out.mangaDir, true)) out.mangaDir = mirrorShape(sleeveShape());
+  if (isOldSleeve(out["mangaEsq"], false)) out["mangaEsq"] = sleeveShape();
+  if (isOldSleeve(out["mangaDir"], true)) out["mangaDir"] = mirrorShape(sleeveShape());
   return out as T;
 }
 

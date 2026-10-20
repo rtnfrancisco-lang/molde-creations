@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isOldSleeve, migrateSleeveShapes, migrateSleeveWidths, mirrorShape, safetyOffsetFor, sleeveShape } from "./sleeve";
 
-const old = [[0, 0.32], [0.22, 0.1], [0.5, 0], [0.78, 0.1], [1, 0.32], [0.9, 1], [0.1, 1]].map(([x, y]) => ({ x, y, smooth: false }));
+const old = [[0, 0.32], [0.22, 0.1], [0.5, 0], [0.78, 0.1], [1, 0.32], [0.9, 1], [0.1, 1]].map(([x, y]) => ({ x: x!, y: y!, smooth: false }));
 
 describe("sleeve", () => {
   it("migrates untouched old sleeves only", () => {
