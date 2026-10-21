@@ -848,8 +848,8 @@ const DENSE_STEP_CM = 0.15;
 const clipperPathArea = (path: IntPath): number => {
   let area = 0;
   for (let i = 0; i < path.length; i++) {
-    const a = path[i];
-    const b = path[(i + 1) % path.length];
+    const a = path[i]!;
+    const b = path[(i + 1) % path.length]!;
     area += a.X * b.Y - b.X * a.Y;
   }
   return area / 2;
