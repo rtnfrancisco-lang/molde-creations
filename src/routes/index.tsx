@@ -2,7 +2,7 @@ import { sleeveShape, mirrorShape, migrateSleeveShapes, migrateSleeveWidths } fr
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { DEFAULT_GUIDES, fmtCm, guidePaths, sanitizeGuides, type Guide, type GuideView, type Guides } from "@/lib/guides";
 import { ALIGN_KEYS, alignDeltas, objectsRef, rotatedBox, type AlignOp, type AlignRefKind, type Box } from "@/lib/align";
-import { Crosshair, AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical } from "lucide-react";
+import { AlignHorizontalJustifyCenter, Crosshair, AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical } from "lucide-react";
 import { GuidesPanel, type GuideGroup } from "@/components/GuidesPanel";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -2334,6 +2334,14 @@ function Index() {
   /* ---------- Alinhar (L R T B E C P), entre objetos ou ao retângulo do molde ---------- */
   const [alignRef, setAlignRef] = useState<AlignRefKind>("last");
   const [alignRect, setAlignRect] = useState<"molde" | "midia">("molde");
+  const [alignOpen, setAlignOpen] = useState(false);
+  useEffect(() => {
+    try { if (localStorage.getItem("moldecore.alinharAberto") === "1") setAlignOpen(true); } catch { /* sem storage */ }
+  }, []);
+  const toggleAlign = () => setAlignOpen((v) => {
+    try { localStorage.setItem("moldecore.alinharAberto", v ? "0" : "1"); } catch { /* sem storage */ }
+    return !v;
+  });
   const itemBox = (it: SelItem): Box | null => {
     if (it.kind === "layer") {
       const l = layers[view].find((x) => x.id === it.id);
@@ -3722,6 +3730,16 @@ function Index() {
               >
                 <Users className="size-3.5" /> Time{roster.length > 0 && ` (${roster.length})`}
               </button>
+              <button
+                onClick={toggleAlign}
+                aria-pressed={alignOpen}
+                className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap border ${alignOpen ? "bg-cyan/10 border-cyan text-cyan" : "border-border text-foreground hover:bg-muted"}`}
+              >
+                <AlignHorizontalJustifyCenter className="size-3.5" /> Alinhar
+                {!alignOpen && selectionItems().length >= 2 && (
+                  <span className="absolute -right-1.5 -top-1.5 grid min-w-4 h-4 place-items-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">{selectionItems().length}</span>
+                )}
+              </button>
               <TeamPanel
                 open={teamOpen}
                 onClose={() => setTeamOpen(false)}
@@ -3785,6 +3803,57 @@ function Index() {
               </div>
             </div>
 
+            {alignOpen && (() => {
+              const n = selectionItems().length;
+              const ok = n >= 2 && tool === "selecao" && !viewPlayer;
+              const tip = ok ? undefined : "Selecione 2 ou mais objetos";
+              const ops: [AlignOp, typeof AlignStartVertical, string, string][] = [
+                ["left", AlignStartVertical, "Alinhar à esquerda", "L"],
+                ["centerX", AlignCenterVertical, "Centrar horizontalmente", "E"],
+                ["right", AlignEndVertical, "Alinhar à direita", "R"],
+                ["top", AlignStartHorizontal, "Alinhar ao topo", "T"],
+                ["centerY", AlignCenterHorizontal, "Centrar verticalmente", "C"],
+                ["bottom", AlignEndHorizontal, "Alinhar à base", "B"],
+              ];
+              const btn = "grid size-7 shrink-0 place-items-center rounded-md border border-line text-foreground hover:border-primary hover:text-primary disabled:pointer-events-none disabled:opacity-40";
+              const group = (title: string, toMold: boolean) => (
+                <div className="flex shrink-0 items-center gap-1">
+                  <span className="whitespace-nowrap pr-1 text-[10px] font-semibold uppercase tracking-wider text-faint">{title}</span>
+                  {ops.map(([op, Icon, name, k]) => (
+                    <button key={op} type="button" className={btn} disabled={!ok} onClick={() => runAlign(op, toMold)}
+                      title={tip ?? `${name} (${toMold ? "Shift+" : ""}${k})`} aria-label={`${name} ${toMold ? "ao molde" : "entre objetos"}`}>
+                      <Icon className="size-3.5" />
+                    </button>
+                  ))}
+                </div>
+              );
+              return (
+                <div className="flex h-10 shrink-0 items-center gap-3 overflow-x-auto whitespace-nowrap border-b border-line bg-panel px-3 text-xs" role="toolbar" aria-label="Alinhamento">
+                  {group("Entre objetos", false)}
+                  <span className="h-5 w-px shrink-0 bg-line" />
+                  {group("Ao molde", true)}
+                  <button type="button" disabled={!ok} title={tip ?? "Centro do molde (P)"} className="flex h-7 shrink-0 items-center gap-1 rounded-md border border-line px-2 text-foreground hover:border-primary hover:text-primary disabled:pointer-events-none disabled:opacity-40" onClick={() => runAlign("center", true)}>
+                    <Crosshair className="size-3.5" /> Centro do molde
+                  </button>
+                  <label className={"flex shrink-0 items-center gap-1 text-faint " + (ok ? "" : "opacity-40")} title={tip}>Referência
+                    <select disabled={!ok} value={alignRef} onChange={(e) => setAlignRef(e.target.value as AlignRefKind)} className="h-7 rounded-md border border-input bg-panel2 px-1 text-xs text-foreground">
+                      <option value="last">Último selecionado</option>
+                      <option value="first">Primeiro selecionado</option>
+                      <option value="group">Conjunto</option>
+                    </select>
+                  </label>
+                  <label className={"flex shrink-0 items-center gap-1 text-faint " + (ok ? "" : "opacity-40")} title={tip}>Retângulo
+                    <select disabled={!ok} value={alignRect} onChange={(e) => setAlignRect(e.target.value as "molde" | "midia")} className="h-7 rounded-md border border-input bg-panel2 px-1 text-xs text-foreground">
+                      <option value="molde">Molde</option>
+                      <option value="midia">Quadro de mídia</option>
+                    </select>
+                  </label>
+                  <span className="ml-auto shrink-0 pl-2 text-muted-foreground" role="status">
+                    {n >= 2 ? `${n} objetos selecionados` : "Selecione 2 ou mais objetos (Shift+clique)"}
+                  </span>
+                </div>
+              );
+            })()}
             <div className="flex-1 min-h-0 flex">
               <div className="w-12 shrink-0 bg-panel border-r border-line flex flex-col items-center py-2 gap-1 z-10">
                 {TOOLS.map((t) => (
@@ -3938,7 +4007,7 @@ function Index() {
                     </div>
                   );
                 })()}
-                {multiSel && tool === "selecao" && (
+                {multiSel && tool === "selecao" && !alignOpen && (
                   <div className="absolute top-3 left-3 z-10 flex items-center gap-2 rounded-md border border-line bg-panel px-3 py-2 shadow-lg text-xs" role="status">
                     <span className="font-medium text-foreground">{multiSel.length} objetos selecionados</span>
                     {multiBox && (
@@ -3949,53 +4018,6 @@ function Index() {
                     )}
                   </div>
                 )}
-                {tool === "selecao" && principalItem && !viewPlayer && (() => {
-                  const multiOk = selectionItems().length >= 2;
-                  const ops: [AlignOp, typeof AlignStartVertical, string, string][] = [
-                    ["left", AlignStartVertical, "Alinhar à esquerda", "L"],
-                    ["centerX", AlignCenterVertical, "Centrar horizontalmente", "E"],
-                    ["right", AlignEndVertical, "Alinhar à direita", "R"],
-                    ["top", AlignStartHorizontal, "Alinhar ao topo", "T"],
-                    ["centerY", AlignCenterHorizontal, "Centrar verticalmente", "C"],
-                    ["bottom", AlignEndHorizontal, "Alinhar à base", "B"],
-                  ];
-                  const btn = "grid size-7 place-items-center rounded-md border border-line text-foreground hover:border-primary hover:text-primary disabled:pointer-events-none disabled:opacity-40";
-                  const group = (title: string, toMold: boolean, enabled: boolean) => (
-                    <div className="flex items-center gap-1">
-                      <span className="w-16 text-[10px] font-semibold uppercase tracking-wider text-faint">{title}</span>
-                      {ops.map(([op, Icon, name, k]) => (
-                        <button key={op} type="button" className={btn} disabled={!enabled} onClick={() => runAlign(op, toMold)}
-                          title={`${name} (${toMold && multiOk ? "Shift+" : ""}${k})`} aria-label={`${name} ${toMold ? "ao molde" : "entre objetos"}`}>
-                          <Icon className="size-3.5" />
-                        </button>
-                      ))}
-                    </div>
-                  );
-                  return (
-                    <div className="absolute left-3 top-16 z-10 max-w-[calc(100%-17rem)] space-y-1.5 rounded-md border border-line bg-panel px-3 py-2 text-xs shadow-lg" onPointerDown={(e) => e.stopPropagation()}>
-                      {group("Entre objetos", false, multiOk)}
-                      {group("Ao molde", true, true)}
-                      <div className="flex flex-wrap items-center gap-2 pt-0.5">
-                        <button type="button" className="flex h-7 items-center gap-1 rounded-md border border-line px-2 text-foreground hover:border-primary hover:text-primary" onClick={() => runAlign("center", true)} title="Centro do molde (P)">
-                          <Crosshair className="size-3.5" /> Centro do molde
-                        </button>
-                        <label className="flex items-center gap-1 text-faint">Referência
-                          <select value={alignRef} onChange={(e) => setAlignRef(e.target.value as AlignRefKind)} className="h-7 rounded-md border border-input bg-panel2 px-1 text-xs text-foreground">
-                            <option value="last">Último selecionado</option>
-                            <option value="first">Primeiro selecionado</option>
-                            <option value="group">Conjunto (caixa de todos)</option>
-                          </select>
-                        </label>
-                        <label className="flex items-center gap-1 text-faint">Retângulo
-                          <select value={alignRect} onChange={(e) => setAlignRect(e.target.value as "molde" | "midia")} className="h-7 rounded-md border border-input bg-panel2 px-1 text-xs text-foreground">
-                            <option value="molde">Molde</option>
-                            <option value="midia">Quadro de mídia</option>
-                          </select>
-                        </label>
-                      </div>
-                    </div>
-                  );
-                })()}
                 {selInfo && !multiSel && (
                   <SelectionPropsBar info={selInfo} locked={lockRatio} onToggleLock={() => setLockRatio((v) => !v)} />
                 )}
