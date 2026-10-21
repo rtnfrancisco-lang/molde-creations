@@ -840,10 +840,12 @@ const sizeOf = (figures: Figure[]): number => {
   return Math.max(1e-6, Math.hypot(maxX - minX, maxY - minY));
 };
 
+type IntPoint = { X: number; Y: number };
+type IntPath = IntPoint[];
 const CLIPPER_SCALE = 1000;
 const DENSE_STEP_CM = 0.15;
 
-const clipperPathArea = (path: any[]): number => {
+const clipperPathArea = (path: IntPath): number => {
   let area = 0;
   for (let i = 0; i < path.length; i++) {
     const a = path[i];
@@ -853,7 +855,7 @@ const clipperPathArea = (path: any[]): number => {
   return area / 2;
 };
 
-const largestClipperPath = (paths: any[]): any[] | null => {
+const largestClipperPath = (paths: IntPath[]): IntPath | null => {
   if (!paths.length) return null;
   return paths.reduce((largest, current) =>
     Math.abs(clipperPathArea(current)) > Math.abs(clipperPathArea(largest)) ? current : largest,
@@ -878,19 +880,19 @@ const densePoints = (samples: Sample[], closed: boolean): Vec[] => {
   return points;
 };
 
-const toClipperPath = (points: Vec[]): any[] =>
+const toClipperPath = (points: Vec[]): IntPath =>
   points.map((p) => ({ X: Math.round(p.x * CLIPPER_SCALE), Y: Math.round(p.y * CLIPPER_SCALE) }));
 
-const fromClipperPath = (path: any[]): Vec[] =>
+const fromClipperPath = (path: IntPath): Vec[] =>
   path.map((p) => ({ x: p.X / CLIPPER_SCALE, y: p.Y / CLIPPER_SCALE }));
 
-const clipperOffset = (paths: any[], deltaCm: number): any[] => {
+const clipperOffset = (paths: IntPath[], deltaCm: number): IntPath[] => {
   if (!paths.length) return [];
   const offset = new ClipperLib.ClipperOffset(2, 0.25 * CLIPPER_SCALE);
   offset.AddPaths(paths, ClipperLib.JoinType.jtRound, ClipperLib.EndType.etClosedPolygon);
   const solution = new ClipperLib.Paths();
   offset.Execute(solution, deltaCm * CLIPPER_SCALE);
-  return Array.from(solution);
+  return Array.from(solution as ArrayLike<IntPath>);
 };
 
 /**
@@ -904,7 +906,7 @@ export function offsetPathD(d: string, distance: number, options: OffsetOptions 
   const figures = parseFigures(d);
   if (!figures?.length) return d;
   const tol = options.tolerance ?? Math.max(sizeOf(figures) * 5e-5, 1e-9);
-  const candidates: any[] = [];
+  const candidates: IntPath[] = [];
 
   for (const figure of figures) {
     if (!figure.closed) continue;
@@ -917,7 +919,7 @@ export function offsetPathD(d: string, distance: number, options: OffsetOptions 
       source,
       ClipperLib.PolyFillType.pftNonZero,
     );
-    const simplifiedPaths = Array.from(simplified) as any[];
+    const simplifiedPaths = Array.from(simplified) as IntPath[];
     if (!simplifiedPaths.length) continue;
 
     const firstOffset = clipperOffset(simplifiedPaths, distance);
@@ -926,7 +928,7 @@ export function offsetPathD(d: string, distance: number, options: OffsetOptions 
 
   if (!candidates.length) return distance < 0 ? "" : d;
 
-  const smoothed: any[] = [];
+  const smoothed: IntPath[] = [];
   for (const candidate of candidates) {
     const opened = clipperOffset([candidate], -0.5);
     const closed = clipperOffset(opened.length ? opened : [candidate], 0.5);
