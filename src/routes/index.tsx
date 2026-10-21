@@ -1451,6 +1451,35 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
   );
 }
 
+/** Faixa fixa: modo seguro ou aba secundária (salvamento automático desligado). */
+function StorageBanner() {
+  const tab = useSyncExternalStore(subscribeGuard, tabState, () => "pending" as const);
+  const [safe, setSafe] = useState(false);
+  useEffect(() => setSafe(isSafeMode()), []);
+  if (!safe && tab !== "secondary") return null;
+  return (
+    <div role="status" className="fixed inset-x-0 top-0 z-[90] flex items-center justify-center gap-3 border-b border-amber bg-amber/15 px-4 py-1.5 text-xs font-medium text-foreground backdrop-blur">
+      <span>
+        {safe
+          ? "Modo seguro: nada está sendo salvo automaticamente. Use Arquivo > Salvar"
+          : "O MoldeCore já está aberto em outra aba. O salvamento automático desta aba está desligado para não perder dados"}
+      </span>
+      {safe && (
+        <button
+          type="button"
+          className="rounded border border-line bg-panel px-2 py-0.5 hover:bg-muted"
+          onClick={() => {
+            setSafeMode(false);
+            location.reload();
+          }}
+        >
+          Sair do modo seguro
+        </button>
+      )}
+    </div>
+  );
+}
+
 function Index() {
   const [clothingType, setClothingType] = useState<ClothingType>("Camiseta");
   const tamanhosExibidos =
@@ -1999,6 +2028,7 @@ function Index() {
 
   const fileActions = useRef({ saveProject, openProject });
   fileActions.current = { saveProject, openProject };
+  saveNow.current = () => void fileActions.current.saveProject(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey)) return;
@@ -3287,6 +3317,7 @@ function Index() {
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground font-display antialiased flex">
+      <StorageBanner />
       {/* ============ SIDEBAR ============ */}
       <div
         className={
