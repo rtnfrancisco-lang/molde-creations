@@ -20,3 +20,4 @@
 - Project data from files or storage passes through pure sanitizers in src/lib/sanitize.ts (tested) before any state is set or saved; broken input must never crash the screen or repeat on reload.
 - All string-built SVG goes through src/lib/svg-safe.ts (n/nf for numbers, attr, safeSrc, color, fixed enum lists); the vector print window shows the SVG only as a data-URL <img> under a no-script CSP, so project files cannot run code.
 - Storage access goes through src/lib/storage-guard.ts (lsGet/lsSet, canRead/canWrite): safe mode (sessionStorage flag) blocks reads and writes, a non-editor tab (Web Locks, localStorage heartbeat fallback) blocks writes; big keys flush together via idb.setMany in one transaction.
+- Desktop (Tauri) static build lives in desktop/ + vite.desktop.config.ts (output dist-tauri), rendering the named Index export without the router; keeps the published TanStack/Cloudflare build untouched.
