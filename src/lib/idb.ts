@@ -37,3 +37,9 @@ export const get = <T = unknown>(key: string) => run<T | undefined>("readonly", 
 export const set = (key: string, value: unknown) => run<void>("readwrite", (s) => void s.put(value, key));
 export const del = (key: string) => run<void>("readwrite", (s) => void s.delete(key));
 export const keys = () => run<string[]>("readonly", (s) => s.getAllKeys() as IDBRequest);
+/** Grava várias chaves em UMA transação (tudo ou nada). */
+export const setMany = (entries: Record<string, unknown>) =>
+  run<void>("readwrite", (s) => {
+    for (const [k, v] of Object.entries(entries)) s.put(v, k);
+  });
+export const clear = () => run<void>("readwrite", (s) => void s.clear());
