@@ -5,7 +5,7 @@ import { ALIGN_KEYS, alignDeltas, objectsRef, rotatedBox, type AlignOp, type Ali
 import { AlignHorizontalJustifyCenter, Crosshair, AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical } from "lucide-react";
 import { GuidesPanel, type GuideGroup } from "@/components/GuidesPanel";
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { createPortal } from "react-dom";
 import {
