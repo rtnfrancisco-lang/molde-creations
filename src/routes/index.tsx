@@ -69,6 +69,7 @@ import { resolveTeamSlot, slotDpi } from "@/lib/team-slot";
 import { teamScale, resolveTeamText, measureText, fontsReady, teamTextOverflows, type ResolvedTeamText } from "@/lib/team-text";
 import { renderPiece, zipFiles, todayStamp, yieldFrame, MIME } from "@/lib/export-render";
 import { teamFileName, uniqueName, TEAM_EXT, TEAM_DPIS, fitDpi, cmToPx, type TeamFormat } from "@/lib/team-export";
+import { sanitizeArtworks, sanitizeGrading, sanitizeLayers, sanitizeProfiles, sanitizeShapes, sanitizeStyles, sanitizeTexts, summarizeIssues, type SGrading } from "@/lib/sanitize";
 import { buildProjectFile, parseProjectFile, nameFromFile, PROJECT_EXT } from "@/lib/project-file";
 import { hasFsAccess, pickSaveHandle, writeHandle, downloadText, openProjectFile, isAbort, type FileHandle } from "@/lib/file-access";
 import {
@@ -475,25 +476,16 @@ const defaultTablesForProfiles = (): ProfileTables => ({
   Short: cloneGrading(SHORT_TABLE),
 });
 
-/* Mantém só as tabelas dos tipos de peça atuais (descarta tipos removidos). */
-const pickTables = (raw: unknown): Partial<ProfileTables> => {
-  const o = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-  return Object.fromEntries(CLOTHING_TYPES.filter((t) => o[t] && typeof o[t] === "object").map((t) => [t, o[t]])) as Partial<ProfileTables>;
-};
 
 const readGradeProfiles = (): GradeProfile[] => {
   try {
     const raw = localStorage.getItem(LS_PROFILES);
     if (!raw) return [{ name: DEFAULT_PROFILE_NAME, tables: defaultTablesForProfiles() }];
-    const parsed = JSON.parse(raw) as GradeProfile[];
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      return [{ name: DEFAULT_PROFILE_NAME, tables: defaultTablesForProfiles() }];
-    }
-    return parsed.map((profile) => ({
+    const { value } = sanitizeProfiles(JSON.parse(raw), defaultTablesForProfiles() as unknown as Record<string, SGrading>);
+    if (value.length === 0) return [{ name: DEFAULT_PROFILE_NAME, tables: defaultTablesForProfiles() }];
+    return value.map((profile) => ({
       name: profile.name,
-      tables: Object.fromEntries(
-        Object.entries({ ...defaultTablesForProfiles(), ...pickTables(profile.tables) }).map(([t, g]) => [t, migrateGradingSleeves(g as Grading, OLD_FOR_TYPE(t))]),
-      ) as ProfileTables,
+      tables: Object.fromEntries(Object.entries(profile.tables).map(([t, g]) => [t, migrateGradingSleeves(g as Grading, OLD_FOR_TYPE(t))])) as ProfileTables,
     }));
   } catch {
     return [{ name: DEFAULT_PROFILE_NAME, tables: defaultTablesForProfiles() }];
@@ -828,6 +820,37 @@ const loadAllBig = async (): Promise<Record<string, unknown>> => {
   }
   return out;
 };
+
+const MAX_PROJECT_CHARS = 500 * 1024 * 1024;
+
+/** Sanitiza os dados de desenho vindos de arquivo ou armazenamento. */
+function sanitizeDrawing(art: unknown, sty: unknown, sh: unknown, ly: unknown, tx: unknown, defShapes: Shapes) {
+  const a = sanitizeArtworks(art);
+  const st = sanitizeStyles(sty);
+  const shp = sanitizeShapes(sh, defShapes);
+  const l = sanitizeLayers(ly);
+  const t = sanitizeTexts(tx, TEXT_FONTS, "Arial");
+  return {
+    artworks: a.value as Artworks,
+    styles: st.value as Styles,
+    shapes: migrateSleeveShapes(shp.value as Shapes),
+    layers: l.value as Layers,
+    texts: t.value as TextsByView,
+    issues: [...a.issues, ...st.issues, ...shp.issues, ...l.issues, ...t.issues],
+  };
+}
+
+/** Guarda uma cópia dos dados originais antes de corrigi-los (mantém as 3 mais recentes). */
+async function backupOriginal(big: Record<string, unknown>) {
+  if (!idb.hasIdb()) return;
+  try {
+    await idb.set(`moldecore.backup.${new Date().toISOString()}`, big);
+    const ks = (await idb.keys()).filter((k) => typeof k === "string" && k.startsWith("moldecore.backup.")).sort();
+    for (const k of ks.slice(0, Math.max(0, ks.length - 3))) await idb.del(k);
+  } catch {
+    /* backup é opcional */
+  }
+}
 
 const LIBRARY = [
   { name: "Camiseta Clássica — Sublimação", size: "M", active: true },
@@ -1644,36 +1667,45 @@ function Index() {
     let alive = true;
     void getBig().then((big) => {
     if (!alive) return;
-    const asObj = (v: unknown) => (v && typeof v === "object" ? (v as object) : null);
     try {
+      const issues: string[] = [];
       const g = localStorage.getItem(LS_GRADING);
       if (g) {
-        const saved = JSON.parse(g) as Partial<Grading> | null;
-        const merged = { ...DEFAULT_TABLE } as Grading;
-        if (saved && typeof saved === "object") {
-          for (const s of SIZES) {
-            const row = (saved as Record<string, unknown>)[s];
-            if (row && typeof row === "object") merged[s] = { ...DEFAULT_TABLE[s], ...(row as object) };
-          }
-        }
-        setTable(migrateGradingSleeves(merged));
+        let saved: unknown = null;
+        try { saved = JSON.parse(g); } catch { issues.push("medidas inválidas"); }
+        const r = sanitizeGrading(saved, DEFAULT_TABLE);
+        issues.push(...r.issues);
+        setTable(migrateGradingSleeves(r.value as Grading));
       }
       const mm = localStorage.getItem(LS_MOTHER) as Size | null;
       if (mm && SIZES.includes(mm)) setMother(mm);
-      const a = asObj(big[LS_ART]);
-      if (a) setArtworks({ ...NO_ART, ...a });
-      const st = asObj(big[LS_STYLES]);
-      if (st) setStyles({ ...DEFAULT_STYLES, ...st });
-      const sh = asObj(big[LS_SHAPES]);
-      if (sh) setShapes(migrateSleeveShapes({ ...DEFAULT_SHAPES, ...sh } as Shapes));
+      const san = sanitizeDrawing(big[LS_ART], big[LS_STYLES], big[LS_SHAPES], big[LS_LAYERS], big[LS_TEXTS], DEFAULT_SHAPES);
+      issues.push(...san.issues);
+      if (big[LS_ART] != null) setArtworks(san.artworks);
+      if (big[LS_STYLES] != null) setStyles(san.styles);
+      if (big[LS_SHAPES] != null) setShapes(san.shapes);
       if (big[LS_GUIDES]) setGuides(sanitizeGuides(big[LS_GUIDES]));
-      const ly = asObj(big[LS_LAYERS]);
-      if (ly) setLayers({ ...NO_LAYERS, ...ly });
-      const tx = asObj(big[LS_TEXTS]);
-      if (tx) setTexts({ ...NO_TEXTS, ...tx });
+      if (big[LS_LAYERS] != null) setLayers(san.layers);
+      if (big[LS_TEXTS] != null) setTexts(san.texts);
+      if (issues.length) {
+        void backupOriginal(big);
+        toast.warning("Alguns dados salvos estavam inválidos e foram corrigidos", { description: summarizeIssues(issues) });
+        // Grava a versão corrigida assim que a gravação for liberada.
+        setTimeout(() => {
+          saveLS(LS_ART, san.artworks);
+          saveLS(LS_STYLES, san.styles);
+          saveLS(LS_SHAPES, san.shapes);
+          saveLS(LS_LAYERS, san.layers);
+          saveLS(LS_TEXTS, san.texts);
+        }, 0);
+      }
       textsHydrated.current = true;
       const sb = localStorage.getItem(LS_SIDEBARS);
-      if (sb) setSidebars((cur) => ({ ...cur, ...JSON.parse(sb) }));
+      if (sb) {
+        const o = JSON.parse(sb) as Record<string, unknown> | null;
+        const pick = (v: unknown, d: boolean) => (typeof v === "boolean" ? v : d);
+        if (o && typeof o === "object") setSidebars((cur) => ({ left: pick(o["left"], cur.left), right: pick(o["right"], cur.right) }));
+      }
     } catch {
       /* ignora dados corrompidos */
     }
@@ -1878,37 +1910,43 @@ function Index() {
       return;
     }
     if (!res) return;
+    if (res.text.length > MAX_PROJECT_CHARS) {
+      toast.error("Arquivo grande demais (acima de 500 MB). Nada foi alterado.");
+      return;
+    }
     const parsed = parseProjectFile(res.text);
     if (!parsed.ok) {
       toast.error(parsed.error);
       return;
     }
     const d = parsed.data;
-    const obj = (v: unknown) => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
+    const KNOWN = ["grading", "mother", "clothingType", "shapes", "artworks", "styles", "layers", "texts", "profiles", "roster", "teamImages", "guides"] as const;
+    if (!KNOWN.some((k) => d[k] != null)) {
+      toast.error("O arquivo não contém nenhuma parte aproveitável do projeto. Nada foi alterado.");
+      return;
+    }
     try {
-      const g = obj(d.grading);
-      const grading = { ...DEFAULT_TABLE } as Grading;
-      for (const s of SIZES) {
-        const row = g[s];
-        if (row && typeof row === "object") grading[s] = { ...DEFAULT_TABLE[s], ...(row as object) };
-      }
-      Object.assign(grading, migrateGradingSleeves(grading));
-      const nArt = { ...NO_ART, ...obj(d.artworks) } as Artworks;
-      const nStyles = { ...DEFAULT_STYLES, ...obj(d.styles) } as Styles;
-      const nShapes = migrateSleeveShapes({ ...defaultShapesFor(asClothingType(d.clothingType)), ...obj(d.shapes) } as Shapes);
-      const nLayers = { ...NO_LAYERS, ...obj(d.layers) } as Layers;
-      const nTexts = { ...NO_TEXTS, ...obj(d.texts) } as TextsByView;
-      const nMother = (SIZES as readonly string[]).includes(d.mother ?? "") ? (d.mother as Size) : mother;
+      const issues: string[] = [];
       const nType = asClothingType(d.clothingType);
+      const gr = sanitizeGrading(d.grading, DEFAULT_TABLE);
+      issues.push(...gr.issues);
+      const grading = migrateGradingSleeves(gr.value as Grading);
+      const san = sanitizeDrawing(d.artworks, d.styles, d.shapes, d.layers, d.texts, defaultShapesFor(nType));
+      issues.push(...san.issues);
+      const { artworks: nArt, styles: nStyles, shapes: nShapes, layers: nLayers, texts: nTexts } = san;
+      const nMother = (SIZES as readonly string[]).includes(d.mother ?? "") ? (d.mother as Size) : mother;
       // Perfis: adiciona por nome, sem sobrescrever perfis locais.
-      const incoming = Array.isArray(d.profiles) ? (d.profiles as GradeProfile[]) : [];
+      const pr = sanitizeProfiles(d.profiles, defaultTablesForProfiles() as unknown as Record<string, SGrading>);
+      issues.push(...pr.issues);
       const merged = [...profiles];
-      for (const p of incoming) {
-        if (!p || typeof p.name !== "string" || !p.name.trim()) continue;
+      for (const p of pr.value) {
         if (merged.some((m) => m.name.toLowerCase() === p.name.toLowerCase())) continue;
-        merged.push({ name: p.name, tables: { ...defaultTablesForProfiles(), ...pickTables(p.tables) } as ProfileTables });
+        merged.push({ name: p.name, tables: Object.fromEntries(Object.entries(p.tables).map(([t, g]) => [t, migrateGradingSleeves(g as Grading, OLD_FOR_TYPE(t))])) as ProfileTables });
       }
       const nActive = typeof d.activeProfile === "string" && merged.some((m) => m.name === d.activeProfile) ? d.activeProfile : activeProfile;
+      const nGuides = sanitizeGuides(d.guides);
+      const nRoster = sanitizeRoster(d.roster);
+      const nImgs = sanitizeImages(d.teamImages);
 
       cleanUntil.current = Date.now() + 400;
       setTable(grading);
@@ -1919,15 +1957,12 @@ function Index() {
       setArtworks(nArt);
       setStyles(nStyles);
       setShapes(nShapes);
-      const nGuides = sanitizeGuides(d.guides);
       setGuides(nGuides);
       saveLS(LS_GUIDES, nGuides);
       setLayers(nLayers);
       setTexts(nTexts);
-      const nRoster = sanitizeRoster(d.roster);
       setRoster(nRoster);
       saveLS(LS_TEAM, nRoster);
-      const nImgs = sanitizeImages(d.teamImages);
       setTeamImages(nImgs);
       saveLS(LS_TEAM_IMGS, nImgs);
       setProfiles(merged);
@@ -1946,7 +1981,8 @@ function Index() {
       setProjectName(parsed.name.trim() || nameFromFile(res.name));
       if (res.handle) setProjectName(nameFromFile(res.name));
       markClean();
-      toast.success("Projeto aberto");
+      if (issues.length) toast.warning("Projeto aberto com correções", { description: summarizeIssues(issues), duration: 10000 });
+      else toast.success("Projeto aberto");
     } catch {
       toast.error("Arquivo inválido ou corrompido.");
     }
