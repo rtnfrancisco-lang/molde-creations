@@ -3127,14 +3127,44 @@ function Index() {
   };
 
   const printVectorPdf = (svg: string, cmW: number, cmH: number, name: string) => {
-    const win = window.open("", "_blank", "width=900,height=720");
-    if (!win) return false;
-    win.document.write(
-      `<!doctype html><html><head><meta charset="utf-8"><title>${name}</title>` +
-        `<style>@page{size:${cmW}cm ${cmH}cm;margin:0}html,body{margin:0;padding:0}svg{display:block;width:${cmW}cm;height:${cmH}cm}</style>` +
-        `</head><body>${svg}<script>window.addEventListener("load",function(){setTimeout(function(){window.focus();window.print();},400);});<\/script></body></html>`,
-    );
-    win.document.close();
+    const w = n(Math.min(10000, Math.max(0.1, cmW)));
+    const h = n(Math.min(10000, Math.max(0.1, cmH)));
+    const src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+    /* Página sem script e com CSP: o SVG entra só como <img>, que não executa código. */
+    const html =
+      `<!doctype html><html><head><meta charset="utf-8">` +
+      `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'">` +
+      `<title>${attr(name)}</title>` +
+      `<style>@page{size:${w}cm ${h}cm;margin:0}html,body{margin:0;padding:0}img{display:block;width:${w}cm;height:${h}cm}</style>` +
+      `</head><body><img alt="" src="${attr(src)}"></body></html>`;
+    const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+    const win = window.open(url, "_blank", "width=900,height=720");
+    if (!win) {
+      URL.revokeObjectURL(url);
+      return false;
+    }
+    let printed = false;
+    const doPrint = () => {
+      if (printed) return;
+      try {
+        const img = win.document.querySelector("img");
+        if (!img || !img.complete) return;
+        printed = true;
+        setTimeout(() => {
+          win.focus();
+          win.print();
+          URL.revokeObjectURL(url);
+        }, 400);
+      } catch {
+        /* janela ainda não pronta */
+      }
+    };
+    win.addEventListener("load", doPrint);
+    const poll = setInterval(() => {
+      if (printed || win.closed) return clearInterval(poll);
+      doPrint();
+    }, 300);
+    setTimeout(() => clearInterval(poll), 60000);
     return true;
   };
 
