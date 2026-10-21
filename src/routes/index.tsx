@@ -476,9 +476,6 @@ const defaultTablesForProfiles = (): ProfileTables => ({
   Short: cloneGrading(SHORT_TABLE),
 });
 
-/* Mantém só as tabelas dos tipos de peça atuais (descarta tipos removidos). */
-const pickTables = (raw: unknown): Partial<ProfileTables> => {
-  const o = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   return Object.fromEntries(CLOTHING_TYPES.filter((t) => o[t] && typeof o[t] === "object").map((t) => [t, o[t]])) as Partial<ProfileTables>;
 };
 
@@ -1707,8 +1704,9 @@ function Index() {
       textsHydrated.current = true;
       const sb = localStorage.getItem(LS_SIDEBARS);
       if (sb) {
-        const o = JSON.parse(sb) as unknown;
-        if (o && typeof o === "object") setSidebars((cur) => ({ left: typeof (o as Record<string, unknown>)["left"] === "boolean" ? ((o as Record<string, boolean>)["left"]) : cur.left, right: typeof (o as Record<string, unknown>)["right"] === "boolean" ? ((o as Record<string, boolean>)["right"]) : cur.right }));
+        const o = JSON.parse(sb) as Record<string, unknown> | null;
+        const pick = (v: unknown, d: boolean) => (typeof v === "boolean" ? v : d);
+        if (o && typeof o === "object") setSidebars((cur) => ({ left: pick(o["left"], cur.left), right: pick(o["right"], cur.right) }));
       }
     } catch {
       /* ignora dados corrompidos */
