@@ -5,7 +5,7 @@ import { ALIGN_KEYS, alignDeltas, objectsRef, rotatedBox, type AlignOp, type Ali
 import { AlignHorizontalJustifyCenter, Crosshair, AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical } from "lucide-react";
 import { GuidesPanel, type GuideGroup } from "@/components/GuidesPanel";
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { createPortal } from "react-dom";
 import {
@@ -69,6 +69,8 @@ import { resolveTeamSlot, slotDpi } from "@/lib/team-slot";
 import { teamScale, resolveTeamText, measureText, fontsReady, teamTextOverflows, type ResolvedTeamText } from "@/lib/team-text";
 import { renderPiece, zipFiles, todayStamp, yieldFrame, MIME } from "@/lib/export-render";
 import { teamFileName, uniqueName, TEAM_EXT, TEAM_DPIS, fitDpi, cmToPx, type TeamFormat } from "@/lib/team-export";
+import { RecoveryScreen } from "@/components/RecoveryScreen";
+import { canRead, canWrite, claimEditor, isSafeMode, lsGet, lsSet, setSafeMode, subscribeGuard, tabState } from "@/lib/storage-guard";
 import { attr, color, n, nf, safeSrc } from "@/lib/svg-safe";
 import { sanitizeArtworks, sanitizeGrading, sanitizeLayers, sanitizeProfiles, sanitizeShapes, sanitizeStyles, sanitizeTexts, summarizeIssues, type SGrading } from "@/lib/sanitize";
 import { buildProjectFile, parseProjectFile, nameFromFile, PROJECT_EXT } from "@/lib/project-file";
@@ -117,6 +119,7 @@ export const Route = createFileRoute("/")({
     ],
   }),
   component: Index,
+  errorComponent: ({ error }) => <RecoveryScreen error={error} />,
 });
 
 /* ================= Tipos e padrões ================= */
@@ -481,7 +484,7 @@ const defaultTablesForProfiles = (): ProfileTables => ({
 
 const readGradeProfiles = (): GradeProfile[] => {
   try {
-    const raw = localStorage.getItem(LS_PROFILES);
+    const raw = lsGet(LS_PROFILES);
     if (!raw) return [{ name: DEFAULT_PROFILE_NAME, tables: defaultTablesForProfiles() }];
     const { value } = sanitizeProfiles(JSON.parse(raw), defaultTablesForProfiles() as unknown as Record<string, SGrading>);
     if (value.length === 0) return [{ name: DEFAULT_PROFILE_NAME, tables: defaultTablesForProfiles() }];
@@ -496,7 +499,7 @@ const readGradeProfiles = (): GradeProfile[] => {
 
 const saveGradeProfiles = (profiles: GradeProfile[]) => {
   try {
-    localStorage.setItem(LS_PROFILES, JSON.stringify(profiles));
+    lsSet(LS_PROFILES, JSON.stringify(profiles));
   } catch {
     /* O armazenamento local pode estar indisponível ou cheio. */
   }
@@ -720,6 +723,8 @@ const BIG_KEYS = new Set([
   "moldecore.time",
   "moldecore.time.imagens",
 ]);
+/** Atalho para salvar em arquivo a partir do aviso de falha. */
+const saveNow: { current: (() => void) | null } = { current: null };
 const SAVE_FAIL_TOAST = "moldecore-save-fail";
 let saveFailed = false;
 const reportSave = (ok: boolean) => {
@@ -731,6 +736,7 @@ const reportSave = (ok: boolean) => {
     toast.error("Não foi possível salvar automaticamente. Salve o projeto em arquivo (Arquivo > Salvar)", {
       id: SAVE_FAIL_TOAST,
       duration: Infinity,
+      action: { label: "Salvar projeto em arquivo agora", onClick: () => saveNow.current?.() },
     });
   }
 };
@@ -741,8 +747,7 @@ const pending = new Map<string, unknown>();
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 const writeLS = (k: string, v: unknown) => {
   try {
-    localStorage.setItem(k, JSON.stringify(v));
-    return true;
+    return lsSet(k, JSON.stringify(v));
   } catch {
     return false;
   }
@@ -751,18 +756,17 @@ const flushBig = async () => {
   flushTimer = null;
   const items = [...pending];
   pending.clear();
+  if (!canWrite() || !items.length) return;
   let ok = true;
-  for (const [k, v] of items) {
-    if (useIdb) {
-      try {
-        await idb.set(k, v);
-        continue;
-      } catch {
-        ok = false;
-        continue;
-      }
+  if (useIdb) {
+    // Todas as chaves alteradas no mesmo intervalo vão numa transação só.
+    try {
+      await idb.setMany(Object.fromEntries(items));
+    } catch {
+      ok = false;
     }
-    if (!writeLS(k, v)) ok = false;
+  } else {
+    for (const [k, v] of items) if (!writeLS(k, v)) ok = false;
   }
   reportSave(ok);
 };
@@ -778,7 +782,7 @@ const saveLS = (k: string, v: unknown) => {
 /** Lê uma chave grande; migra do localStorage para o IndexedDB quando preciso. */
 const loadBig = async (k: string): Promise<unknown> => {
   const legacy = () => {
-    const raw = localStorage.getItem(k);
+    const raw = lsGet(k);
     if (raw == null) return undefined;
     try {
       return JSON.parse(raw) as unknown;
@@ -786,11 +790,12 @@ const loadBig = async (k: string): Promise<unknown> => {
       return undefined;
     }
   };
+  if (!canRead()) return undefined;
   if (!useIdb) return legacy();
   const v = await idb.get(k);
   if (v !== undefined) return v;
   const old = legacy();
-  if (old === undefined) return undefined;
+  if (old === undefined || !canWrite()) return old;
   try {
     await idb.set(k, old);
     if ((await idb.get(k)) !== undefined) localStorage.removeItem(k);
@@ -803,6 +808,8 @@ const loadBig = async (k: string): Promise<unknown> => {
 let bigPromise: Promise<Record<string, unknown>> | null = null;
 const getBig = () => (bigPromise ??= loadAllBig());
 const loadAllBig = async (): Promise<Record<string, unknown>> => {
+  await claimEditor();
+  if (!canRead()) return {};
   useIdb = idb.hasIdb();
   if (useIdb) {
     try {
@@ -844,7 +851,7 @@ function sanitizeDrawing(art: unknown, sty: unknown, sh: unknown, ly: unknown, t
 
 /** Guarda uma cópia dos dados originais antes de corrigi-los (mantém as 3 mais recentes). */
 async function backupOriginal(big: Record<string, unknown>) {
-  if (!idb.hasIdb()) return;
+  if (!idb.hasIdb() || !canWrite()) return;
   try {
     await idb.set(`moldecore.backup.${new Date().toISOString()}`, big);
     const ks = (await idb.keys()).filter((k) => typeof k === "string" && k.startsWith("moldecore.backup.")).sort();
@@ -1444,6 +1451,35 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
   );
 }
 
+/** Faixa fixa: modo seguro ou aba secundária (salvamento automático desligado). */
+function StorageBanner() {
+  const tab = useSyncExternalStore(subscribeGuard, tabState, () => "pending" as const);
+  const [safe, setSafe] = useState(false);
+  useEffect(() => setSafe(isSafeMode()), []);
+  if (!safe && tab !== "secondary") return null;
+  return (
+    <div role="status" className="fixed inset-x-0 top-0 z-[90] flex items-center justify-center gap-3 border-b border-amber bg-amber/15 px-4 py-1.5 text-xs font-medium text-foreground backdrop-blur">
+      <span>
+        {safe
+          ? "Modo seguro: nada está sendo salvo automaticamente. Use Arquivo > Salvar"
+          : "O MoldeCore já está aberto em outra aba. O salvamento automático desta aba está desligado para não perder dados"}
+      </span>
+      {safe && (
+        <button
+          type="button"
+          className="rounded border border-line bg-panel px-2 py-0.5 hover:bg-muted"
+          onClick={() => {
+            setSafeMode(false);
+            location.reload();
+          }}
+        >
+          Sair do modo seguro
+        </button>
+      )}
+    </div>
+  );
+}
+
 function Index() {
   const [clothingType, setClothingType] = useState<ClothingType>("Camiseta");
   const tamanhosExibidos =
@@ -1671,7 +1707,7 @@ function Index() {
     if (!alive) return;
     try {
       const issues: string[] = [];
-      const g = localStorage.getItem(LS_GRADING);
+      const g = lsGet(LS_GRADING);
       if (g) {
         let saved: unknown = null;
         try { saved = JSON.parse(g); } catch { issues.push("medidas inválidas"); }
@@ -1679,7 +1715,7 @@ function Index() {
         issues.push(...r.issues);
         setTable(migrateGradingSleeves(r.value as Grading));
       }
-      const mm = localStorage.getItem(LS_MOTHER) as Size | null;
+      const mm = lsGet(LS_MOTHER) as Size | null;
       if (mm && SIZES.includes(mm)) setMother(mm);
       const san = sanitizeDrawing(big[LS_ART], big[LS_STYLES], big[LS_SHAPES], big[LS_LAYERS], big[LS_TEXTS], DEFAULT_SHAPES);
       issues.push(...san.issues);
@@ -1702,7 +1738,7 @@ function Index() {
         }, 0);
       }
       textsHydrated.current = true;
-      const sb = localStorage.getItem(LS_SIDEBARS);
+      const sb = lsGet(LS_SIDEBARS);
       if (sb) {
         const o = JSON.parse(sb) as Record<string, unknown> | null;
         const pick = (v: unknown, d: boolean) => (typeof v === "boolean" ? v : d);
@@ -1754,7 +1790,7 @@ function Index() {
 
   const restore = (sn: Snap) => {
     setClothingType(sn.clothingType);
-    localStorage.setItem(LS_TYPE, sn.clothingType);
+    lsSet(LS_TYPE, sn.clothingType);
     setTable(sn.table);
     setShapes(sn.shapes);
     setGuides(sn.guides);
@@ -1762,7 +1798,7 @@ function Index() {
     setArtworks(sn.artworks);
     setStyles(sn.styles);
     setLayers(sn.layers);
-    localStorage.setItem(LS_GRADING, JSON.stringify(sn.table));
+    lsSet(LS_GRADING, JSON.stringify(sn.table));
     saveLS(LS_SHAPES, sn.shapes);
     saveLS(LS_STYLES, sn.styles);
     saveLS(LS_ART, sn.artworks);
@@ -1955,7 +1991,7 @@ function Index() {
       setMother(nMother);
       setSize(nMother);
       setClothingType(nType);
-      localStorage.setItem(LS_TYPE, nType);
+      lsSet(LS_TYPE, nType);
       setArtworks(nArt);
       setStyles(nStyles);
       setShapes(nShapes);
@@ -1970,14 +2006,14 @@ function Index() {
       setProfiles(merged);
       setActiveProfile(nActive);
       saveLS(LS_GRADING, grading);
-      localStorage.setItem(LS_MOTHER, nMother);
+      lsSet(LS_MOTHER, nMother);
       saveLS(LS_ART, nArt);
       saveLS(LS_STYLES, nStyles);
       saveLS(LS_SHAPES, nShapes);
       saveLS(LS_LAYERS, nLayers);
       saveLS(LS_TEXTS, nTexts);
       saveGradeProfiles(merged);
-      localStorage.setItem(LS_ACTIVE_PROFILE, nActive);
+      lsSet(LS_ACTIVE_PROFILE, nActive);
       resetHistory();
       fileHandle.current = res.handle;
       setProjectName(parsed.name.trim() || nameFromFile(res.name));
@@ -1992,6 +2028,7 @@ function Index() {
 
   const fileActions = useRef({ saveProject, openProject });
   fileActions.current = { saveProject, openProject };
+  saveNow.current = () => void fileActions.current.saveProject(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey)) return;
@@ -2021,11 +2058,11 @@ function Index() {
 
   useEffect(() => {
     const storedProfiles = readGradeProfiles();
-    const storedActive = localStorage.getItem(LS_ACTIVE_PROFILE) ?? DEFAULT_PROFILE_NAME;
+    const storedActive = lsGet(LS_ACTIVE_PROFILE) ?? DEFAULT_PROFILE_NAME;
     const selected = storedProfiles.find((profile) => profile.name === storedActive) ?? storedProfiles[0]!;
     setProfiles(storedProfiles);
     setActiveProfile(selected.name);
-    const storedType = asClothingType(localStorage.getItem(LS_TYPE));
+    const storedType = asClothingType(lsGet(LS_TYPE));
     setClothingType(storedType);
     setTable(cloneGrading(selected.tables[storedType] ?? PRESET_TABLES[storedType] ?? DEFAULT_TABLE));
   }, []);
@@ -2046,7 +2083,7 @@ function Index() {
           const selected = profiles.find((profile) => profile.name === name);
           if (!selected) return;
           setActiveProfile(name);
-          localStorage.setItem(LS_ACTIVE_PROFILE, name);
+          lsSet(LS_ACTIVE_PROFILE, name);
           setTable(cloneGrading(selected.tables[clothingType] ?? DEFAULT_TABLE));
           setSavedMsg(`Perfil ${name} carregado`);
           setTimeout(() => setSavedMsg(""), 2500);
@@ -2061,7 +2098,7 @@ function Index() {
           setActiveProfile(normalized);
           setTable(cloneGrading(nextProfile.tables[clothingType]));
           saveGradeProfiles(nextProfiles);
-          localStorage.setItem(LS_ACTIVE_PROFILE, normalized);
+          lsSet(LS_ACTIVE_PROFILE, normalized);
         }}
         onDelete={() => {
           if (profiles.length <= 1 || activeProfile === DEFAULT_PROFILE_NAME) return;
@@ -2072,7 +2109,7 @@ function Index() {
           setActiveProfile(nextActive.name);
           setTable(cloneGrading(nextActive.tables[clothingType]));
           saveGradeProfiles(nextProfiles);
-          localStorage.setItem(LS_ACTIVE_PROFILE, nextActive.name);
+          lsSet(LS_ACTIVE_PROFILE, nextActive.name);
         }}
       />,
     );
@@ -2109,7 +2146,7 @@ function Index() {
         saveGradeProfiles(nextProfiles);
         return nextProfiles;
       });
-      localStorage.setItem(LS_GRADING, JSON.stringify(next));
+      lsSet(LS_GRADING, JSON.stringify(next));
       return next;
     });
   };
@@ -2117,7 +2154,7 @@ function Index() {
   const changeMother = (m: Size) => {
     setMother(m);
     setSize(m);
-    localStorage.setItem(LS_MOTHER, m);
+    lsSet(LS_MOTHER, m);
   };
 
   const updateArtworks = (next: Artworks) => {
@@ -2138,8 +2175,8 @@ function Index() {
     );
     setProfiles(nextProfiles);
     saveGradeProfiles(nextProfiles);
-    localStorage.setItem(LS_GRADING, JSON.stringify(table));
-    localStorage.setItem(LS_ACTIVE_PROFILE, activeProfile);
+    lsSet(LS_GRADING, JSON.stringify(table));
+    lsSet(LS_ACTIVE_PROFILE, activeProfile);
     setSavedMsg(`Perfil ${activeProfile} salvo neste navegador`);
     setTimeout(() => setSavedMsg(""), 2500);
   };
@@ -2154,7 +2191,7 @@ function Index() {
       return;
     }
     setClothingType(t);
-    localStorage.setItem(LS_TYPE, t);
+    lsSet(LS_TYPE, t);
     const selectedProfile = profiles.find((profile) => profile.name === activeProfile);
     const profileTable = selectedProfile?.tables[t];
     const preset = profileTable ?? PRESET_TABLES[t];
@@ -2165,7 +2202,7 @@ function Index() {
     const nextSize = availableIds.includes(size) ? size : defaultMother;
     const nextMother = availableIds.includes(defaultMother) ? defaultMother : availableIds[0]!;
     setTable(preset);
-    localStorage.setItem(LS_GRADING, JSON.stringify(preset));
+    lsSet(LS_GRADING, JSON.stringify(preset));
     if (crossFamily) {
       const nShapes = defaultShapesFor(t);
       setShapes(nShapes);
@@ -2184,7 +2221,7 @@ function Index() {
     }
     setMother(nextMother);
     setSize(nextSize);
-    localStorage.setItem(LS_MOTHER, nextMother);
+    lsSet(LS_MOTHER, nextMother);
     setSavedMsg(`Tabela de medidas de ${t} carregada · Molde Mãe: ${sizeLabel(t, nextMother)}`);
     setTimeout(() => setSavedMsg(""), 3500);
   };
@@ -2374,10 +2411,10 @@ function Index() {
   const [alignRect, setAlignRect] = useState<"molde" | "midia">("molde");
   const [alignOpen, setAlignOpen] = useState(false);
   useEffect(() => {
-    try { if (localStorage.getItem("moldecore.alinharAberto") === "1") setAlignOpen(true); } catch { /* sem storage */ }
+    try { if (lsGet("moldecore.alinharAberto") === "1") setAlignOpen(true); } catch { /* sem storage */ }
   }, []);
   const toggleAlign = () => setAlignOpen((v) => {
-    try { localStorage.setItem("moldecore.alinharAberto", v ? "0" : "1"); } catch { /* sem storage */ }
+    try { lsSet("moldecore.alinharAberto", v ? "0" : "1"); } catch { /* sem storage */ }
     return !v;
   });
   const itemBox = (it: SelItem): Box | null => {
@@ -3280,6 +3317,7 @@ function Index() {
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground font-display antialiased flex">
+      <StorageBanner />
       {/* ============ SIDEBAR ============ */}
       <div
         className={
@@ -4375,7 +4413,7 @@ function Index() {
                     onClick={() => {
                       checkpoint("table-reset:" + Date.now());
                       setTable(DEFAULT_TABLE);
-                      localStorage.setItem(LS_GRADING, JSON.stringify(DEFAULT_TABLE));
+                      lsSet(LS_GRADING, JSON.stringify(DEFAULT_TABLE));
                     }}
                     className="w-full text-[11px] font-mono text-muted-foreground hover:text-cyan"
                   >
