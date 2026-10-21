@@ -1,5 +1,5 @@
 /* Importação de arquivos (SVG, PDF, PNG, JPEG) e utilitários de camadas */
-import { attr, color, n, pick, safeSrc } from "./svg-safe";
+import { attr, color as svgColor, n, pick, safeSrc } from "./svg-safe";
 const RULES = ["nonzero", "evenodd"] as const;
 
 export type P = { x: number; y: number };
@@ -351,7 +351,7 @@ const pathsMarkup = (paths: LPath[], aw: number, ah: number) =>
   paths
     .map(
       (p) =>
-        `<path d="${attr(layerPathD(p, aw, ah))}" fill="${color(p.fill ?? "none")}" stroke="${color(p.stroke ?? "none")}" stroke-width="${n(p.sw * aw)}" fill-rule="${pick(p.rule, RULES, "nonzero")}"/>`,
+        `<path d="${attr(layerPathD(p, aw, ah))}" fill="${svgColor(p.fill ?? "none")}" stroke="${svgColor(p.stroke ?? "none")}" stroke-width="${n(p.sw * aw)}" fill-rule="${pick(p.rule, RULES, "nonzero")}"/>`,
     )
     .join("");
 

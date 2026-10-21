@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { attr, n, safeSrc } from "@/lib/svg-safe";
 import {
   Crop,
   Crosshair,
