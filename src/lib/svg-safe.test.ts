@@ -67,7 +67,7 @@ describe("svg-safe", () => {
     );
     const v = hostile({ kind: "vetor", src: undefined, w: 1, ratio: 1, cx: 0.5, cy: 0, rot: 0, paths: [{ subs: [{ nodes: [{ x: 0, y: 0, smooth: false }, { x: 1, y: 0, smooth: false }, { x: 1, y: 1, smooth: false }], closed: true }], fill: "#ff0000", stroke: null, sw: 0.1, rule: "evenodd" }] });
     expect(layerMarkup(v, 10, 10)).toBe(
-      `<g transform="translate(0 0) rotate(0)"><g transform="translate(0 -5)"><path d="M -5 0 L 5 0 L 5 10 Z" fill="#ff0000" stroke="none" stroke-width="1" fill-rule="evenodd"/></g></g>`,
+      `<g transform="translate(0 0) rotate(0)"><g transform="translate(0 -5)"><path d="M -5 0 L 5 0 L 5 10 L -5 0 Z" fill="#ff0000" stroke="none" stroke-width="1" fill-rule="evenodd"/></g></g>`,
     );
     expect(artImageMarkup({ src: PNG, cx: 0.5, cy: 0.5, w: 0.5, ratio: 1, opacity: 0.8 }, 20, 20, (cx, cy) => artTransform({ rot: 5 }, cx, cy))).toBe(
       `<image href="${PNG}" x="-5" y="5" width="10" height="10" transform="rotate(5 0 10)" opacity="0.8" preserveAspectRatio="none"/>`,
