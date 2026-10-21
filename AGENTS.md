@@ -17,3 +17,4 @@
 - Team player image library (name/number PNG/JPEG) matching and unlinking are pure functions in src/lib/team-images.ts (tested); players reference images by id so one image can serve many rows.
 - Guide-line distances (bleed/safety) are per-view state computed via guidePaths in src/lib/guides.ts (tested); canvas, PowerClip frame and all exports must call it so screen and output match.
 - Per-garment views, labels, measurement fields and default shapes come from GARMENT_CONFIG in src/routes/index.tsx; per-view data keeps the four view ids so new garment families only hide views instead of migrating data.
+- Project data from files or storage passes through pure sanitizers in src/lib/sanitize.ts (tested) before any state is set or saved; broken input must never crash the screen or repeat on reload.
