@@ -1,4 +1,6 @@
 /* Importação de arquivos (SVG, PDF, PNG, JPEG) e utilitários de camadas */
+import { attr, color as svgColor, n, pick, safeSrc } from "./svg-safe";
+const RULES = ["nonzero", "evenodd"] as const;
 
 export type P = { x: number; y: number };
 export type LNode = { x: number; y: number; smooth: boolean; hIn?: P; hOut?: P };
@@ -345,12 +347,11 @@ export const imageRatio = (src: string) =>
     img.src = src;
   });
 
-const esc = (s: string) => s.replace(/"/g, "'");
 const pathsMarkup = (paths: LPath[], aw: number, ah: number) =>
   paths
     .map(
       (p) =>
-        `<path d="${layerPathD(p, aw, ah)}" fill="${esc(p.fill ?? "none")}" stroke="${esc(p.stroke ?? "none")}" stroke-width="${p.sw * aw}" fill-rule="${p.rule}"/>`,
+        `<path d="${attr(layerPathD(p, aw, ah))}" fill="${svgColor(p.fill ?? "none")}" stroke="${svgColor(p.stroke ?? "none")}" stroke-width="${n(p.sw * aw)}" fill-rule="${pick(p.rule, RULES, "nonzero")}"/>`,
     )
     .join("");
 
@@ -360,7 +361,7 @@ export function vectorDataUrl(l: Layer, pad = 0) {
   const ah = aw * l.ratio;
   const vw = aw + 2 * pad;
   const vh = ah + 2 * pad;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${vw}" height="${vh}" viewBox="${-aw / 2 - pad} ${-pad} ${vw} ${vh}">${pathsMarkup(l.paths ?? [], aw, ah)}</svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${n(vw)}" height="${n(vh)}" viewBox="${n(-aw / 2 - pad)} ${n(-pad)} ${n(vw)} ${n(vh)}">${pathsMarkup(l.paths ?? [], aw, ah)}</svg>`;
   return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
 }
 
@@ -372,7 +373,21 @@ export function layerMarkup(l: Layer, W: number, H: number) {
   const cx = (l.cx - 0.5) * W;
   const cy = l.cy * H;
   const inner = l.src
-    ? `<image href="${l.src}" x="${-aw / 2}" y="${-ah / 2}" width="${aw}" height="${ah}" preserveAspectRatio="none"/>`
-    : `<g transform="translate(0 ${-ah / 2})">${pathsMarkup(l.paths ?? [], aw, ah)}</g>`;
-  return `<g transform="translate(${cx} ${cy}) rotate(${l.rot})">${inner}</g>`;
+    ? `<image href="${attr(safeSrc(l.src))}" x="${n(-aw / 2)}" y="${n(-ah / 2)}" width="${n(aw)}" height="${n(ah)}" preserveAspectRatio="none"/>`
+    : `<g transform="translate(0 ${n(-ah / 2)})">${pathsMarkup(l.paths ?? [], aw, ah)}</g>`;
+  return `<g transform="translate(${n(cx)} ${n(cy)}) rotate(${n(l.rot)})">${inner}</g>`;
+}
+
+/** Marcação SVG da estampa em cm reais (src, números e transformação seguros). */
+export function artImageMarkup(
+  art: { src: string; cx: number; cy: number; w: number; ratio: number; opacity?: number },
+  W: number,
+  H: number,
+  transform: (cx: number, cy: number) => string,
+) {
+  const aw = art.w * W;
+  const ah = aw * art.ratio;
+  const ax = (art.cx - 0.5) * W - aw / 2;
+  const ay = art.cy * H - ah / 2;
+  return `<image href="${attr(safeSrc(art.src))}" x="${n(ax)}" y="${n(ay)}" width="${n(aw)}" height="${n(ah)}" transform="${attr(transform(ax + aw / 2, ay + ah / 2))}" opacity="${n(art.opacity ?? 1)}" preserveAspectRatio="none"/>`;
 }

@@ -18,3 +18,4 @@
 - Guide-line distances (bleed/safety) are per-view state computed via guidePaths in src/lib/guides.ts (tested); canvas, PowerClip frame and all exports must call it so screen and output match.
 - Per-garment views, labels, measurement fields and default shapes come from GARMENT_CONFIG in src/routes/index.tsx; per-view data keeps the four view ids so new garment families only hide views instead of migrating data.
 - Project data from files or storage passes through pure sanitizers in src/lib/sanitize.ts (tested) before any state is set or saved; broken input must never crash the screen or repeat on reload.
+- All string-built SVG goes through src/lib/svg-safe.ts (n/nf for numbers, attr, safeSrc, color, fixed enum lists); the vector print window shows the SVG only as a data-URL <img> under a no-script CSP, so project files cannot run code.

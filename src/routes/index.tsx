@@ -69,6 +69,7 @@ import { resolveTeamSlot, slotDpi } from "@/lib/team-slot";
 import { teamScale, resolveTeamText, measureText, fontsReady, teamTextOverflows, type ResolvedTeamText } from "@/lib/team-text";
 import { renderPiece, zipFiles, todayStamp, yieldFrame, MIME } from "@/lib/export-render";
 import { teamFileName, uniqueName, TEAM_EXT, TEAM_DPIS, fitDpi, cmToPx, type TeamFormat } from "@/lib/team-export";
+import { attr, color, n, nf, safeSrc } from "@/lib/svg-safe";
 import { sanitizeArtworks, sanitizeGrading, sanitizeLayers, sanitizeProfiles, sanitizeShapes, sanitizeStyles, sanitizeTexts, summarizeIssues, type SGrading } from "@/lib/sanitize";
 import { buildProjectFile, parseProjectFile, nameFromFile, PROJECT_EXT } from "@/lib/project-file";
 import { hasFsAccess, pickSaveHandle, writeHandle, downloadText, openProjectFile, isAbort, type FileHandle } from "@/lib/file-access";
@@ -80,6 +81,7 @@ import {
   imageRatio,
   vectorDataUrl,
   layerMarkup,
+  artImageMarkup,
   layerPathD,
   type Layer,
   type LayerSlot,
@@ -1010,9 +1012,9 @@ const textMarkup = (items: TextElement[], opts?: { resolve?: TextResolve }) =>
       const anchor = t.align === "left" ? "start" : t.align === "center" ? "middle" : "end";
       const spans = t.text
         .split("\n")
-        .map((line, i) => `<tspan x="${t.x}" dy="${i ? fs * 1.15 : 0}">${escXml(line || " ")}</tspan>`)
+        .map((line, i) => `<tspan x="${n(t.x)}" dy="${n(i ? fs * 1.15 : 0)}">${escXml(line || " ")}</tspan>`)
         .join("");
-      return `<text x="${t.x}" y="${t.y + fs}" font-size="${fs}" text-anchor="${anchor}" font-family="${escXml(t.fontFamily)}" font-weight="${t.bold ? 700 : 400}" font-style="${t.italic ? "italic" : "normal"}"${t.underline ? ' text-decoration="underline"' : ""} fill="${escXml(t.color)}" xml:space="preserve">${spans}</text>`;
+      return `<text x="${n(t.x)}" y="${n(t.y + fs)}" font-size="${n(fs)}" text-anchor="${anchor}" font-family="${attr(t.fontFamily)}" font-weight="${t.bold ? 700 : 400}" font-style="${t.italic ? "italic" : "normal"}"${t.underline ? ' text-decoration="underline"' : ""} fill="${attr(color(t.color))}" xml:space="preserve">${spans}</text>`;
     })
     .join("");
 
@@ -2984,26 +2986,22 @@ function Index() {
     const gp = guidePaths(path, W, H, guides[view]);
     const bleedPath = gp.frameSrc;
     const safetyPath = gp.safety;
-    const bleed = !gp.bleed ? "" : `<path d="${bleedPath}" fill="none" stroke="#38bdf8" stroke-width="0.06" stroke-linejoin="round"/>`;
-    const seamLine = `<path d="${path}" fill="none" stroke="#111827" stroke-width="0.06" stroke-linejoin="round"/>`;
-    const safety = !safetyPath ? "" : `<path d="${safetyPath}" fill="none" stroke="#ef4444" stroke-width="0.06" stroke-dasharray="0.5 0.35" stroke-linejoin="round"/>`;
+    const bleed = !gp.bleed ? "" : `<path d="${attr(bleedPath)}" fill="none" stroke="#38bdf8" stroke-width="0.06" stroke-linejoin="round"/>`;
+    const seamLine = `<path d="${attr(path)}" fill="none" stroke="#111827" stroke-width="0.06" stroke-linejoin="round"/>`;
+    const safety = !safetyPath ? "" : `<path d="${attr(safetyPath)}" fill="none" stroke="#ef4444" stroke-width="0.06" stroke-dasharray="0.5 0.35" stroke-linejoin="round"/>`;
     const tech = o.hideTechnical ? "" : bleed + seamLine + safety;
 
     let img = "";
     if (art) {
-      const aw = art.w * W;
-      const ah = aw * art.ratio;
-      const ax = (art.cx - 0.5) * W - aw / 2;
-      const ay = art.cy * H - ah / 2;
-      const im = `<image href="${art.src}" x="${ax}" y="${ay}" width="${aw}" height="${ah}" transform="${artTransform(art, ax + aw / 2, ay + ah / 2)}" opacity="${art.opacity ?? 1}" preserveAspectRatio="none"/>`;
+      const im = artImageMarkup(art, W, H, (cx, cy) => artTransform(art, cx, cy));
       img = art.clipped === false ? im : `<g clip-path="url(#moldeClip)">${im}</g>`;
     }
 
     const objs = curLayers.map((l) => (l.clipped ? `<g clip-path="url(#moldeClip)">${layerMarkup(l, W, H)}</g>` : layerMarkup(l, W, H))).join("");
-    const body = `<path d="${path}" fill="${st.fill ?? "none"}"/>`;
+    const body = `<path d="${attr(path)}" fill="${color(st.fill ?? "none")}"/>`;
     const outline = o.hideTechnical
       ? ""
-      : `<path d="${path}" fill="none" stroke="${st.stroke ?? "#111827"}" stroke-width="0.05"/>`;
+      : `<path d="${attr(path)}" fill="none" stroke="${color(st.stroke ?? "#111827")}" stroke-width="0.05"/>`;
 
     /* Quadro de mídia / Área de Mídia: o retângulo preto passa a coincidir
        EXATAMENTE com a Linha Azul de Sangria. Os limites (X_min, X_max, Y_min,
@@ -3021,16 +3019,16 @@ function Index() {
     const x0 = bb.minX;
     const y0 = bb.minY;
 
-    const frame = `<rect x="${x0.toFixed(3)}" y="${y0.toFixed(3)}" width="${cmW.toFixed(3)}" height="${cmH.toFixed(3)}" fill="none" stroke="#111827" stroke-width="0.1"/>`;
+    const frame = `<rect x="${nf(x0, 3)}" y="${nf(y0, 3)}" width="${nf(cmW, 3)}" height="${nf(cmH, 3)}" fill="none" stroke="#111827" stroke-width="0.1"/>`;
     /* Rótulo técnico fixo de produção: [Tamanho] [Parte] no canto superior
        esquerdo, por dentro da borda. Fica embutido no arquivo mesmo quando as
        linhas técnicas são escondidas. */
-    const label = `<text x="${(x0 + 0.6).toFixed(2)}" y="${(y0 + 1.3).toFixed(2)}" font-family="monospace" font-size="1" fill="#111827">${escXml(techLabel(clothingType, size, view) + (o.player ? ` · Nº ${o.player.numero}${o.player.nome ? " " + o.player.nome : ""}` : ""))}</text>`;
+    const label = `<text x="${nf(x0 + 0.6, 2)}" y="${nf(y0 + 1.3, 2)}" font-family="monospace" font-size="1" fill="#111827">${escXml(techLabel(clothingType, size, view) + (o.player ? ` · Nº ${o.player.numero}${o.player.nome ? " " + o.player.nome : ""}` : ""))}</text>`;
 
     /* A janela de exportação é recortada exatamente nos limites do quadro. */
     const svg =
-      `<svg xmlns="http://www.w3.org/2000/svg" width="${cmW.toFixed(3)}cm" height="${cmH.toFixed(3)}cm" viewBox="${x0.toFixed(3)} ${y0.toFixed(3)} ${cmW.toFixed(3)} ${cmH.toFixed(3)}">` +
-      `<defs><clipPath id="moldeClip"><rect x="${x0.toFixed(3)}" y="${y0.toFixed(3)}" width="${cmW.toFixed(3)}" height="${cmH.toFixed(3)}"/></clipPath></defs>` +
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${nf(cmW, 3)}cm" height="${nf(cmH, 3)}cm" viewBox="${nf(x0, 3)} ${nf(y0, 3)} ${nf(cmW, 3)} ${nf(cmH, 3)}">` +
+      `<defs><clipPath id="moldeClip"><rect x="${nf(x0, 3)}" y="${nf(y0, 3)}" width="${nf(cmW, 3)}" height="${nf(cmH, 3)}"/></clipPath></defs>` +
       body +
       img +
       objs +
@@ -3126,14 +3124,44 @@ function Index() {
   };
 
   const printVectorPdf = (svg: string, cmW: number, cmH: number, name: string) => {
-    const win = window.open("", "_blank", "width=900,height=720");
-    if (!win) return false;
-    win.document.write(
-      `<!doctype html><html><head><meta charset="utf-8"><title>${name}</title>` +
-        `<style>@page{size:${cmW}cm ${cmH}cm;margin:0}html,body{margin:0;padding:0}svg{display:block;width:${cmW}cm;height:${cmH}cm}</style>` +
-        `</head><body>${svg}<script>window.addEventListener("load",function(){setTimeout(function(){window.focus();window.print();},400);});<\/script></body></html>`,
-    );
-    win.document.close();
+    const w = n(Math.min(10000, Math.max(0.1, cmW)));
+    const h = n(Math.min(10000, Math.max(0.1, cmH)));
+    const src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+    /* Página sem script e com CSP: o SVG entra só como <img>, que não executa código. */
+    const html =
+      `<!doctype html><html><head><meta charset="utf-8">` +
+      `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'">` +
+      `<title>${attr(name)}</title>` +
+      `<style>@page{size:${w}cm ${h}cm;margin:0}html,body{margin:0;padding:0}img{display:block;width:${w}cm;height:${h}cm}</style>` +
+      `</head><body><img alt="" src="${attr(src)}"></body></html>`;
+    const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+    const win = window.open(url, "_blank", "width=900,height=720");
+    if (!win) {
+      URL.revokeObjectURL(url);
+      return false;
+    }
+    let printed = false;
+    const doPrint = () => {
+      if (printed) return;
+      try {
+        const img = win.document.querySelector("img");
+        if (!img || !img.complete) return;
+        printed = true;
+        setTimeout(() => {
+          win.focus();
+          win.print();
+          URL.revokeObjectURL(url);
+        }, 400);
+      } catch {
+        /* janela ainda não pronta */
+      }
+    };
+    win.addEventListener("load", doPrint);
+    const poll = setInterval(() => {
+      if (printed || win.closed) return clearInterval(poll);
+      doPrint();
+    }, 300);
+    setTimeout(() => clearInterval(poll), 60000);
     return true;
   };
 
