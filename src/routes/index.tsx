@@ -2335,15 +2335,13 @@ function Index() {
   const [alignRef, setAlignRef] = useState<AlignRefKind>("last");
   const [alignRect, setAlignRect] = useState<"molde" | "midia">("molde");
   const [alignOpen, setAlignOpen] = useState(false);
-  const alignLoaded = useRef(false);
   useEffect(() => {
-    if (!alignLoaded.current) {
-      alignLoaded.current = true;
-      try { if (localStorage.getItem("moldecore.alinharAberto") === "1") setAlignOpen(true); } catch { /* sem storage */ }
-      return;
-    }
-    try { localStorage.setItem("moldecore.alinharAberto", alignOpen ? "1" : "0"); } catch { /* sem storage */ }
-  }, [alignOpen]);
+    try { if (localStorage.getItem("moldecore.alinharAberto") === "1") setAlignOpen(true); } catch { /* sem storage */ }
+  }, []);
+  const toggleAlign = () => setAlignOpen((v) => {
+    try { localStorage.setItem("moldecore.alinharAberto", v ? "0" : "1"); } catch { /* sem storage */ }
+    return !v;
+  });
   const itemBox = (it: SelItem): Box | null => {
     if (it.kind === "layer") {
       const l = layers[view].find((x) => x.id === it.id);
@@ -3733,7 +3731,7 @@ function Index() {
                 <Users className="size-3.5" /> Time{roster.length > 0 && ` (${roster.length})`}
               </button>
               <button
-                onClick={() => setAlignOpen((v) => !v)}
+                onClick={toggleAlign}
                 aria-pressed={alignOpen}
                 className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap border ${alignOpen ? "bg-cyan/10 border-cyan text-cyan" : "border-border text-foreground hover:bg-muted"}`}
               >
