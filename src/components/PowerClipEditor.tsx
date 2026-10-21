@@ -30,10 +30,17 @@ export type PcArt = {
 };
 
 /** Transformação SVG da estampa: rotação e espelho em torno do próprio centro, sem alterar a geometria. */
-export function artTransform(a: { rot?: number; flipX?: boolean; flipY?: boolean }, cx: number, cy: number) {
+export function artTransform(
+  a: { rot?: number; flipX?: boolean; flipY?: boolean },
+  cx: number,
+  cy: number,
+) {
   const fx = a.flipX ? -1 : 1;
   const fy = a.flipY ? -1 : 1;
-  const flip = fx === 1 && fy === 1 ? "" : ` translate(${n(cx)} ${n(cy)}) scale(${fx} ${fy}) translate(${n(-cx)} ${n(-cy)})`;
+  const flip =
+    fx === 1 && fy === 1
+      ? ""
+      : ` translate(${n(cx)} ${n(cy)}) scale(${fx} ${fy}) translate(${n(-cx)} ${n(-cy)})`;
   return `rotate(${n(a.rot ?? 0)} ${n(cx)} ${n(cy)})${flip}`;
 }
 
@@ -41,7 +48,17 @@ type Frame = { x: number; y: number; w: number; h: number };
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-function NumField({ label, value, onChange, suffix = "cm" }: { label: string; value: number; onChange: (v: number) => void; suffix?: string }) {
+function NumField({
+  label,
+  value,
+  onChange,
+  suffix = "cm",
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  suffix?: string;
+}) {
   return (
     <label className="flex items-center gap-1.5">
       <span className="w-14 text-faint">{label}</span>
@@ -125,7 +142,8 @@ export function PowerClipEditor({
     reader.onload = () => {
       const src = reader.result as string;
       const img = new Image();
-      img.onload = () => set({ src, name: file.name, ratio: img.naturalHeight / Math.max(1, img.naturalWidth) });
+      img.onload = () =>
+        set({ src, name: file.name, ratio: img.naturalHeight / Math.max(1, img.naturalWidth) });
       img.src = src;
     };
     reader.readAsDataURL(file);
@@ -192,24 +210,52 @@ export function PowerClipEditor({
         <span className="flex items-center gap-2 font-semibold text-foreground">
           <Crop className="size-3.5 text-primary" /> Editor do PowerClip
         </span>
-        <button onClick={onClose} aria-label="Fechar editor" className="text-muted-foreground hover:text-foreground">
+        <button
+          onClick={onClose}
+          aria-label="Fechar editor"
+          className="text-muted-foreground hover:text-foreground"
+        >
           <X className="size-3.5" />
         </button>
       </div>
-      <div className="px-3 pb-2 text-[11px] text-muted-foreground truncate">Arquivo: {art.name ?? "Estampa"}</div>
+      <div className="px-3 pb-2 text-[11px] text-muted-foreground truncate">
+        Arquivo: {art.name ?? "Estampa"}
+      </div>
 
       <Section title="Posição e tamanho">
-        <NumField label="X" value={cxs - aw / 2 - frame.x} onChange={(v) => set(fromSvg(frame.x + v + aw / 2, cys))} />
-        <NumField label="Y" value={cys - ah / 2 - frame.y} onChange={(v) => set(fromSvg(cxs, frame.y + v + ah / 2))} />
+        <NumField
+          label="X"
+          value={cxs - aw / 2 - frame.x}
+          onChange={(v) => set(fromSvg(frame.x + v + aw / 2, cys))}
+        />
+        <NumField
+          label="Y"
+          value={cys - ah / 2 - frame.y}
+          onChange={(v) => set(fromSvg(cxs, frame.y + v + ah / 2))}
+        />
         <NumField label="Largura" value={aw} onChange={(v) => v > 0 && set({ w: v / W })} />
-        <NumField label="Altura" value={ah} onChange={(v) => v > 0 && set({ w: v / art.ratio / W })} />
-        <div className="text-[10px] text-faint">X e Y medidos a partir do canto superior esquerdo do retângulo.</div>
+        <NumField
+          label="Altura"
+          value={ah}
+          onChange={(v) => v > 0 && set({ w: v / art.ratio / W })}
+        />
+        <div className="text-[10px] text-faint">
+          X e Y medidos a partir do canto superior esquerdo do retângulo.
+        </div>
       </Section>
 
       <Section title="Posicionamento">
-        <button className={btn + " w-full"} onClick={center}><Crosshair className="size-3.5" /> Centralizar no Retângulo</button>
-        <button className={btn + " w-full"} onClick={fit}><Maximize2 className="size-3.5" /> Ajustar Tamanho 100%</button>
-        {feat.reset && <button className={btn + " w-full"} onClick={reset}><RotateCcw className="size-3.5" /> Redefinir Posição e Tamanho</button>}
+        <button className={btn + " w-full"} onClick={center}>
+          <Crosshair className="size-3.5" /> Centralizar no Retângulo
+        </button>
+        <button className={btn + " w-full"} onClick={fit}>
+          <Maximize2 className="size-3.5" /> Ajustar Tamanho 100%
+        </button>
+        {feat.reset && (
+          <button className={btn + " w-full"} onClick={reset}>
+            <RotateCcw className="size-3.5" /> Redefinir Posição e Tamanho
+          </button>
+        )}
       </Section>
 
       <Section title="Transformação">
@@ -221,30 +267,42 @@ export function PowerClipEditor({
           ))}
         </div>
         <NumField label="Rotação" value={rot} suffix="°" onChange={rotTo} />
-        {feat.flip && <div className="grid grid-cols-2 gap-1">
-          <button className={btn + (art.flipX ? " border-primary text-primary" : "")} onClick={() => set({ flipX: !art.flipX })}>
-            <FlipHorizontal2 className="size-3.5" /> Espelhar H
-          </button>
-          <button className={btn + (art.flipY ? " border-primary text-primary" : "")} onClick={() => set({ flipY: !art.flipY })}>
-            <FlipVertical2 className="size-3.5" /> Espelhar V
-          </button>
-        </div>}
+        {feat.flip && (
+          <div className="grid grid-cols-2 gap-1">
+            <button
+              className={btn + (art.flipX ? " border-primary text-primary" : "")}
+              onClick={() => set({ flipX: !art.flipX })}
+            >
+              <FlipHorizontal2 className="size-3.5" /> Espelhar H
+            </button>
+            <button
+              className={btn + (art.flipY ? " border-primary text-primary" : "")}
+              onClick={() => set({ flipY: !art.flipY })}
+            >
+              <FlipVertical2 className="size-3.5" /> Espelhar V
+            </button>
+          </div>
+        )}
       </Section>
 
-      {feat.opacity && <Section title="Propriedades">
-        <label className="flex items-center gap-2">
-          <span className="w-14 text-faint">Opacidade</span>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={Math.round((art.opacity ?? 1) * 100)}
-            onChange={(e) => set({ opacity: Number(e.target.value) / 100 })}
-            className="flex-1 accent-primary"
-          />
-          <span className="w-9 text-right font-mono text-foreground">{Math.round((art.opacity ?? 1) * 100)}%</span>
-        </label>
-      </Section>}
+      {feat.opacity && (
+        <Section title="Propriedades">
+          <label className="flex items-center gap-2">
+            <span className="w-14 text-faint">Opacidade</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={Math.round((art.opacity ?? 1) * 100)}
+              onChange={(e) => set({ opacity: Number(e.target.value) / 100 })}
+              className="flex-1 accent-primary"
+            />
+            <span className="w-9 text-right font-mono text-foreground">
+              {Math.round((art.opacity ?? 1) * 100)}%
+            </span>
+          </label>
+        </Section>
+      )}
 
       <Section title="Arquivo">
         <input
@@ -258,16 +316,22 @@ export function PowerClipEditor({
             e.target.value = "";
           }}
         />
-        {feat.replace && <>
-        <button className={btn + " w-full"} onClick={() => fileRef.current?.click()}>
-          <Replace className="size-3.5" /> Substituir Imagem
-        </button>
-        <div className="text-[10px] text-faint text-center">ou arraste uma imagem para este painel</div>
-        </>}
+        {feat.replace && (
+          <>
+            <button className={btn + " w-full"} onClick={() => fileRef.current?.click()}>
+              <Replace className="size-3.5" /> Substituir Imagem
+            </button>
+            <div className="text-[10px] text-faint text-center">
+              ou arraste uma imagem para este painel
+            </div>
+          </>
+        )}
         {askFormat ? (
           <div className="grid grid-cols-3 gap-1">
             {(["png", "jpg", "svg"] as const).map((f) => (
-              <button key={f} className={btn} onClick={() => extract(f)}>.{f}</button>
+              <button key={f} className={btn} onClick={() => extract(f)}>
+                .{f}
+              </button>
             ))}
           </div>
         ) : (
@@ -275,7 +339,10 @@ export function PowerClipEditor({
             <Download className="size-3.5" /> Extrair Arquivo
           </button>
         )}
-        <button className={btn + " w-full hover:border-destructive hover:text-destructive"} onClick={onRemove}>
+        <button
+          className={btn + " w-full hover:border-destructive hover:text-destructive"}
+          onClick={onRemove}
+        >
           <X className="size-3.5" /> Remover do PowerClip
         </button>
       </Section>

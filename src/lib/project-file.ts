@@ -32,31 +32,49 @@ export type ProjectFile = {
   data: ProjectData;
 };
 
-export type ParseResult = { ok: true; name: string; data: Partial<ProjectData> } | { ok: false; error: string };
+export type ParseResult =
+  { ok: true; name: string; data: Partial<ProjectData> } | { ok: false; error: string };
 
 export function buildProjectFile(name: string, data: ProjectData): string {
-  const file: ProjectFile = { app: PROJECT_APP, version: PROJECT_VERSION, savedAt: new Date().toISOString(), name, data };
+  const file: ProjectFile = {
+    app: PROJECT_APP,
+    version: PROJECT_VERSION,
+    savedAt: new Date().toISOString(),
+    name,
+    data,
+  };
   return JSON.stringify(file);
 }
 
-const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+const isObj = (v: unknown): v is Record<string, unknown> =>
+  !!v && typeof v === "object" && !Array.isArray(v);
 
 export function parseProjectFile(text: string): ParseResult {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
   } catch {
-    return { ok: false, error: "Arquivo inválido ou corrompido (não é um projeto MoldeCore legível)." };
+    return {
+      ok: false,
+      error: "Arquivo inválido ou corrompido (não é um projeto MoldeCore legível).",
+    };
   }
-  if (!isObj(raw) || raw["app"] !== PROJECT_APP) return { ok: false, error: "Este arquivo não é um projeto do MoldeCore." };
+  if (!isObj(raw) || raw["app"] !== PROJECT_APP)
+    return { ok: false, error: "Este arquivo não é um projeto do MoldeCore." };
   const version = raw["version"];
   if (typeof version !== "number" || !Number.isFinite(version) || version < 1)
     return { ok: false, error: "Versão do arquivo inválida." };
-  if (version > PROJECT_VERSION) return { ok: false, error: "Arquivo criado numa versão mais nova do MoldeCore." };
+  if (version > PROJECT_VERSION)
+    return { ok: false, error: "Arquivo criado numa versão mais nova do MoldeCore." };
   const data = raw["data"];
   if (!isObj(data)) return { ok: false, error: "Arquivo corrompido: dados do projeto ausentes." };
-  return { ok: true, name: typeof raw["name"] === "string" ? raw["name"] : "", data: data as Partial<ProjectData> };
+  return {
+    ok: true,
+    name: typeof raw["name"] === "string" ? raw["name"] : "",
+    data: data as Partial<ProjectData>,
+  };
 }
 
 /** Nome do projeto a partir do nome do arquivo (sem extensão). */
-export const nameFromFile = (fileName: string) => fileName.replace(/\.(moldecore|json)$/i, "") || "Sem título";
+export const nameFromFile = (fileName: string) =>
+  fileName.replace(/\.(moldecore|json)$/i, "") || "Sem título";

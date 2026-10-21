@@ -21,15 +21,27 @@ export type TeamTextInput = {
 };
 export type FieldAnchor = "esquerda" | "centro" | "direita";
 export type ResolvedTeamText = {
-  text: string; x: number; y: number; fontSize: number;
-  align?: "left" | "center" | "right"; left?: number; right?: number;
+  text: string;
+  x: number;
+  y: number;
+  fontSize: number;
+  align?: "left" | "center" | "right";
+  left?: number;
+  right?: number;
 };
 
 const viewDims = (m: Dims, view: TeamView) =>
-  view === "frente" || view === "costas" ? { w: m.bodyWidth, h: m.bodyHeight } : { w: m.sleeveWidth, h: m.sleeveHeight };
+  view === "frente" || view === "costas"
+    ? { w: m.bodyWidth, h: m.bodyHeight }
+    : { w: m.sleeveWidth, h: m.sleeveHeight };
 
 /** Escala da vista entre o molde mãe e o tamanho pedido. */
-export function teamScale<S extends string>(table: Record<S, Dims>, mother: S, size: S, view: TeamView): { sx: number; sy: number } {
+export function teamScale<S extends string>(
+  table: Record<S, Dims>,
+  mother: S,
+  size: S,
+  view: TeamView,
+): { sx: number; sy: number } {
   const a = viewDims(table[mother], view);
   const b = viewDims(table[size], view);
   return { sx: a.w > 0 ? b.w / a.w : 1, sy: a.h > 0 ? b.h / a.h : 1 };
@@ -39,7 +51,12 @@ export function teamScale<S extends string>(table: Record<S, Dims>, mother: S, s
  *  Campos do time ficam ancorados no ponto fixo da caixa do texto de exemplo, com a linha de base preservada. */
 export function resolveTeamText(
   t: TeamTextInput,
-  o: { value: string | null; sx: number; sy: number; measure: (text: string, font: TeamFont) => number },
+  o: {
+    value: string | null;
+    sx: number;
+    sy: number;
+    measure: (text: string, font: TeamFont) => number;
+  },
 ): ResolvedTeamText | null {
   if (!t.field) return { text: t.text, x: t.x, y: t.y, fontSize: t.fontSize };
   if (o.value == null || o.value === "") return null;
@@ -67,9 +84,13 @@ export function resolveTeamText(
   }
   const left = anchor === "centro" ? P - w1 / 2 : anchor === "esquerda" ? P : P - w1;
   return {
-    text, x: P, y: B - fs / 10, fontSize: fs,
+    text,
+    x: P,
+    y: B - fs / 10,
+    fontSize: fs,
     align: anchor === "centro" ? "center" : anchor === "esquerda" ? "left" : "right",
-    left, right: left + w1,
+    left,
+    right: left + w1,
   };
 }
 

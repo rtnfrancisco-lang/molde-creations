@@ -1,7 +1,13 @@
 /* Formato padrão da manga, migração do formato antigo e segurança proporcional. Funções puras. */
 import { SAFETY_OFFSET_CM } from "./vector-offset";
 
-export type SNode = { x: number; y: number; smooth: boolean; hIn?: { x: number; y: number }; hOut?: { x: number; y: number } };
+export type SNode = {
+  x: number;
+  y: number;
+  smooth: boolean;
+  hIn?: { x: number; y: number };
+  hOut?: { x: number; y: number };
+};
 type M = { bodyHeight: number; bodyWidth: number; sleeveHeight: number; sleeveWidth: number };
 
 /** Cabeça em S, cantos vivos a 60% da altura, laterais côncavas e barra reta. */
@@ -31,17 +37,32 @@ export const mirrorShape = (nodes: SNode[]): SNode[] =>
     }))
     .reverse();
 
-const OLD: [number, number][] = [[0, 0.32], [0.22, 0.1], [0.5, 0], [0.78, 0.1], [1, 0.32], [0.9, 1], [0.1, 1]];
+const OLD: [number, number][] = [
+  [0, 0.32],
+  [0.22, 0.1],
+  [0.5, 0],
+  [0.78, 0.1],
+  [1, 0.32],
+  [0.9, 1],
+  [0.1, 1],
+];
 
 const sameAs = (v: unknown, ref: [number, number][]) =>
   Array.isArray(v) &&
   v.length === ref.length &&
   v.every((n, i) => {
     const o = n as SNode;
-    return o && Math.abs(o.x - ref[i]![0]) < 1e-9 && Math.abs(o.y - ref[i]![1]) < 1e-9 && !o.hIn && !o.hOut;
+    return (
+      o &&
+      Math.abs(o.x - ref[i]![0]) < 1e-9 &&
+      Math.abs(o.y - ref[i]![1]) < 1e-9 &&
+      !o.hIn &&
+      !o.hOut
+    );
   });
 
-export const isOldSleeve = (v: unknown, dir: boolean) => sameAs(v, dir ? OLD.map(([x, y]) => [1 - x, y]) : OLD);
+export const isOldSleeve = (v: unknown, dir: boolean) =>
+  sameAs(v, dir ? OLD.map(([x, y]) => [1 - x, y]) : OLD);
 
 /** Troca mangas idênticas ao padrão antigo pelo novo; formas editadas ficam. */
 export function migrateSleeveShapes<T extends Record<string, unknown>>(shapes: T): T {
@@ -52,15 +73,23 @@ export function migrateSleeveShapes<T extends Record<string, unknown>>(shapes: T
 }
 
 /** Atualiza sleeveWidth só onde largura E altura ainda são o padrão antigo. */
-export function migrateSleeveWidths<G extends Record<string, M>>(table: G, oldT: Record<string, M>, newT: Record<string, M>): G {
+export function migrateSleeveWidths<G extends Record<string, M>>(
+  table: G,
+  oldT: Record<string, M>,
+  newT: Record<string, M>,
+): G {
   const out: Record<string, M> = {};
   for (const [s, row] of Object.entries(table)) {
     const o = oldT[s];
     const n = newT[s];
-    out[s] = o && n && row && row.sleeveWidth === o.sleeveWidth && row.sleeveHeight === o.sleeveHeight ? { ...row, sleeveWidth: n.sleeveWidth } : row;
+    out[s] =
+      o && n && row && row.sleeveWidth === o.sleeveWidth && row.sleeveHeight === o.sleeveHeight
+        ? { ...row, sleeveWidth: n.sleeveWidth }
+        : row;
   }
   return out as G;
 }
 
 /** Zona de segurança: reduz proporcionalmente em peças pequenas em vez de sumir/inverter. */
-export const safetyOffsetFor = (W: number, H: number) => -Math.min(Math.abs(SAFETY_OFFSET_CM), Math.min(W, H) * 0.15);
+export const safetyOffsetFor = (W: number, H: number) =>
+  -Math.min(Math.abs(SAFETY_OFFSET_CM), Math.min(W, H) * 0.15);

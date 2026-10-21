@@ -7,7 +7,10 @@ const b = { x0: 20, y0: 10, x1: 24, y1: 20 };
 describe("align", () => {
   it("left aligns to the last selected, which does not move", () => {
     const ref = objectsRef([a, b], "last")!;
-    expect(alignDeltas([a, b], "left", "objects", ref)).toEqual([{ dx: 20, dy: 0 }, { dx: 0, dy: 0 }]);
+    expect(alignDeltas([a, b], "left", "objects", ref)).toEqual([
+      { dx: 20, dy: 0 },
+      { dx: 0, dy: 0 },
+    ]);
   });
   it("first selected reference", () => {
     const ref = objectsRef([a, b], "first")!;

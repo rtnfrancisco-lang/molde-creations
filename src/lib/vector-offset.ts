@@ -264,8 +264,8 @@ const parseFigures = (d: string): Figure[] | null => {
   for (const { cmd, args } of toks) {
     const rel = cmd === cmd.toLowerCase();
     const C = cmd.toUpperCase();
-    const ax = (i: number): number => (rel ? pos.x + (args[i] ?? 0) : args[i] ?? 0);
-    const ay = (i: number): number => (rel ? pos.y + (args[i] ?? 0) : args[i] ?? 0);
+    const ax = (i: number): number => (rel ? pos.x + (args[i] ?? 0) : (args[i] ?? 0));
+    const ay = (i: number): number => (rel ? pos.y + (args[i] ?? 0) : (args[i] ?? 0));
 
     if (C === "Z") {
       if (fig) {
@@ -358,7 +358,15 @@ const parseFigures = (d: string): Figure[] | null => {
     if (C === "A") {
       for (let i = 0; i + 7 <= args.length; i += 7) {
         const p1 = { x: ax(i + 5), y: ay(i + 6) };
-        for (const s of arcToSegs(pos, args[i] ?? 0, args[i + 1] ?? 0, args[i + 2] ?? 0, (args[i + 3] ?? 0) !== 0, (args[i + 4] ?? 0) !== 0, p1)) {
+        for (const s of arcToSegs(
+          pos,
+          args[i] ?? 0,
+          args[i + 1] ?? 0,
+          args[i + 2] ?? 0,
+          (args[i + 3] ?? 0) !== 0,
+          (args[i + 4] ?? 0) !== 0,
+          p1,
+        )) {
           ensure().segs.push(s);
         }
         pos = p1;
@@ -516,9 +524,7 @@ const offsetPoint = (p: Vec, t: Vec, k: number): Vec => {
 };
 
 type Corner =
-  | { kind: "straight"; p: Vec }
-  | { kind: "miter"; p: Vec }
-  | { kind: "bevel"; pts: Vec[] };
+  { kind: "straight"; p: Vec } | { kind: "miter"; p: Vec } | { kind: "bevel"; pts: Vec[] };
 
 /** Arco de raio |k| em volta do nó, do lado que chega até o lado que sai. */
 const roundArc = (v: Vec, tIn: Vec, tOut: Vec, k: number): Vec[] => {
@@ -549,8 +555,8 @@ const roundArc = (v: Vec, tIn: Vec, tOut: Vec, k: number): Vec[] => {
  * perpendicular dos DOIS lados (reta ou Bézier, porque a tangente usada é a
  * derivada exata na ponta de cada um deles). Nenhum deslocamento lateral.
  *
-  * Só a volta degenerada de 180° usa chanfro/arco: suas normais opostas não
-  * definem uma bissetriz única. Nós normais nunca são truncados.
+ * Só a volta degenerada de 180° usa chanfro/arco: suas normais opostas não
+ * definem uma bissetriz única. Nós normais nunca são truncados.
  */
 const solveCorner = (
   v: Vec,
@@ -722,7 +728,8 @@ const pointInRing = (p: Vec, ring: Vec[]): boolean => {
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
     const a = ring[i]!;
     const b = ring[j]!;
-    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x)
+      inside = !inside;
   }
   return inside;
 };
@@ -880,11 +887,7 @@ const fromClipperPath = (path: any[]): Vec[] =>
 const clipperOffset = (paths: any[], deltaCm: number): any[] => {
   if (!paths.length) return [];
   const offset = new ClipperLib.ClipperOffset(2, 0.25 * CLIPPER_SCALE);
-  offset.AddPaths(
-    paths,
-    ClipperLib.JoinType.jtRound,
-    ClipperLib.EndType.etClosedPolygon,
-  );
+  offset.AddPaths(paths, ClipperLib.JoinType.jtRound, ClipperLib.EndType.etClosedPolygon);
   const solution = new ClipperLib.Paths();
   offset.Execute(solution, deltaCm * CLIPPER_SCALE);
   return Array.from(solution);

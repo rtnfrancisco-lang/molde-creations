@@ -22,7 +22,10 @@ function open(): Promise<IDBDatabase> {
   return dbp;
 }
 
-async function run<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest | void): Promise<T> {
+async function run<T>(
+  mode: IDBTransactionMode,
+  fn: (s: IDBObjectStore) => IDBRequest | void,
+): Promise<T> {
   const db = await open();
   return new Promise<T>((resolve, reject) => {
     const tx = db.transaction(STORE, mode);
@@ -34,7 +37,8 @@ async function run<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRe
 }
 
 export const get = <T = unknown>(key: string) => run<T | undefined>("readonly", (s) => s.get(key));
-export const set = (key: string, value: unknown) => run<void>("readwrite", (s) => void s.put(value, key));
+export const set = (key: string, value: unknown) =>
+  run<void>("readwrite", (s) => void s.put(value, key));
 export const del = (key: string) => run<void>("readwrite", (s) => void s.delete(key));
 export const keys = () => run<string[]>("readonly", (s) => s.getAllKeys() as IDBRequest);
 /** Grava várias chaves em UMA transação (tudo ou nada). */

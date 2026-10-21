@@ -5,7 +5,15 @@ import { cmToPx, fitDpi, type TeamFormat } from "./team-export";
 export type ExportFormat = TeamFormat;
 
 /** Gera os bytes de uma peça, reduzindo o DPI quando passa dos limites do navegador. */
-export async function renderPiece(svg: string, cmW: number, cmH: number, format: ExportFormat, dpiWanted: number, quality: number, title: string) {
+export async function renderPiece(
+  svg: string,
+  cmW: number,
+  cmH: number,
+  format: ExportFormat,
+  dpiWanted: number,
+  quality: number,
+  title: string,
+) {
   const dpi = fitDpi(cmW, cmH, dpiWanted);
   const pxW = cmToPx(cmW, dpi);
   const pxH = cmToPx(cmH, dpi);
@@ -13,11 +21,25 @@ export async function renderPiece(svg: string, cmW: number, cmH: number, format:
   const bytes =
     format === "pdf"
       ? await svgToPdf(svg, cmW, cmH, pxW, pxH, q, title)
-      : new Uint8Array(await (await rasterize(svg, pxW, pxH, format === "jpeg" ? "image/jpeg" : "image/png", format === "jpeg" ? q : undefined)).arrayBuffer());
+      : new Uint8Array(
+          await (
+            await rasterize(
+              svg,
+              pxW,
+              pxH,
+              format === "jpeg" ? "image/jpeg" : "image/png",
+              format === "jpeg" ? q : undefined,
+            )
+          ).arrayBuffer(),
+        );
   return { bytes, dpi, reduced: dpi < dpiWanted, pxW, pxH };
 }
 
-export const MIME: Record<ExportFormat, string> = { png: "image/png", jpeg: "image/jpeg", pdf: "application/pdf" };
+export const MIME: Record<ExportFormat, string> = {
+  png: "image/png",
+  jpeg: "image/jpeg",
+  pdf: "application/pdf",
+};
 
 export async function zipFiles(files: Record<string, Uint8Array>, format: ExportFormat) {
   const { zipSync } = await import("fflate");

@@ -5,7 +5,13 @@ const RULES = ["nonzero", "evenodd"] as const;
 export type P = { x: number; y: number };
 export type LNode = { x: number; y: number; smooth: boolean; hIn?: P; hOut?: P };
 export type LSub = { nodes: LNode[]; closed: boolean };
-export type LPath = { subs: LSub[]; fill: string | null; stroke: string | null; sw: number; rule: "nonzero" | "evenodd" };
+export type LPath = {
+  subs: LSub[];
+  fill: string | null;
+  stroke: string | null;
+  sw: number;
+  rule: "nonzero" | "evenodd";
+};
 export type Layer = {
   id: string;
   name: string;
@@ -75,7 +81,10 @@ function parseD(d: string, host: SVGSVGElement): RSub[] {
   const tok = d.match(/[a-zA-Z]|[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:[eE][-+]?\d+)?/g) ?? [];
   const subs: RSub[] = [];
   let sub: RSub | null = null;
-  let cx = 0, cy = 0, sx = 0, sy = 0;
+  let cx = 0,
+    cy = 0,
+    sx = 0,
+    sy = 0;
   let lastC: P | null = null;
   let lastQ: P | null = null;
   let i = 0;
@@ -160,7 +169,12 @@ function parseD(d: string, host: SVGSVGElement): RSub[] {
           nc = c2;
         } else {
           const prevQ: P | null = lastQ;
-          const q: P = C === "Q" ? { x: ox + num(), y: oy + num() } : prevQ ? { x: 2 * cx - prevQ.x, y: 2 * cy - prevQ.y } : { x: cx, y: cy };
+          const q: P =
+            C === "Q"
+              ? { x: ox + num(), y: oy + num() }
+              : prevQ
+                ? { x: 2 * cx - prevQ.x, y: 2 * cy - prevQ.y }
+                : { x: cx, y: cy };
           e = { x: ox + num(), y: oy + num() };
           c1 = { x: cx + (2 / 3) * (q.x - cx), y: cy + (2 / 3) * (q.y - cy) };
           c2 = { x: e.x + (2 / 3) * (q.x - e.x), y: e.y + (2 / 3) * (q.y - e.y) };
@@ -207,12 +221,16 @@ function toD(el: Element): string {
     case "path":
       return el.getAttribute("d") ?? "";
     case "rect": {
-      const x = num(el, "x"), y = num(el, "y"), w = num(el, "width"), h = num(el, "height");
+      const x = num(el, "x"),
+        y = num(el, "y"),
+        w = num(el, "width"),
+        h = num(el, "height");
       return `M${x} ${y}H${x + w}V${y + h}H${x}Z`;
     }
     case "circle":
     case "ellipse": {
-      const cx = num(el, "cx"), cy = num(el, "cy");
+      const cx = num(el, "cx"),
+        cy = num(el, "cy");
       const rx = el.tagName.toLowerCase() === "circle" ? num(el, "r") : num(el, "rx");
       const ry = el.tagName.toLowerCase() === "circle" ? num(el, "r") : num(el, "ry");
       const k = 0.5523;
@@ -222,7 +240,10 @@ function toD(el: Element): string {
       return `M${num(el, "x1")} ${num(el, "y1")}L${num(el, "x2")} ${num(el, "y2")}`;
     case "polyline":
     case "polygon": {
-      const v = (el.getAttribute("points") ?? "").trim().split(/[\s,]+/).map(Number);
+      const v = (el.getAttribute("points") ?? "")
+        .trim()
+        .split(/[\s,]+/)
+        .map(Number);
       let d = "";
       for (let i = 0; i + 1 < v.length; i += 2) d += (i ? "L" : "M") + v[i] + " " + v[i + 1];
       return el.tagName.toLowerCase() === "polygon" ? d + "Z" : d;
@@ -243,12 +264,19 @@ export function importSvg(text: string): { paths: LPath[]; ratio: number } | nul
   const root = doc.documentElement;
   if (!root || root.nodeName.toLowerCase() !== "svg") return null;
   const hostDiv = document.createElement("div");
-  hostDiv.style.cssText = "position:fixed;left:-99999px;top:0;width:1000px;height:1000px;visibility:hidden;pointer-events:none";
+  hostDiv.style.cssText =
+    "position:fixed;left:-99999px;top:0;width:1000px;height:1000px;visibility:hidden;pointer-events:none";
   const svg = document.importNode(root, true) as unknown as SVGSVGElement;
   hostDiv.appendChild(svg);
   document.body.appendChild(hostDiv);
   try {
-    type Raw = { subs: RSub[]; fill: string | null; stroke: string | null; sw: number; rule: "nonzero" | "evenodd" };
+    type Raw = {
+      subs: RSub[];
+      fill: string | null;
+      stroke: string | null;
+      sw: number;
+      rule: "nonzero" | "evenodd";
+    };
     const raws: Raw[] = [];
     svg.querySelectorAll("path,rect,circle,ellipse,line,polyline,polygon").forEach((el) => {
       if (el.closest("defs,clipPath,mask,symbol,pattern,marker")) return;
@@ -279,7 +307,10 @@ export function importSvg(text: string): { paths: LPath[]; ratio: number } | nul
       });
     });
     if (!raws.length) return null;
-    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    let x0 = Infinity,
+      y0 = Infinity,
+      x1 = -Infinity,
+      y1 = -Infinity;
     raws.forEach((r) =>
       r.subs.forEach((s) =>
         s.pts.forEach((p) => {
@@ -327,7 +358,9 @@ export async function pdfToImage(file: File): Promise<{ src: string; ratio: numb
   canvas.width = Math.round(vp.width);
   canvas.height = Math.round(vp.height);
   const ctx = canvas.getContext("2d")!;
-  await page.render({ canvasContext: ctx, viewport: vp, canvas } as Parameters<typeof page.render>[0]).promise;
+  await page.render({ canvasContext: ctx, viewport: vp, canvas } as Parameters<
+    typeof page.render
+  >[0]).promise;
   return { src: canvas.toDataURL("image/png"), ratio: vp.height / vp.width };
 }
 

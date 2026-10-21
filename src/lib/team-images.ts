@@ -3,11 +3,16 @@ import type { Player } from "@/lib/roster";
 
 export type TeamImage = { id: string; nome: string; src: string; w: number; h: number };
 
-export const newImageId = () => "img" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+export const newImageId = () =>
+  "img" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
 /** Minúsculas, sem acentos, só letras e números. */
 export const normKey = (s: string) =>
-  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
 
 export const baseName = (file: string) => file.replace(/^.*[\\/]/, "").replace(/\.[^.]+$/, "");
 
@@ -19,17 +24,27 @@ export const numberKey = (name: string) => {
 };
 const playerNum = (n: string) => normKey(n).replace(/^0+(?=\d)/, "");
 
-export type LinkReport = { nomes: number; numeros: number; faltaNome: string[]; faltaNumero: string[]; semUso: string[] };
+export type LinkReport = {
+  nomes: number;
+  numeros: number;
+  faltaNome: string[];
+  faltaNumero: string[];
+  semUso: string[];
+};
 
 /** Vincula imagens aos jogadores pelo nome do arquivo. Prefere número quando o arquivo é só dígitos. */
-export function autoLink(roster: Player[], images: TeamImage[]): { roster: Player[]; used: Set<string> } {
+export function autoLink(
+  roster: Player[],
+  images: TeamImage[],
+): { roster: Player[]; used: Set<string> } {
   const used = new Set<string>();
   const next = roster.map((p) => ({ ...p }));
   for (const img of images) {
     const nk = numberKey(img.nome);
     const onlyDigits = /^\d+$/.test(normKey(img.nome));
     const nameK = normKey(img.nome);
-    const byNum = nk != null ? next.filter((p) => p.numero.trim() && playerNum(p.numero) === nk) : [];
+    const byNum =
+      nk != null ? next.filter((p) => p.numero.trim() && playerNum(p.numero) === nk) : [];
     const byName = nameK ? next.filter((p) => normKey(p.nome) === nameK) : [];
     if (byNum.length && (onlyDigits || !byName.length)) {
       byNum.forEach((p) => (p.imgNumero = img.id));
@@ -46,14 +61,19 @@ export function linkReport(roster: Player[], imported: TeamImage[], used: Set<st
   return {
     nomes: roster.filter((p) => p.imgNome).length,
     numeros: roster.filter((p) => p.imgNumero).length,
-    faltaNome: roster.filter((p) => !p.imgNome && p.nome.trim()).map((p) => p.nome.trim().toUpperCase()),
+    faltaNome: roster
+      .filter((p) => !p.imgNome && p.nome.trim())
+      .map((p) => p.nome.trim().toUpperCase()),
     faltaNumero: roster.filter((p) => !p.imgNumero && p.numero.trim()).map((p) => p.numero.trim()),
     semUso: imported.filter((i) => !used.has(i.id)).map((i) => i.nome),
   };
 }
 
 export function reportText(r: LinkReport) {
-  const falta = [...r.faltaNome.map((n) => `${n} (nome)`), ...r.faltaNumero.map((n) => `${n} (número)`)];
+  const falta = [
+    ...r.faltaNome.map((n) => `${n} (nome)`),
+    ...r.faltaNumero.map((n) => `${n} (número)`),
+  ];
   return [
     `${r.nomes} nomes e ${r.numeros} números vinculados`,
     falta.length ? `faltam: ${falta.join(", ")}` : null,
@@ -77,7 +97,11 @@ export function sanitizeImages(v: unknown): TeamImage[] {
   if (!Array.isArray(v)) return [];
   return v.filter(
     (i): i is TeamImage =>
-      !!i && typeof i === "object" && typeof i.id === "string" && typeof i.src === "string" && typeof i.nome === "string",
+      !!i &&
+      typeof i === "object" &&
+      typeof i.id === "string" &&
+      typeof i.src === "string" &&
+      typeof i.nome === "string",
   );
 }
 
@@ -112,7 +136,10 @@ export async function readTeamImage(file: File, trim: boolean): Promise<Omit<Tea
   cv.height = H;
   const ctx = cv.getContext("2d", { willReadFrequently: true })!;
   ctx.drawImage(im, 0, 0);
-  let x0 = W, y0 = H, x1 = -1, y1 = -1;
+  let x0 = W,
+    y0 = H,
+    x1 = -1,
+    y1 = -1;
   const band = Math.max(1, Math.floor(4_000_000 / Math.max(1, W)));
   for (let y = 0; y < H; y += band) {
     const bh = Math.min(band, H - y);

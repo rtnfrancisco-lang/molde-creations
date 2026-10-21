@@ -28,12 +28,23 @@ function checkDom(svg: string) {
   expect(doc.getElementsByTagName("script").length).toBe(0);
 }
 
-const hostile = (over: Record<string, unknown>) => ({ id: "x", name: "x", kind: "imagem", cx: 0.5, cy: 0.5, w: 0.3, ratio: 1, rot: 0, ...over }) as unknown as Layer;
+const hostile = (over: Record<string, unknown>) =>
+  ({
+    id: "x",
+    name: "x",
+    kind: "imagem",
+    cx: 0.5,
+    cy: 0.5,
+    w: 0.3,
+    ratio: 1,
+    rot: 0,
+    ...over,
+  }) as unknown as Layer;
 
 describe("svg-safe", () => {
   it("helpers", () => {
     expect(n(1.5)).toBe("1.5");
-    expect(n("0)\" onload=\"x")).toBe("0");
+    expect(n('0)" onload="x')).toBe("0");
     expect(n(NaN)).toBe("0");
     expect(attr(`"<&'>`)).toBe("&quot;&lt;&amp;&#39;&gt;");
     expect(safeSrc("http://x")).toBe("");
@@ -42,19 +53,51 @@ describe("svg-safe", () => {
 
   it("camada e estampa hostis não injetam elementos nem atributos", () => {
     const svg = wrap(
-      layerMarkup(hostile({ src: `data:image/png;base64,AA" onload="alert(1)`, rot: `0)" onload="x` }), 30, 40) +
+      layerMarkup(
+        hostile({ src: `data:image/png;base64,AA" onload="alert(1)`, rot: `0)" onload="x` }),
+        30,
+        40,
+      ) +
         layerMarkup(hostile({ src: "<script>alert(1)</script>" }), 30, 40) +
         layerMarkup(
           hostile({
             kind: "vetor",
             src: undefined,
             rot: "abc",
-            paths: [{ subs: [{ nodes: [{ x: 0, y: 0, smooth: false }, { x: 1, y: 1, smooth: false }], closed: true }], fill: 'red" onclick="x', stroke: "url(javascript:x)", sw: "1", rule: 'evenodd" onload="x' }],
+            paths: [
+              {
+                subs: [
+                  {
+                    nodes: [
+                      { x: 0, y: 0, smooth: false },
+                      { x: 1, y: 1, smooth: false },
+                    ],
+                    closed: true,
+                  },
+                ],
+                fill: 'red" onclick="x',
+                stroke: "url(javascript:x)",
+                sw: "1",
+                rule: 'evenodd" onload="x',
+              },
+            ],
           }),
           30,
           40,
         ) +
-        artImageMarkup({ src: `${PNG}"/><script>x</script>`, cx: "a" as unknown as number, cy: 0.5, w: 0.5, ratio: 1, opacity: "1\" onload=\"x" as unknown as number }, 30, 40, (cx, cy) => artTransform({ rot: `0)" onload="x` as unknown as number }, cx, cy)),
+        artImageMarkup(
+          {
+            src: `${PNG}"/><script>x</script>`,
+            cx: "a" as unknown as number,
+            cy: 0.5,
+            w: 0.5,
+            ratio: 1,
+            opacity: '1" onload="x' as unknown as number,
+          },
+          30,
+          40,
+          (cx, cy) => artTransform({ rot: `0)" onload="x` as unknown as number }, cx, cy),
+        ),
     );
     checkDom(svg);
     expect(svg).not.toMatch(/onload|onclick|<script/);
@@ -65,11 +108,44 @@ describe("svg-safe", () => {
     expect(layerMarkup(l, 40, 60)).toBe(
       `<g transform="translate(0 15) rotate(10)"><image href="${PNG}" x="-10" y="-20" width="20" height="40" preserveAspectRatio="none"/></g>`,
     );
-    const v = hostile({ kind: "vetor", src: undefined, w: 1, ratio: 1, cx: 0.5, cy: 0, rot: 0, paths: [{ subs: [{ nodes: [{ x: 0, y: 0, smooth: false }, { x: 1, y: 0, smooth: false }, { x: 1, y: 1, smooth: false }], closed: true }], fill: "#ff0000", stroke: null, sw: 0.1, rule: "evenodd" }] });
+    const v = hostile({
+      kind: "vetor",
+      src: undefined,
+      w: 1,
+      ratio: 1,
+      cx: 0.5,
+      cy: 0,
+      rot: 0,
+      paths: [
+        {
+          subs: [
+            {
+              nodes: [
+                { x: 0, y: 0, smooth: false },
+                { x: 1, y: 0, smooth: false },
+                { x: 1, y: 1, smooth: false },
+              ],
+              closed: true,
+            },
+          ],
+          fill: "#ff0000",
+          stroke: null,
+          sw: 0.1,
+          rule: "evenodd",
+        },
+      ],
+    });
     expect(layerMarkup(v, 10, 10)).toBe(
       `<g transform="translate(0 0) rotate(0)"><g transform="translate(0 -5)"><path d="M -5 0 L 5 0 L 5 10 L -5 0 Z" fill="#ff0000" stroke="none" stroke-width="1" fill-rule="evenodd"/></g></g>`,
     );
-    expect(artImageMarkup({ src: PNG, cx: 0.5, cy: 0.5, w: 0.5, ratio: 1, opacity: 0.8 }, 20, 20, (cx, cy) => artTransform({ rot: 5 }, cx, cy))).toBe(
+    expect(
+      artImageMarkup(
+        { src: PNG, cx: 0.5, cy: 0.5, w: 0.5, ratio: 1, opacity: 0.8 },
+        20,
+        20,
+        (cx, cy) => artTransform({ rot: 5 }, cx, cy),
+      ),
+    ).toBe(
       `<image href="${PNG}" x="-5" y="5" width="10" height="10" transform="rotate(5 0 10)" opacity="0.8" preserveAspectRatio="none"/>`,
     );
   });

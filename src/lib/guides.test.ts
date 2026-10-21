@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { fmtCm, guidePaths, parseCm, sanitizeGuides } from "./guides";
 
-const rect = (w: number, h: number) => `M ${-w / 2} 0 L ${w / 2} 0 L ${w / 2} ${h} L ${-w / 2} ${h} Z`;
+const rect = (w: number, h: number) =>
+  `M ${-w / 2} 0 L ${w / 2} 0 L ${w / 2} ${h} L ${-w / 2} ${h} Z`;
 
 describe("guides", () => {
   it("parses comma or dot, rejects invalid", () => {
@@ -18,7 +19,10 @@ describe("guides", () => {
   });
   it("defaults old files to 1 / 4", () => {
     expect(sanitizeGuides(undefined).costas).toEqual({ bleed: 1, safety: 4 });
-    expect(sanitizeGuides({ frente: { bleed: 2, safety: 2 } }).frente).toEqual({ bleed: 2, safety: 2 });
+    expect(sanitizeGuides({ frente: { bleed: 2, safety: 2 } }).frente).toEqual({
+      bleed: 2,
+      safety: 2,
+    });
   });
   it("zero distances draw nothing; frame follows seam", () => {
     const r = guidePaths(rect(40, 20), 40, 20, { bleed: 0, safety: 0 });

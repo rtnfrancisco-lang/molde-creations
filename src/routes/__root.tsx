@@ -89,8 +89,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:title", content: "MoldeCore — Motor de Moldes" },
       {
         property: "og:description",
-        content:
-          "Automação de moldes de roupa para sublimação — crie e gere moldes base.",
+        content: "Automação de moldes de roupa para sublimação — crie e gere moldes base.",
       },
       { property: "og:type", content: "website" },
       { property: "og:locale", content: "pt_BR" },

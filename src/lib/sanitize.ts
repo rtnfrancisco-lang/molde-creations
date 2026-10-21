@@ -9,21 +9,46 @@ type ByView<T> = Record<SView, T>;
 
 /* ---------- Helpers ---------- */
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
-export const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+export const isObj = (v: unknown): v is Record<string, unknown> =>
+  !!v && typeof v === "object" && !Array.isArray(v);
 
 /** Número finito limitado ao intervalo; senão o padrão. */
 export function num(v: unknown, def: number, min = -Infinity, max = Infinity): number {
   if (!isNum(v)) return def;
   return Math.min(max, Math.max(min, v));
 }
-export const str = (v: unknown, max = 1000): string => (typeof v === "string" ? v.slice(0, max) : "");
+export const str = (v: unknown, max = 1000): string =>
+  typeof v === "string" ? v.slice(0, max) : "";
 export const oneOf = <T extends string>(v: unknown, list: readonly T[], def: T): T =>
   typeof v === "string" && (list as readonly string[]).includes(v) ? (v as T) : def;
 export const bool = (v: unknown): boolean => v === true;
 
 const NAMED = new Set([
-  "black", "white", "red", "green", "blue", "yellow", "cyan", "magenta", "gray", "grey", "orange", "purple",
-  "pink", "brown", "navy", "teal", "lime", "maroon", "olive", "silver", "aqua", "fuchsia", "gold", "transparent", "none",
+  "black",
+  "white",
+  "red",
+  "green",
+  "blue",
+  "yellow",
+  "cyan",
+  "magenta",
+  "gray",
+  "grey",
+  "orange",
+  "purple",
+  "pink",
+  "brown",
+  "navy",
+  "teal",
+  "lime",
+  "maroon",
+  "olive",
+  "silver",
+  "aqua",
+  "fuchsia",
+  "gold",
+  "transparent",
+  "none",
 ]);
 const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 const FN = /^(?:rgba?|hsla?)\(\s*[-+0-9.%\s,/]+\)$/i;
@@ -38,7 +63,8 @@ export function cor(v: unknown, def: string | null = null): string | null {
 const isCor = (v: unknown) => cor(v) !== null;
 
 export const MAX_IMAGE_CHARS = 120 * 1024 * 1024;
-const DATA_IMG = /^data:image\/(?:png|jpeg|jpg|webp|gif|svg\+xml)(?:;charset=[\w-]+)?(?:;base64)?,/i;
+const DATA_IMG =
+  /^data:image\/(?:png|jpeg|jpg|webp|gif|svg\+xml)(?:;charset=[\w-]+)?(?:;base64)?,/i;
 /** Só data URL de imagem, sem aspas nem < >. */
 export function safeImageSrc(v: unknown): string | null {
   if (typeof v !== "string" || v.length > MAX_IMAGE_CHARS) return null;
@@ -61,7 +87,14 @@ export function summarizeIssues(issues: string[]): string {
 }
 
 /* Lê número; registra problema quando presente mas inválido/fora do intervalo. */
-function numI(v: unknown, def: number, min: number, max: number, issues: string[], label = "coordenadas inválidas") {
+function numI(
+  v: unknown,
+  def: number,
+  min: number,
+  max: number,
+  issues: string[],
+  label = "coordenadas inválidas",
+) {
   if (isNum(v) && v >= min && v <= max) return v;
   issues.push(label);
   return num(v, def, min, max);
@@ -115,13 +148,35 @@ export function sanitizeShapes(raw: unknown, defaults: ByView<SNode[]>): Res<ByV
 }
 
 /* ---------- Camadas ---------- */
-export type SPath = { subs: { nodes: SNode[]; closed: boolean }[]; fill: string | null; stroke: string | null; sw: number; rule: "nonzero" | "evenodd" };
+export type SPath = {
+  subs: { nodes: SNode[]; closed: boolean }[];
+  fill: string | null;
+  stroke: string | null;
+  sw: number;
+  rule: "nonzero" | "evenodd";
+};
 export type SInit = { cx: number; cy: number; w: number; ratio: number; rot: number };
-export type SSlot = { kind: "nome" | "numero"; h: "esquerda" | "centro" | "direita"; v: "topo" | "centro" | "base"; scale: boolean };
+export type SSlot = {
+  kind: "nome" | "numero";
+  h: "esquerda" | "centro" | "direita";
+  v: "topo" | "centro" | "base";
+  scale: boolean;
+};
 export type SLayer = {
-  id: string; name: string; kind: "imagem" | "vetor" | "pdf"; src?: string; paths?: SPath[];
-  cx: number; cy: number; w: number; ratio: number; rot: number;
-  hidden?: boolean; clipped?: boolean; init?: SInit; slot?: SSlot;
+  id: string;
+  name: string;
+  kind: "imagem" | "vetor" | "pdf";
+  src?: string;
+  paths?: SPath[];
+  cx: number;
+  cy: number;
+  w: number;
+  ratio: number;
+  rot: number;
+  hidden?: boolean;
+  clipped?: boolean;
+  init?: SInit;
+  slot?: SSlot;
 };
 const MAX_LAYERS = 500;
 const MAX_PATHS = 2000;
@@ -129,8 +184,11 @@ const MAX_PATHS = 2000;
 function sanitizeInit(v: unknown): SInit | undefined {
   if (!isObj(v)) return undefined;
   return {
-    cx: num(v["cx"], 0.5, -20, 20), cy: num(v["cy"], 0.5, -20, 20), w: num(v["w"], 0.3, 0.001, 20),
-    ratio: num(v["ratio"], 1, 0.001, 1000), rot: num(v["rot"], 0, -3600, 3600),
+    cx: num(v["cx"], 0.5, -20, 20),
+    cy: num(v["cy"], 0.5, -20, 20),
+    w: num(v["w"], 0.3, 0.001, 20),
+    ratio: num(v["ratio"], 1, 0.001, 1000),
+    rot: num(v["rot"], 0, -3600, 3600),
   };
 }
 function sanitizeSlot(v: unknown): SSlot | undefined {
@@ -163,7 +221,8 @@ function sanitizePaths(raw: unknown, issues: string[]): SPath[] {
     }
     if (p["fill"] != null && !isCor(p["fill"])) issues.push("cores inválidas");
     if (p["stroke"] != null && !isCor(p["stroke"])) issues.push("cores inválidas");
-    if (p["rule"] !== undefined && p["rule"] !== "nonzero" && p["rule"] !== "evenodd") issues.push("regras de preenchimento inválidas");
+    if (p["rule"] !== undefined && p["rule"] !== "nonzero" && p["rule"] !== "evenodd")
+      issues.push("regras de preenchimento inválidas");
     out.push({
       subs,
       fill: cor(p["fill"]),
@@ -207,7 +266,8 @@ function sanitizeLayer(l: unknown, issues: string[], ids: Set<string>): SLayer |
       else issues.push("imagens inseguras removidas");
     }
     out.paths = sanitizePaths(l["paths"], issues);
-    if (!out.src && !out.paths.length && l["paths"] !== undefined && !Array.isArray(l["paths"])) issues.push("caminhos inválidos");
+    if (!out.src && !out.paths.length && l["paths"] !== undefined && !Array.isArray(l["paths"]))
+      issues.push("caminhos inválidos");
   } else {
     const s = safeImageSrc(l["src"]);
     if (!s) {
@@ -246,19 +306,38 @@ export function sanitizeLayers(raw: unknown): Res<ByView<SLayer[]>> {
       continue;
     }
     if (arr.length > MAX_LAYERS) issues.push("camadas em excesso (cortadas)");
-    value[v] = arr.slice(0, MAX_LAYERS).map((l) => sanitizeLayer(l, issues, ids)).filter((l): l is SLayer => !!l);
+    value[v] = arr
+      .slice(0, MAX_LAYERS)
+      .map((l) => sanitizeLayer(l, issues, ids))
+      .filter((l): l is SLayer => !!l);
   }
   return { value, issues };
 }
 
 /* ---------- Textos ---------- */
 export type SText = {
-  id: string; text: string; x: number; y: number; fontFamily: string; fontSize: number;
-  bold: boolean; italic: boolean; underline: boolean; align: "left" | "center" | "right"; color: string;
-  field?: "nome" | "numero"; upper?: boolean; fitWidth?: number | undefined; scaleWithSize?: boolean;
+  id: string;
+  text: string;
+  x: number;
+  y: number;
+  fontFamily: string;
+  fontSize: number;
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  align: "left" | "center" | "right";
+  color: string;
+  field?: "nome" | "numero";
+  upper?: boolean;
+  fitWidth?: number | undefined;
+  scaleWithSize?: boolean;
   fieldAnchor?: "esquerda" | "centro" | "direita";
 };
-export function sanitizeTexts(raw: unknown, fonts: readonly string[], defFont = "Arial"): Res<ByView<SText[]>> {
+export function sanitizeTexts(
+  raw: unknown,
+  fonts: readonly string[],
+  defFont = "Arial",
+): Res<ByView<SText[]>> {
   const issues: string[] = [];
   const o = isObj(raw) ? raw : {};
   if (raw !== undefined && raw !== null && !isObj(raw)) issues.push("listas de textos inválidas");
@@ -285,7 +364,8 @@ export function sanitizeTexts(raw: unknown, fonts: readonly string[], defFont = 
         id = `texto-${k}`;
       }
       ids.add(id);
-      if (t["fontFamily"] !== undefined && !fonts.includes(t["fontFamily"] as string)) issues.push("fontes desconhecidas");
+      if (t["fontFamily"] !== undefined && !fonts.includes(t["fontFamily"] as string))
+        issues.push("fontes desconhecidas");
       if (t["color"] !== undefined && !isCor(t["color"])) issues.push("cores inválidas");
       const out: SText = {
         id,
@@ -304,7 +384,12 @@ export function sanitizeTexts(raw: unknown, fonts: readonly string[], defFont = 
       if (t["upper"] !== undefined) out.upper = bool(t["upper"]);
       if (isNum(t["fitWidth"])) out.fitWidth = num(t["fitWidth"], 0, 0, 1000);
       if (t["scaleWithSize"] !== undefined) out.scaleWithSize = bool(t["scaleWithSize"]);
-      if (t["fieldAnchor"] !== undefined) out.fieldAnchor = oneOf(t["fieldAnchor"], ["esquerda", "centro", "direita"] as const, "centro");
+      if (t["fieldAnchor"] !== undefined)
+        out.fieldAnchor = oneOf(
+          t["fieldAnchor"],
+          ["esquerda", "centro", "direita"] as const,
+          "centro",
+        );
       value[v].push(out);
     }
   }
@@ -313,8 +398,18 @@ export function sanitizeTexts(raw: unknown, fonts: readonly string[], defFont = 
 
 /* ---------- Estampas ---------- */
 export type SArt = {
-  src: string; cx: number; cy: number; w: number; ratio: number; clipped?: boolean; rot?: number;
-  flipX?: boolean; flipY?: boolean; opacity?: number; name?: string; init?: SInit;
+  src: string;
+  cx: number;
+  cy: number;
+  w: number;
+  ratio: number;
+  clipped?: boolean;
+  rot?: number;
+  flipX?: boolean;
+  flipY?: boolean;
+  opacity?: number;
+  name?: string;
+  init?: SInit;
   pre?: { cx: number; cy: number; w: number; rot: number } | undefined;
 };
 export function sanitizeArtworks(raw: unknown): Res<ByView<SArt | null>> {
@@ -342,16 +437,23 @@ export function sanitizeArtworks(raw: unknown): Res<ByView<SArt | null>> {
       ratio: numI(a["ratio"], 1, 0.001, 1000, issues),
     };
     if (a["clipped"] !== undefined) out.clipped = bool(a["clipped"]);
-    if (a["rot"] !== undefined) out.rot = numI(a["rot"], 0, -3600, 3600, issues, "rotações inválidas");
+    if (a["rot"] !== undefined)
+      out.rot = numI(a["rot"], 0, -3600, 3600, issues, "rotações inválidas");
     if (a["flipX"] !== undefined) out.flipX = bool(a["flipX"]);
     if (a["flipY"] !== undefined) out.flipY = bool(a["flipY"]);
-    if (a["opacity"] !== undefined) out.opacity = numI(a["opacity"], 1, 0, 1, issues, "opacidades inválidas");
+    if (a["opacity"] !== undefined)
+      out.opacity = numI(a["opacity"], 1, 0, 1, issues, "opacidades inválidas");
     if (a["name"] !== undefined) out.name = str(a["name"], 120);
     const init = sanitizeInit(a["init"]);
     if (init) out.init = init;
     if (isObj(a["pre"])) {
       const p = a["pre"];
-      out.pre = { cx: num(p["cx"], 0.5, -20, 20), cy: num(p["cy"], 0.5, -20, 20), w: num(p["w"], 0.5, 0.001, 20), rot: num(p["rot"], 0, -3600, 3600) };
+      out.pre = {
+        cx: num(p["cx"], 0.5, -20, 20),
+        cy: num(p["cy"], 0.5, -20, 20),
+        w: num(p["w"], 0.5, 0.001, 20),
+        rot: num(p["rot"], 0, -3600, 3600),
+      };
     }
     value[v] = out;
   }
@@ -366,7 +468,8 @@ export function sanitizeStyles(raw: unknown): Res<ByView<SStyle>> {
   const value = {} as ByView<SStyle>;
   for (const v of VIEWS) {
     const s = isObj(o[v]) ? (o[v] as Record<string, unknown>) : {};
-    if ((s["stroke"] != null && !isCor(s["stroke"])) || (s["fill"] != null && !isCor(s["fill"]))) issues.push("cores inválidas");
+    if ((s["stroke"] != null && !isCor(s["stroke"])) || (s["fill"] != null && !isCor(s["fill"])))
+      issues.push("cores inválidas");
     value[v] = { stroke: cor(s["stroke"]), fill: cor(s["fill"]) };
   }
   return { value, issues };
@@ -394,7 +497,10 @@ export function sanitizeGrading(raw: unknown, defaults: SGrading): Res<SGrading>
 
 export type SProfile = { name: string; tables: Record<string, SGrading> };
 /** Perfis: nomes ≤80, só tabelas dos tipos de peça existentes. */
-export function sanitizeProfiles(raw: unknown, defaultsByType: Record<string, SGrading>): Res<SProfile[]> {
+export function sanitizeProfiles(
+  raw: unknown,
+  defaultsByType: Record<string, SGrading>,
+): Res<SProfile[]> {
   const issues: string[] = [];
   if (!Array.isArray(raw)) return { value: [], issues: raw == null ? [] : ["perfis inválidos"] };
   const value: SProfile[] = [];

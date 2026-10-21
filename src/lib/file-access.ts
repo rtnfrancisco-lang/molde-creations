@@ -13,9 +13,12 @@ type W = Window & {
   showOpenFilePicker?: (o: { types?: Picker[]; multiple?: boolean }) => Promise<Handle[]>;
 };
 
-const TYPES: Picker[] = [{ description: "Projeto MoldeCore", accept: { "application/json": [".moldecore", ".json"] } }];
+const TYPES: Picker[] = [
+  { description: "Projeto MoldeCore", accept: { "application/json": [".moldecore", ".json"] } },
+];
 
-export const hasFsAccess = () => typeof window !== "undefined" && typeof (window as W).showSaveFilePicker === "function";
+export const hasFsAccess = () =>
+  typeof window !== "undefined" && typeof (window as W).showSaveFilePicker === "function";
 
 export const isAbort = (e: unknown) => (e as DOMException)?.name === "AbortError";
 
@@ -29,7 +32,10 @@ export async function writeHandle(h: Handle, text: string) {
 export async function pickSaveHandle(suggestedName: string): Promise<Handle | null> {
   const w = window as W;
   if (!w.showSaveFilePicker) return null;
-  return w.showSaveFilePicker({ suggestedName, types: [{ description: "Projeto MoldeCore", accept: { "application/json": [".moldecore"] } }] });
+  return w.showSaveFilePicker({
+    suggestedName,
+    types: [{ description: "Projeto MoldeCore", accept: { "application/json": [".moldecore"] } }],
+  });
 }
 
 export function downloadText(text: string, filename: string) {
@@ -44,7 +50,11 @@ export function downloadText(text: string, filename: string) {
 }
 
 /** Abre um projeto. Devolve null se o usuário cancelar. */
-export async function openProjectFile(): Promise<{ text: string; name: string; handle: Handle | null } | null> {
+export async function openProjectFile(): Promise<{
+  text: string;
+  name: string;
+  handle: Handle | null;
+} | null> {
   const w = window as W;
   if (w.showOpenFilePicker) {
     try {

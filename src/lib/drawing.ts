@@ -62,7 +62,10 @@ export function rdp(pts: P[], tol: number): P[] {
   const len = Math.hypot(dx, dy);
   for (let i = 1; i < pts.length - 1; i++) {
     const p = pts[i]!;
-    const d = len < 1e-9 ? Math.hypot(p.x - a.x, p.y - a.y) : Math.abs(dy * p.x - dx * p.y + b.x * a.y - b.y * a.x) / len;
+    const d =
+      len < 1e-9
+        ? Math.hypot(p.x - a.x, p.y - a.y)
+        : Math.abs(dy * p.x - dx * p.y + b.x * a.y - b.y * a.x) / len;
     if (d > best) {
       best = d;
       idx = i;
@@ -98,7 +101,10 @@ export function layerFromCm(
   H: number,
 ): Layer | null {
   if (nodes.length < 2) return null;
-  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  let x0 = Infinity,
+    y0 = Infinity,
+    x1 = -Infinity,
+    y1 = -Infinity;
   const add = (x: number, y: number) => {
     x0 = Math.min(x0, x);
     y0 = Math.min(y0, y);
@@ -136,7 +142,15 @@ export function layerFromCm(
     id: "d" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
     name,
     kind: "vetor",
-    paths: [{ subs: [{ nodes: ln, closed }], fill: closed ? style.fill : null, stroke: style.stroke, sw: style.widthCm / bw, rule: "nonzero" }],
+    paths: [
+      {
+        subs: [{ nodes: ln, closed }],
+        fill: closed ? style.fill : null,
+        stroke: style.stroke,
+        sw: style.widthCm / bw,
+        rule: "nonzero",
+      },
+    ],
     cx: cxCm / W + 0.5,
     cy: cyCm / H,
     w: bw / W,
@@ -167,14 +181,24 @@ export function dragRect(s: P, p: P, shift: boolean, alt: boolean) {
   }
   const a = alt ? { x: s.x - dx, y: s.y - dy } : s;
   const b = { x: s.x + dx, y: s.y + dy };
-  return { a, b, x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) };
+  return {
+    a,
+    b,
+    x: Math.min(a.x, b.x),
+    y: Math.min(a.y, b.y),
+    w: Math.abs(b.x - a.x),
+    h: Math.abs(b.y - a.y),
+  };
 }
 
 const K = 0.5523;
 const poly = (pts: P[]): CmNode[] => pts.map((p) => ({ x: p.x, y: p.y, smooth: false }));
 
 /** Nós (em cm) da forma dentro da caixa. Retorna também se é fechada. */
-export function shapeNodes(kind: ShapeKind, r: ReturnType<typeof dragRect>): { nodes: CmNode[]; closed: boolean } {
+export function shapeNodes(
+  kind: ShapeKind,
+  r: ReturnType<typeof dragRect>,
+): { nodes: CmNode[]; closed: boolean } {
   const { x, y, w, h } = r;
   const cx = x + w / 2;
   const cy = y + h / 2;
@@ -192,11 +216,25 @@ export function shapeNodes(kind: ShapeKind, r: ReturnType<typeof dragRect>): { n
   };
   switch (kind) {
     case "retangulo":
-      return { nodes: poly([{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }]), closed: true };
+      return {
+        nodes: poly([
+          { x, y },
+          { x: x + w, y },
+          { x: x + w, y: y + h },
+          { x, y: y + h },
+        ]),
+        closed: true,
+      };
     case "arredondado": {
       const rr = Math.min(w, h) * 0.15;
       const k = rr * K;
-      const n = (px: number, py: number, hIn?: P, hOut?: P): CmNode => ({ x: px, y: py, smooth: false, ...(hIn ? { hIn } : {}), ...(hOut ? { hOut } : {}) });
+      const n = (px: number, py: number, hIn?: P, hOut?: P): CmNode => ({
+        x: px,
+        y: py,
+        smooth: false,
+        ...(hIn ? { hIn } : {}),
+        ...(hOut ? { hOut } : {}),
+      });
       return {
         closed: true,
         nodes: [
@@ -222,9 +260,24 @@ export function shapeNodes(kind: ShapeKind, r: ReturnType<typeof dragRect>): { n
         ],
       };
     case "triangulo":
-      return { nodes: poly([{ x: cx, y }, { x: x + w, y: y + h }, { x, y: y + h }]), closed: true };
+      return {
+        nodes: poly([
+          { x: cx, y },
+          { x: x + w, y: y + h },
+          { x, y: y + h },
+        ]),
+        closed: true,
+      };
     case "losango":
-      return { nodes: poly([{ x: cx, y }, { x: x + w, y: cy }, { x: cx, y: y + h }, { x, y: cy }]), closed: true };
+      return {
+        nodes: poly([
+          { x: cx, y },
+          { x: x + w, y: cy },
+          { x: cx, y: y + h },
+          { x, y: cy },
+        ]),
+        closed: true,
+      };
     case "pentagono":
       return { nodes: regular(5, -Math.PI / 2), closed: true };
     case "hexagono":
@@ -233,7 +286,18 @@ export function shapeNodes(kind: ShapeKind, r: ReturnType<typeof dragRect>): { n
       return { nodes: regular(5, -Math.PI / 2, 0.4), closed: true };
     case "seta": {
       const p = (u: number, v: number) => ({ x: x + u * w, y: y + v * h });
-      return { nodes: poly([p(0, 0.3), p(0.6, 0.3), p(0.6, 0), p(1, 0.5), p(0.6, 1), p(0.6, 0.7), p(0, 0.7)]), closed: true };
+      return {
+        nodes: poly([
+          p(0, 0.3),
+          p(0.6, 0.3),
+          p(0.6, 0),
+          p(1, 0.5),
+          p(0.6, 1),
+          p(0.6, 0.7),
+          p(0, 0.7),
+        ]),
+        closed: true,
+      };
     }
     case "linha":
       return { nodes: poly([r.a, r.b]), closed: false };
