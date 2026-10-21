@@ -62,7 +62,10 @@ export function claimEditor(): Promise<TabState> {
       emit();
       resolve(s);
     };
-    const locks = typeof navigator !== "undefined" ? (navigator as Navigator & { locks?: LockManager }).locks : undefined;
+    const locks =
+      typeof navigator !== "undefined"
+        ? (navigator as Navigator & { locks?: LockManager }).locks
+        : undefined;
     if (locks?.request) {
       locks
         .request(LOCK, { ifAvailable: true }, (lock) => {
@@ -81,7 +84,8 @@ export function claimEditor(): Promise<TabState> {
     try {
       const raw = localStorage.getItem(HB_KEY);
       const o = raw ? (JSON.parse(raw) as { id?: string; t?: number }) : null;
-      if (o && o.id !== id && typeof o.t === "number" && Date.now() - o.t < 5000) return done("secondary");
+      if (o && o.id !== id && typeof o.t === "number" && Date.now() - o.t < 5000)
+        return done("secondary");
       const beat = () => localStorage.setItem(HB_KEY, JSON.stringify({ id, t: Date.now() }));
       beat();
       setInterval(beat, 2000);
@@ -96,7 +100,10 @@ export function claimEditor(): Promise<TabState> {
 
 /** Cópia de tudo (IndexedDB + localStorage "moldecore.*"). */
 export async function dumpAll(): Promise<Record<string, unknown>> {
-  const out: { indexedDB: Record<string, unknown>; localStorage: Record<string, string> } = { indexedDB: {}, localStorage: {} };
+  const out: { indexedDB: Record<string, unknown>; localStorage: Record<string, string> } = {
+    indexedDB: {},
+    localStorage: {},
+  };
   try {
     for (const k of await idb.keys()) out.indexedDB[String(k)] = await idb.get(String(k));
   } catch {

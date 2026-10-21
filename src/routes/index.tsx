@@ -1,8 +1,42 @@
 import { sleeveShape, mirrorShape, migrateSleeveShapes, migrateSleeveWidths } from "@/lib/sleeve";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { DEFAULT_GUIDES, fmtCm, guidePaths, sanitizeGuides, type Guide, type GuideView, type Guides } from "@/lib/guides";
-import { ALIGN_KEYS, alignDeltas, objectsRef, rotatedBox, type AlignOp, type AlignRefKind, type Box } from "@/lib/align";
-import { AlignHorizontalJustifyCenter, Crosshair, AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  DEFAULT_GUIDES,
+  fmtCm,
+  guidePaths,
+  sanitizeGuides,
+  type Guide,
+  type GuideView,
+  type Guides,
+} from "@/lib/guides";
+import {
+  ALIGN_KEYS,
+  alignDeltas,
+  objectsRef,
+  rotatedBox,
+  type AlignOp,
+  type AlignRefKind,
+  type Box,
+} from "@/lib/align";
+import {
+  AlignHorizontalJustifyCenter,
+  Crosshair,
+  AlignCenterHorizontal,
+  AlignCenterVertical,
+  AlignEndHorizontal,
+  AlignEndVertical,
+  AlignStartHorizontal,
+  AlignStartVertical,
+} from "lucide-react";
 import { GuidesPanel, type GuideGroup } from "@/components/GuidesPanel";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -60,21 +94,71 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import * as idb from "@/lib/idb";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { TeamPanel, type TeamExportOpts } from "@/components/TeamPanel";
 import { embedFonts } from "@/lib/raster-export";
 import { sanitizeRoster, type Player } from "@/lib/roster";
 import { sanitizeImages, type TeamImage } from "@/lib/team-images";
 import { resolveTeamSlot, slotDpi } from "@/lib/team-slot";
-import { teamScale, resolveTeamText, measureText, fontsReady, teamTextOverflows, type ResolvedTeamText } from "@/lib/team-text";
+import {
+  teamScale,
+  resolveTeamText,
+  measureText,
+  fontsReady,
+  teamTextOverflows,
+  type ResolvedTeamText,
+} from "@/lib/team-text";
 import { renderPiece, zipFiles, todayStamp, yieldFrame, MIME } from "@/lib/export-render";
-import { teamFileName, uniqueName, TEAM_EXT, TEAM_DPIS, fitDpi, cmToPx, type TeamFormat } from "@/lib/team-export";
+import {
+  teamFileName,
+  uniqueName,
+  TEAM_EXT,
+  TEAM_DPIS,
+  fitDpi,
+  cmToPx,
+  type TeamFormat,
+} from "@/lib/team-export";
 import { RecoveryScreen } from "@/components/RecoveryScreen";
-import { canRead, canWrite, claimEditor, isSafeMode, lsGet, lsSet, setSafeMode, subscribeGuard, tabState } from "@/lib/storage-guard";
+import {
+  canRead,
+  canWrite,
+  claimEditor,
+  isSafeMode,
+  lsGet,
+  lsSet,
+  setSafeMode,
+  subscribeGuard,
+  tabState,
+} from "@/lib/storage-guard";
 import { attr, color, n, nf, safeSrc } from "@/lib/svg-safe";
-import { sanitizeArtworks, sanitizeGrading, sanitizeLayers, sanitizeProfiles, sanitizeShapes, sanitizeStyles, sanitizeTexts, summarizeIssues, type SGrading } from "@/lib/sanitize";
+import {
+  sanitizeArtworks,
+  sanitizeGrading,
+  sanitizeLayers,
+  sanitizeProfiles,
+  sanitizeShapes,
+  sanitizeStyles,
+  sanitizeTexts,
+  summarizeIssues,
+  type SGrading,
+} from "@/lib/sanitize";
 import { buildProjectFile, parseProjectFile, nameFromFile, PROJECT_EXT } from "@/lib/project-file";
-import { hasFsAccess, pickSaveHandle, writeHandle, downloadText, openProjectFile, isAbort, type FileHandle } from "@/lib/file-access";
+import {
+  hasFsAccess,
+  pickSaveHandle,
+  writeHandle,
+  downloadText,
+  openProjectFile,
+  isAbort,
+  type FileHandle,
+} from "@/lib/file-access";
 import {
   buildPath,
   importSvg,
@@ -89,15 +173,23 @@ import {
   type LayerSlot,
 } from "@/lib/importers";
 import { activeView } from "@/lib/active-view";
-import {
-  offsetPathD,
-  TECHNICAL_OFFSET_OPTIONS,
-} from "@/lib/vector-offset";
+import { offsetPathD, TECHNICAL_OFFSET_OPTIONS } from "@/lib/vector-offset";
 import { DirectTextEditor } from "@/components/DirectTextEditor";
 import { ImageEditorModal } from "@/components/ImageEditorModal";
 import { PowerClipEditor, artTransform, type PcArt } from "@/components/PowerClipEditor";
 import { DrawOptionsPanel } from "@/components/DrawOptionsPanel";
-import { DEFAULT_DRAW_OPTS, SHAPE_LABELS, dedupe, dragRect, layerFromCm, nextName, rdp, shapeNodes, type CmNode, type DrawOpts } from "@/lib/drawing";
+import {
+  DEFAULT_DRAW_OPTS,
+  SHAPE_LABELS,
+  dedupe,
+  dragRect,
+  layerFromCm,
+  nextName,
+  rdp,
+  shapeNodes,
+  type CmNode,
+  type DrawOpts,
+} from "@/lib/drawing";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -111,7 +203,8 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: "MoldeCore — Motor de Moldes" },
       {
         property: "og:description",
-        content: "Automação de moldes de roupa para sublimação — frente, costas e mangas vetoriais.",
+        content:
+          "Automação de moldes de roupa para sublimação — frente, costas e mangas vetoriais.",
       },
       { property: "og:type", content: "website" },
       { property: "og:locale", content: "pt_BR" },
@@ -129,7 +222,13 @@ type Measurements = Record<Field, number>;
 type Size = "PP" | "P" | "M" | "G" | "GG" | "XG" | "XG2";
 type Grading = Record<Size, Measurements>;
 type View = "frente" | "costas" | "mangaEsq" | "mangaDir";
-type Node = { x: number; y: number; smooth: boolean; hIn?: { x: number; y: number }; hOut?: { x: number; y: number } };
+type Node = {
+  x: number;
+  y: number;
+  smooth: boolean;
+  hIn?: { x: number; y: number };
+  hOut?: { x: number; y: number };
+};
 type Shapes = Record<View, Node[]>;
 type Artwork = PcArt;
 type Artworks = Record<View, Artwork | null>;
@@ -140,7 +239,12 @@ type PartStyle = { stroke: string | null; fill: string | null };
 type Styles = Record<View, PartStyle>;
 const NO_ART: Artworks = { frente: null, costas: null, mangaEsq: null, mangaDir: null };
 const NO_STYLE: PartStyle = { stroke: null, fill: null };
-const DEFAULT_STYLES: Styles = { frente: NO_STYLE, costas: NO_STYLE, mangaEsq: NO_STYLE, mangaDir: NO_STYLE };
+const DEFAULT_STYLES: Styles = {
+  frente: NO_STYLE,
+  costas: NO_STYLE,
+  mangaEsq: NO_STYLE,
+  mangaDir: NO_STYLE,
+};
 type Tool = "selecao" | "forma" | "caneta" | "formas" | "zoom" | "fita" | "texto";
 type TextElement = {
   id: string;
@@ -167,7 +271,9 @@ const CLOTHING_TYPES = ["Camisa Infantil", "Camisa Baby Look", "Camiseta", "Shor
 type ClothingType = (typeof CLOTHING_TYPES)[number];
 /* Tipos removidos (Moletom, Regata, Manga Longa) ou desconhecidos abrem como Camiseta. */
 const asClothingType = (v: unknown): ClothingType =>
-  typeof v === "string" && (CLOTHING_TYPES as readonly string[]).includes(v) ? (v as ClothingType) : "Camiseta";
+  typeof v === "string" && (CLOTHING_TYPES as readonly string[]).includes(v)
+    ? (v as ClothingType)
+    : "Camiseta";
 type SizeOption = { id: Size; label: string };
 
 /* Fonte única de verdade dos tamanhos disponíveis e dos rótulos exibidos. */
@@ -186,8 +292,10 @@ const SIZES_BY_GARMENT: Record<ClothingType, readonly SizeOption[]> = {
   Short: ["PP", "P", "M", "G", "GG", "XG"].map((id) => ({ id: id as Size, label: id })),
 };
 
-const sizesForGarment = (clothingType: ClothingType): readonly SizeOption[] => SIZES_BY_GARMENT[clothingType];
-const sizeIdsForGarment = (clothingType: ClothingType): readonly Size[] => sizesForGarment(clothingType).map((option) => option.id);
+const sizesForGarment = (clothingType: ClothingType): readonly SizeOption[] =>
+  SIZES_BY_GARMENT[clothingType];
+const sizeIdsForGarment = (clothingType: ClothingType): readonly Size[] =>
+  sizesForGarment(clothingType).map((option) => option.id);
 /* Lista completa de tamanhos (todas as peças). */
 const SIZES: readonly Size[] = ["PP", "P", "M", "G", "GG", "XG", "XG2"];
 
@@ -285,8 +393,11 @@ const SLEEVE_MIGRATIONS: [Grading, Grading][] = [
 const migrateGradingSleeves = (g: Grading, only?: [Grading, Grading]): Grading =>
   (only ? [only] : SLEEVE_MIGRATIONS).reduce((acc, [o, n]) => migrateSleeveWidths(acc, o, n), g);
 const OLD_FOR_TYPE = (t: string): [Grading, Grading] =>
-  t === "Camisa Infantil" ? SLEEVE_MIGRATIONS[1]! : t === "Camisa Baby Look" ? SLEEVE_MIGRATIONS[2]! : SLEEVE_MIGRATIONS[0]!;
-
+  t === "Camisa Infantil"
+    ? SLEEVE_MIGRATIONS[1]!
+    : t === "Camisa Baby Look"
+      ? SLEEVE_MIGRATIONS[2]!
+      : SLEEVE_MIGRATIONS[0]!;
 
 const PRESET_TABLES: Partial<Record<ClothingType, Grading>> = {
   "Camisa Infantil": INFANTIL_TABLE,
@@ -311,7 +422,8 @@ const DEFAULT_MOTHER: Record<ClothingType, Size> = {
 };
 
 /* Nome legível da parte do molde a partir da vista ativa */
-const partLabel = (view: View, t: ClothingType = "Camiseta"): string => GARMENT_CONFIG[t].partLabels[view];
+const partLabel = (view: View, t: ClothingType = "Camiseta"): string =>
+  GARMENT_CONFIG[t].partLabels[view];
 
 /* Texto do indicador técnico (canto superior esquerdo): [Tamanho] [Parte] */
 const techLabel = (clothingType: ClothingType, size: Size, view: View): string =>
@@ -338,8 +450,6 @@ const bodyShape = (neckDepth: number): Node[] => [
   { x: 0.11, y: 0.15, smooth: true },
   { x: 0.08, y: 0.05, smooth: false },
 ];
-
-
 
 const DEFAULT_SHAPES: Shapes = {
   frente: bodyShape(0.12),
@@ -383,12 +493,25 @@ const legLeftShape = (): Node[] => [
   { x: 0.139, y: 0.4, smooth: true },
   { x: 0.144, y: 0.25, smooth: true },
 ];
-const legRightShape = (): Node[] => legLeftShape().map((n) => ({ ...n, x: 1 - n.x })).reverse();
+const legRightShape = (): Node[] =>
+  legLeftShape()
+    .map((n) => ({ ...n, x: 1 - n.x }))
+    .reverse();
 const CAMISA_CONFIG: GarmentConfig = {
   family: "camisa",
   views: ["frente", "costas", "mangaEsq", "mangaDir"],
-  viewLabels: { frente: "Frente", costas: "Costas", mangaEsq: "Manga Esquerda", mangaDir: "Manga Direita" },
-  shortLabels: { frente: "Frente", costas: "Costas", mangaEsq: "Manga Esq.", mangaDir: "Manga Dir." },
+  viewLabels: {
+    frente: "Frente",
+    costas: "Costas",
+    mangaEsq: "Manga Esquerda",
+    mangaDir: "Manga Direita",
+  },
+  shortLabels: {
+    frente: "Frente",
+    costas: "Costas",
+    mangaEsq: "Manga Esq.",
+    mangaDir: "Manga Dir.",
+  },
   partLabels: { frente: "FRENTE", costas: "COSTAS", mangaEsq: "MANGA ESQ", mangaDir: "MANGA DIR" },
   guideGroups: [
     { id: "frente", label: "Frente", views: ["frente"] },
@@ -405,9 +528,24 @@ const GARMENT_CONFIG: Record<ClothingType, GarmentConfig> = {
   Short: {
     family: "short",
     views: ["frente", "costas"],
-    viewLabels: { frente: "Perna Esquerda", costas: "Perna Direita", mangaEsq: "Perna Esquerda", mangaDir: "Perna Direita" },
-    shortLabels: { frente: "Perna Esquerda", costas: "Perna Direita", mangaEsq: "Perna Esquerda", mangaDir: "Perna Direita" },
-    partLabels: { frente: "PERNA ESQUERDA", costas: "PERNA DIREITA", mangaEsq: "PERNA ESQUERDA", mangaDir: "PERNA DIREITA" },
+    viewLabels: {
+      frente: "Perna Esquerda",
+      costas: "Perna Direita",
+      mangaEsq: "Perna Esquerda",
+      mangaDir: "Perna Direita",
+    },
+    shortLabels: {
+      frente: "Perna Esquerda",
+      costas: "Perna Direita",
+      mangaEsq: "Perna Esquerda",
+      mangaDir: "Perna Direita",
+    },
+    partLabels: {
+      frente: "PERNA ESQUERDA",
+      costas: "PERNA DIREITA",
+      mangaEsq: "PERNA ESQUERDA",
+      mangaDir: "PERNA DIREITA",
+    },
     guideGroups: [
       { id: "pernaEsq", label: "Perna Esquerda", views: ["frente"] },
       { id: "pernaDir", label: "Perna Direita", views: ["costas"] },
@@ -416,7 +554,12 @@ const GARMENT_CONFIG: Record<ClothingType, GarmentConfig> = {
       { key: "bodyWidth", label: "Largura da Perna", group: "Perna" },
       { key: "bodyHeight", label: "Altura da Perna", group: "Perna" },
     ],
-    defaultShapes: () => ({ frente: legLeftShape(), costas: legRightShape(), mangaEsq: legLeftShape(), mangaDir: legRightShape() }),
+    defaultShapes: () => ({
+      frente: legLeftShape(),
+      costas: legRightShape(),
+      mangaEsq: legLeftShape(),
+      mangaDir: legRightShape(),
+    }),
   },
 };
 const viewsFor = (t: ClothingType): View[] => GARMENT_CONFIG[t].views;
@@ -426,9 +569,13 @@ const fieldsFor = (t: ClothingType) => GARMENT_CONFIG[t].fields;
 const defaultShapesFor = (t: ClothingType): Shapes => GARMENT_CONFIG[t].defaultShapes();
 const garmentFamily = (t: ClothingType): GarmentFamily => GARMENT_CONFIG[t].family;
 /* Rótulo sem acento e com "_" no lugar de espaços, para nomes de arquivo. */
-const slugLabel = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().replace(/\s+/g, "_");
+const slugLabel = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .replace(/\s+/g, "_");
 const LS_TYPE = "moldecore.tipoPeca";
-
 
 const TOOLS: { k: Tool; label: string; icon: typeof Ruler; key: string }[] = [
   { k: "selecao", label: "Ferramenta Seleção", icon: MousePointer2, key: "V" },
@@ -441,9 +588,12 @@ const TOOLS: { k: Tool; label: string; icon: typeof Ruler; key: string }[] = [
 ];
 
 const TOOL_HINTS: Record<Tool, string> = {
-  selecao: "Clique em um objeto para selecionar · arraste as alças para redimensionar · o cadeado trava a proporção",
-  forma: "Arraste nós e alças · duplo clique adiciona nó · Alt+clique remove · Shift+clique alterna reta/curva",
-  caneta: "Mão livre: arraste para desenhar · clique para pontos retos · clique no 1º ponto, Enter ou duplo clique finaliza · Esc cancela",
+  selecao:
+    "Clique em um objeto para selecionar · arraste as alças para redimensionar · o cadeado trava a proporção",
+  forma:
+    "Arraste nós e alças · duplo clique adiciona nó · Alt+clique remove · Shift+clique alterna reta/curva",
+  caneta:
+    "Mão livre: arraste para desenhar · clique para pontos retos · clique no 1º ponto, Enter ou duplo clique finaliza · Esc cancela",
   formas: "Escolha a forma · arraste no canvas · Shift proporcional · Alt a partir do centro",
   zoom: "Clique para aproximar · Alt+clique afasta · arraste para mover a vista · roda do mouse também dá zoom",
   fita: "Clique em dois pontos para medir a distância real em cm",
@@ -481,16 +631,24 @@ const defaultTablesForProfiles = (): ProfileTables => ({
   Short: cloneGrading(SHORT_TABLE),
 });
 
-
 const readGradeProfiles = (): GradeProfile[] => {
   try {
     const raw = lsGet(LS_PROFILES);
     if (!raw) return [{ name: DEFAULT_PROFILE_NAME, tables: defaultTablesForProfiles() }];
-    const { value } = sanitizeProfiles(JSON.parse(raw), defaultTablesForProfiles() as unknown as Record<string, SGrading>);
-    if (value.length === 0) return [{ name: DEFAULT_PROFILE_NAME, tables: defaultTablesForProfiles() }];
+    const { value } = sanitizeProfiles(
+      JSON.parse(raw),
+      defaultTablesForProfiles() as unknown as Record<string, SGrading>,
+    );
+    if (value.length === 0)
+      return [{ name: DEFAULT_PROFILE_NAME, tables: defaultTablesForProfiles() }];
     return value.map((profile) => ({
       name: profile.name,
-      tables: Object.fromEntries(Object.entries(profile.tables).map(([t, g]) => [t, migrateGradingSleeves(g as Grading, OLD_FOR_TYPE(t))])) as ProfileTables,
+      tables: Object.fromEntries(
+        Object.entries(profile.tables).map(([t, g]) => [
+          t,
+          migrateGradingSleeves(g as Grading, OLD_FOR_TYPE(t)),
+        ]),
+      ) as ProfileTables,
     }));
   } catch {
     return [{ name: DEFAULT_PROFILE_NAME, tables: defaultTablesForProfiles() }];
@@ -597,7 +755,9 @@ const ProfileDock = ({
           <PanelRightClose className="size-4" />
         </button>
         <div className="min-w-0">
-          <p className="text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">Tabela de Tamanhos</p>
+          <p className="text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">
+            Tabela de Tamanhos
+          </p>
           <h2 className="text-sm font-semibold text-foreground">Perfil de Grade do Cliente</h2>
         </div>
         <div className="flex items-center gap-1">
@@ -658,29 +818,44 @@ const ProfileDock = ({
           <div className="w-full rounded-lg border border-line bg-panel p-4 shadow-2xl">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
-                <p className="text-[10px] font-mono uppercase tracking-[0.16em] text-cyan">Salvar medidas</p>
-                <h3 className="mt-1 text-base font-semibold text-foreground">Em qual Perfil de Cliente deseja salvar estas medidas?</h3>
+                <p className="text-[10px] font-mono uppercase tracking-[0.16em] text-cyan">
+                  Salvar medidas
+                </p>
+                <h3 className="mt-1 text-base font-semibold text-foreground">
+                  Em qual Perfil de Cliente deseja salvar estas medidas?
+                </h3>
               </div>
-              <button type="button" onClick={() => setSaveOpen(false)} aria-label="Fechar" className="text-muted-foreground hover:text-foreground">
+              <button
+                type="button"
+                onClick={() => setSaveOpen(false)}
+                aria-label="Fechar"
+                className="text-muted-foreground hover:text-foreground"
+              >
                 <X className="size-4" />
               </button>
             </div>
 
-            <label className="mb-1.5 block text-[10px] font-mono uppercase tracking-[0.12em] text-muted-foreground">Perfil de destino</label>
+            <label className="mb-1.5 block text-[10px] font-mono uppercase tracking-[0.12em] text-muted-foreground">
+              Perfil de destino
+            </label>
             <select
               value={saveTarget}
               onChange={(event) => setSaveTarget(event.target.value)}
               className="h-9 w-full rounded-md border border-input bg-panel2 px-3 text-sm text-foreground outline-none focus:border-cyan/60 focus:ring-1 focus:ring-cyan/30"
             >
               {profiles.map((profile) => (
-                <option key={profile.name} value={profile.name}>{profile.name} — atualizar</option>
+                <option key={profile.name} value={profile.name}>
+                  {profile.name} — atualizar
+                </option>
               ))}
               <option value="__new__">Criar Novo Perfil</option>
             </select>
 
             {saveTarget === "__new__" && (
               <div className="mt-3">
-                <label className="mb-1.5 block text-[10px] font-mono uppercase tracking-[0.12em] text-muted-foreground">Nome do Perfil Geral do Cliente</label>
+                <label className="mb-1.5 block text-[10px] font-mono uppercase tracking-[0.12em] text-muted-foreground">
+                  Nome do Perfil Geral do Cliente
+                </label>
                 <input
                   autoFocus
                   value={newProfileName}
@@ -692,7 +867,9 @@ const ProfileDock = ({
             )}
 
             <div className="mt-3">
-              <label className="mb-1.5 block text-[10px] font-mono uppercase tracking-[0.12em] text-muted-foreground">Nome específico da variação (opcional)</label>
+              <label className="mb-1.5 block text-[10px] font-mono uppercase tracking-[0.12em] text-muted-foreground">
+                Nome específico da variação (opcional)
+              </label>
               <input
                 value={variationName}
                 onChange={(event) => setVariationName(event.target.value)}
@@ -702,8 +879,21 @@ const ProfileDock = ({
             </div>
 
             <div className="mt-4 flex justify-end gap-2">
-              <button type="button" onClick={() => setSaveOpen(false)} className="h-9 rounded-md border border-line px-3 text-sm text-muted-foreground hover:bg-panel2 hover:text-foreground">Cancelar</button>
-              <button type="button" onClick={submitSave} disabled={saveTarget === "__new__" && !newProfileName.trim()} className="h-9 rounded-md bg-cyan px-4 text-sm font-semibold text-primary-foreground hover:bg-cyan/90 disabled:opacity-50">Salvar perfil</button>
+              <button
+                type="button"
+                onClick={() => setSaveOpen(false)}
+                className="h-9 rounded-md border border-line px-3 text-sm text-muted-foreground hover:bg-panel2 hover:text-foreground"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={submitSave}
+                disabled={saveTarget === "__new__" && !newProfileName.trim()}
+                className="h-9 rounded-md bg-cyan px-4 text-sm font-semibold text-primary-foreground hover:bg-cyan/90 disabled:opacity-50"
+              >
+                Salvar perfil
+              </button>
             </div>
           </div>
         </div>
@@ -733,11 +923,14 @@ const reportSave = (ok: boolean) => {
     saveFailed = false;
   } else if (!saveFailed) {
     saveFailed = true;
-    toast.error("Não foi possível salvar automaticamente. Salve o projeto em arquivo (Arquivo > Salvar)", {
-      id: SAVE_FAIL_TOAST,
-      duration: Infinity,
-      action: { label: "Salvar projeto em arquivo agora", onClick: () => saveNow.current?.() },
-    });
+    toast.error(
+      "Não foi possível salvar automaticamente. Salve o projeto em arquivo (Arquivo > Salvar)",
+      {
+        id: SAVE_FAIL_TOAST,
+        duration: Infinity,
+        action: { label: "Salvar projeto em arquivo agora", onClick: () => saveNow.current?.() },
+      },
+    );
   }
 };
 /** Só grava dados grandes depois que o carregamento inicial terminou. */
@@ -833,7 +1026,14 @@ const loadAllBig = async (): Promise<Record<string, unknown>> => {
 const MAX_PROJECT_CHARS = 500 * 1024 * 1024;
 
 /** Sanitiza os dados de desenho vindos de arquivo ou armazenamento. */
-function sanitizeDrawing(art: unknown, sty: unknown, sh: unknown, ly: unknown, tx: unknown, defShapes: Shapes) {
+function sanitizeDrawing(
+  art: unknown,
+  sty: unknown,
+  sh: unknown,
+  ly: unknown,
+  tx: unknown,
+  defShapes: Shapes,
+) {
   const a = sanitizeArtworks(art);
   const st = sanitizeStyles(sty);
   const shp = sanitizeShapes(sh, defShapes);
@@ -854,16 +1054,16 @@ async function backupOriginal(big: Record<string, unknown>) {
   if (!idb.hasIdb() || !canWrite()) return;
   try {
     await idb.set(`moldecore.backup.${new Date().toISOString()}`, big);
-    const ks = (await idb.keys()).filter((k) => typeof k === "string" && k.startsWith("moldecore.backup.")).sort();
+    const ks = (await idb.keys())
+      .filter((k) => typeof k === "string" && k.startsWith("moldecore.backup."))
+      .sort();
     for (const k of ks.slice(0, Math.max(0, ks.length - 3))) await idb.del(k);
   } catch {
     /* backup é opcional */
   }
 }
 
-const LIBRARY = [
-  { name: "Camiseta Clássica — Sublimação", size: "M", active: true },
-];
+const LIBRARY = [{ name: "Camiseta Clássica — Sublimação", size: "M", active: true }];
 
 const fmt = (n: number) => n.toFixed(1).replace(".", ",");
 const round1 = (n: number) => Math.round(n * 10) / 10;
@@ -873,7 +1073,9 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
    lidos na ordem em que aparecem. Serve para o quadro de mídia colar exatamente
    na Linha Azul de Sangria, sem margem nem padding. */
 
-const pathBounds = (d: string): { minX: number; minY: number; maxX: number; maxY: number } | null => {
+const pathBounds = (
+  d: string,
+): { minX: number; minY: number; maxX: number; maxY: number } | null => {
   const nums = d.match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi);
   if (!nums || nums.length < 4) return null;
   let minX = Infinity;
@@ -905,7 +1107,8 @@ const isTypingTarget = (target: EventTarget | null) => {
   const el = target as HTMLElement | null;
   if (!el) return false;
   if (el.isContentEditable || el.tagName === "TEXTAREA") return true;
-  if (el.tagName === "INPUT") return TYPING_INPUTS.has(((el as HTMLInputElement).type || "text").toLowerCase());
+  if (el.tagName === "INPUT")
+    return TYPING_INPUTS.has(((el as HTMLInputElement).type || "text").toLowerCase());
   return false;
 };
 
@@ -946,7 +1149,10 @@ function CanvasContextMenu({
   return (
     <div
       className="fixed z-[100] min-w-52 max-h-[calc(100vh-1rem)] overflow-y-auto rounded-lg border border-line bg-panel p-1.5 shadow-xl"
-      style={{ left: Math.min(x, window.innerWidth - 230), top: Math.max(8, Math.min(y, window.innerHeight - 460)) }}
+      style={{
+        left: Math.min(x, window.innerWidth - 230),
+        top: Math.max(8, Math.min(y, window.innerHeight - 460)),
+      }}
       onContextMenu={(event) => event.preventDefault()}
       onClick={(event) => event.stopPropagation()}
     >
@@ -981,9 +1187,17 @@ function CanvasContextMenu({
         .map((sec) => (
           <div key={sec.title}>
             <div className="my-1 border-t border-line" />
-            <div className="px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider text-faint">{sec.title}</div>
+            <div className="px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider text-faint">
+              {sec.title}
+            </div>
             {sec.items.map((i) => (
-              <button key={i.label} type="button" className={itemClass} disabled={i.disabled} onClick={act(i.run)}>
+              <button
+                key={i.label}
+                type="button"
+                className={itemClass}
+                disabled={i.disabled}
+                onClick={act(i.run)}
+              >
                 <span>{i.label}</span>
               </button>
             ))}
@@ -1000,7 +1214,12 @@ type TextsByView = Record<View, TextElement[]>;
 const NO_TEXTS: TextsByView = { frente: [], costas: [], mangaEsq: [], mangaDir: [] };
 
 const escXml = (v: string) =>
-  v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+  v
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 
 /* Textos para exportação: mesmo desenho do canvas (cm, x centrado em 0). */
 type TextResolve = (t: TextElement) => ResolvedTeamText | null;
@@ -1019,7 +1238,10 @@ const textMarkup = (items: TextElement[], opts?: { resolve?: TextResolve }) =>
       const anchor = t.align === "left" ? "start" : t.align === "center" ? "middle" : "end";
       const spans = t.text
         .split("\n")
-        .map((line, i) => `<tspan x="${n(t.x)}" dy="${n(i ? fs * 1.15 : 0)}">${escXml(line || " ")}</tspan>`)
+        .map(
+          (line, i) =>
+            `<tspan x="${n(t.x)}" dy="${n(i ? fs * 1.15 : 0)}">${escXml(line || " ")}</tspan>`,
+        )
         .join("");
       return `<text x="${n(t.x)}" y="${n(t.y + fs)}" font-size="${n(fs)}" text-anchor="${anchor}" font-family="${attr(t.fontFamily)}" font-weight="${t.bold ? 700 : 400}" font-style="${t.italic ? "italic" : "normal"}"${t.underline ? ' text-decoration="underline"' : ""} fill="${attr(color(t.color))}" xml:space="preserve">${spans}</text>`;
     })
@@ -1059,11 +1281,34 @@ const sameSelItem = (a: SelItem, b: SelItem) => a.kind === b.kind && a.id === b.
 
 type TBox = { x: number; y: number; w: number; h: number };
 
-function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, checkpoint, selectedId, onSelect: setSelectedId, unit, selectionBox, preview, multiActive = false, multiPick }: TextWorkspaceProps) {
+function TextWorkspace({
+  tool,
+  view,
+  svgPoint,
+  bounds,
+  texts: byView,
+  setTexts,
+  checkpoint,
+  selectedId,
+  onSelect: setSelectedId,
+  unit,
+  selectionBox,
+  preview,
+  multiActive = false,
+  multiPick,
+}: TextWorkspaceProps) {
   const selTextRef = useRef<SVGTextElement | null>(null);
   const [box, setBox] = useState<TBox | null>(null);
   const [fontsTick, setFontsTick] = useState(0);
-  const [resize, setResize] = useState<{ id: string; px: number; py: number; d0: number; hx: HandleDir; hy: HandleDir; orig: TextElement } | null>(null);
+  const [resize, setResize] = useState<{
+    id: string;
+    px: number;
+    py: number;
+    d0: number;
+    hx: HandleDir;
+    hy: HandleDir;
+    orig: TextElement;
+  } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeTextValue, setActiveTextValue] = useState("");
   const [drag, setDrag] = useState<{ id: string; dx: number; dy: number } | null>(null);
@@ -1093,9 +1338,11 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
     if (!id || (forId && forId !== id)) return;
     const value = (forValue ?? activeTextValueRef.current).replace(/\u00a0/g, " ");
     // O texto pertence à vista em que foi criado, mesmo que a vista já tenha mudado.
-    updateTexts(editingViewRef.current, (items) => items
-      .map((item) => item.id === id ? { ...item, text: value } : item)
-      .filter((item) => item.text.trim().length > 0));
+    updateTexts(editingViewRef.current, (items) =>
+      items
+        .map((item) => (item.id === id ? { ...item, text: value } : item))
+        .filter((item) => item.text.trim().length > 0),
+    );
     editingIdRef.current = null;
     setEditingId(null);
     if (!value.trim()) setSelectedId(null);
@@ -1122,8 +1369,13 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
   }, []);
 
   const [defaults, setDefaults] = useState<Omit<TextElement, "id" | "text" | "x" | "y">>({
-    fontFamily: "Arial", fontSize: 24, bold: false, italic: false,
-    underline: false, align: "left", color: "#20242b",
+    fontFamily: "Arial",
+    fontSize: 24,
+    bold: false,
+    italic: false,
+    underline: false,
+    align: "left",
+    color: "#20242b",
   });
   const current = selected ?? defaults;
   const shownText = (item: Pick<TextElement, "text" | "field" | "upper">) =>
@@ -1131,29 +1383,51 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
 
   // Caixas medidas dos textos com campo do time (selo visual, só na tela).
   const textEls = useRef<Record<string, SVGTextElement | null>>({});
-  const [fieldBoxes, setFieldBoxes] = useState<Record<string, { x: number; y: number; w: number; h: number }>>({});
+  const [fieldBoxes, setFieldBoxes] = useState<
+    Record<string, { x: number; y: number; w: number; h: number }>
+  >({});
   useLayoutEffect(() => {
     const next: Record<string, { x: number; y: number; w: number; h: number }> = {};
     for (const item of texts) {
       if (!item.field || item.id === editingId) continue;
       const el = textEls.current[item.id];
       if (!el) continue;
-      try { const b = el.getBBox(); next[item.id] = { x: b.x, y: b.y, w: b.width, h: b.height }; } catch { /* ignora */ }
+      try {
+        const b = el.getBBox();
+        next[item.id] = { x: b.x, y: b.y, w: b.width, h: b.height };
+      } catch {
+        /* ignora */
+      }
     }
-    setFieldBoxes((prev) => JSON.stringify(prev) === JSON.stringify(next) ? prev : next);
+    setFieldBoxes((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
   });
 
   const setField = (field: "fixo" | "nome" | "numero") => {
     const apply = (item: Omit<TextElement, "id" | "text" | "x" | "y"> | TextElement) => {
-      const { field: _f, upper: _u, fitWidth: _w, scaleWithSize: _s, fieldAnchor: _a, ...rest } = item as TextElement;
+      const {
+        field: _f,
+        upper: _u,
+        fitWidth: _w,
+        scaleWithSize: _s,
+        fieldAnchor: _a,
+        ...rest
+      } = item as TextElement;
       if (field === "fixo") return rest;
-      return { ...rest, field, scaleWithSize: item.scaleWithSize ?? true,
-        ...(field === "nome" ? { upper: item.upper ?? false, ...(item.fitWidth ? { fitWidth: item.fitWidth } : {}) } : {}) };
+      return {
+        ...rest,
+        field,
+        scaleWithSize: item.scaleWithSize ?? true,
+        ...(field === "nome"
+          ? { upper: item.upper ?? false, ...(item.fitWidth ? { fitWidth: item.fitWidth } : {}) }
+          : {}),
+      };
     };
     setDefaults((d) => apply(d) as typeof d);
     if (!selectedId) return;
     checkpoint("text-style:" + selectedId);
-    updateTexts(view, (items) => items.map((item) => item.id === selectedId ? apply(item) as TextElement : item));
+    updateTexts(view, (items) =>
+      items.map((item) => (item.id === selectedId ? (apply(item) as TextElement) : item)),
+    );
   };
 
   // Caixa do texto selecionado, medida no próprio SVG (unidades do canvas).
@@ -1169,7 +1443,22 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
     } catch {
       setBox(null);
     }
-  }, [selected?.text, selected?.fontSize, selected?.fontFamily, selected?.bold, selected?.italic, selected?.align, selected?.x, selected?.y, selected?.id, selected?.upper, selected?.field, view, editingId, fontsTick]);
+  }, [
+    selected?.text,
+    selected?.fontSize,
+    selected?.fontFamily,
+    selected?.bold,
+    selected?.italic,
+    selected?.align,
+    selected?.x,
+    selected?.y,
+    selected?.id,
+    selected?.upper,
+    selected?.field,
+    view,
+    editingId,
+    fontsTick,
+  ]);
 
   // Redimensionamento proporcional pelas alças, com o ponto oposto fixo.
   useEffect(() => {
@@ -1177,12 +1466,27 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
     const move = (event: PointerEvent) => {
       const p = svgPoint(event);
       const { px, py, d0, hx, hy, orig } = resize;
-      const d = hx !== 0 && hy !== 0 ? Math.max(Math.abs(p.x - px), Math.abs(p.y - py)) : hx !== 0 ? Math.abs(p.x - px) : Math.abs(p.y - py);
+      const d =
+        hx !== 0 && hy !== 0
+          ? Math.max(Math.abs(p.x - px), Math.abs(p.y - py))
+          : hx !== 0
+            ? Math.abs(p.x - px)
+            : Math.abs(p.y - py);
       const sRaw = d0 > 0 ? d / d0 : 1;
       const fs = Math.min(1000, Math.max(1, orig.fontSize * sRaw));
       const s = fs / orig.fontSize;
-      updateTexts(view, (items) => items.map((item) => item.id === resize.id
-        ? { ...item, fontSize: Math.round(fs * 100) / 100, x: px + s * (orig.x - px), y: py + s * (orig.y - py) } : item));
+      updateTexts(view, (items) =>
+        items.map((item) =>
+          item.id === resize.id
+            ? {
+                ...item,
+                fontSize: Math.round(fs * 100) / 100,
+                x: px + s * (orig.x - px),
+                y: py + s * (orig.y - py),
+              }
+            : item,
+        ),
+      );
     };
     const stop = () => setResize(null);
     document.addEventListener("pointermove", move);
@@ -1200,7 +1504,12 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
     const py = box.y + box.h / 2 - (hy * box.h) / 2;
     const hxp = box.x + box.w / 2 + (hx * box.w) / 2;
     const hyp = box.y + box.h / 2 + (hy * box.h) / 2;
-    const d0 = hx !== 0 && hy !== 0 ? Math.max(Math.abs(hxp - px), Math.abs(hyp - py)) : hx !== 0 ? Math.abs(hxp - px) : Math.abs(hyp - py);
+    const d0 =
+      hx !== 0 && hy !== 0
+        ? Math.max(Math.abs(hxp - px), Math.abs(hyp - py))
+        : hx !== 0
+          ? Math.abs(hxp - px)
+          : Math.abs(hyp - py);
     checkpoint("text-resize:" + Date.now());
     setResize({ id: selected.id, px, py, d0, hx, hy, orig: selected });
   };
@@ -1210,7 +1519,9 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
     setDefaults((d) => ({ ...d, ...patch }));
     if (!selectedId) return;
     checkpoint("text-style:" + selectedId);
-    updateTexts(view, (items) => items.map((item) => item.id === selectedId ? { ...item, ...patch } : item));
+    updateTexts(view, (items) =>
+      items.map((item) => (item.id === selectedId ? { ...item, ...patch } : item)),
+    );
   };
 
   const startEditing = (item: TextElement) => {
@@ -1229,7 +1540,13 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
     // Salva o texto em edição antes de abrir outro (o preventDefault impede o blur).
     commitText();
     const point = svgPoint(event);
-    const item: TextElement = { id: crypto.randomUUID(), text: "", x: point.x, y: point.y, ...defaults };
+    const item: TextElement = {
+      id: crypto.randomUUID(),
+      text: "",
+      x: point.x,
+      y: point.y,
+      ...defaults,
+    };
     checkpoint("text-add:" + item.id);
     updateTexts(view, (items) => [...items, item]);
     startEditing(item);
@@ -1239,8 +1556,11 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
     if (!drag) return;
     const move = (event: PointerEvent) => {
       const point = svgPoint(event);
-      updateTexts(view, (items) => items.map((item) => item.id === drag.id
-        ? { ...item, x: point.x - drag.dx, y: point.y - drag.dy } : item));
+      updateTexts(view, (items) =>
+        items.map((item) =>
+          item.id === drag.id ? { ...item, x: point.x - drag.dx, y: point.y - drag.dy } : item,
+        ),
+      );
     };
     const stop = () => setDrag(null);
     document.addEventListener("pointermove", move);
@@ -1274,10 +1594,27 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
         {preview.map((item) => {
           const fontSize = item.fontSize / 10;
           return (
-            <text key={item.id} x={item.x} y={item.y + fontSize} fill={item.color}
-              style={{ fontFamily: item.fontFamily, fontSize, fontWeight: item.bold ? 700 : 400, fontStyle: item.italic ? "italic" : "normal", textDecoration: item.underline ? "underline" : "none" }}
-              textAnchor={item.align === "left" ? "start" : item.align === "center" ? "middle" : "end"}>
-              {item.text.split("\n").map((line, index) => <tspan key={index} x={item.x} dy={index ? fontSize * 1.15 : 0}>{line || " "}</tspan>)}
+            <text
+              key={item.id}
+              x={item.x}
+              y={item.y + fontSize}
+              fill={item.color}
+              style={{
+                fontFamily: item.fontFamily,
+                fontSize,
+                fontWeight: item.bold ? 700 : 400,
+                fontStyle: item.italic ? "italic" : "normal",
+                textDecoration: item.underline ? "underline" : "none",
+              }}
+              textAnchor={
+                item.align === "left" ? "start" : item.align === "center" ? "middle" : "end"
+              }
+            >
+              {item.text.split("\n").map((line, index) => (
+                <tspan key={index} x={item.x} dy={index ? fontSize * 1.15 : 0}>
+                  {line || " "}
+                </tspan>
+              ))}
             </text>
           );
         })}
@@ -1291,162 +1628,365 @@ function TextWorkspace({ tool, view, svgPoint, bounds, texts: byView, setTexts, 
       {texts.map((item) => {
         const fontSize = item.fontSize / 10;
         const textStyle = {
-          fontFamily: item.fontFamily, fontSize, fontWeight: item.bold ? 700 : 400,
+          fontFamily: item.fontFamily,
+          fontSize,
+          fontWeight: item.bold ? 700 : 400,
           fontStyle: item.italic ? "italic" : "normal",
           textDecoration: item.underline ? "underline" : "none",
         } as const;
         return editingId === item.id ? (
-          <foreignObject key={item.id} x={item.x} y={item.y} width={Math.max(30, bounds.width / 2)} height={Math.max(8, bounds.height / 4)} style={{ overflow: "visible" }}>
+          <foreignObject
+            key={item.id}
+            x={item.x}
+            y={item.y}
+            width={Math.max(30, bounds.width / 2)}
+            height={Math.max(8, bounds.height / 4)}
+            style={{ overflow: "visible" }}
+          >
             <DirectTextEditor
-              embedded value={activeTextValue} x={0} y={0} width={Math.max(30, bounds.width / 2)}
-              style={{ fontFamily: item.fontFamily, fontSize, bold: item.bold, italic: item.italic,
-                underline: item.underline, align: item.align, color: item.color }}
+              embedded
+              value={activeTextValue}
+              x={0}
+              y={0}
+              width={Math.max(30, bounds.width / 2)}
+              style={{
+                fontFamily: item.fontFamily,
+                fontSize,
+                bold: item.bold,
+                italic: item.italic,
+                underline: item.underline,
+                align: item.align,
+                color: item.color,
+              }}
               onChange={(value) => {
                 activeTextValueRef.current = value;
                 setActiveTextValue(value);
-                updateTexts(editingViewRef.current, (items) => items.map((current) => current.id === item.id ? { ...current, text: value } : current));
+                updateTexts(editingViewRef.current, (items) =>
+                  items.map((current) =>
+                    current.id === item.id ? { ...current, text: value } : current,
+                  ),
+                );
               }}
               onCommit={(value) => commitText(item.id, value)}
               onCancel={() => commitText(item.id)}
             />
           </foreignObject>
-        ) : (() => {
-          const active = tool === "selecao" || tool === "texto";
-          const onDown = (event: React.PointerEvent) => {
-            if (!active) return;
-            if (multiPick?.(event, { kind: "text", id: item.id })) return;
-            if (event.button !== 0) return;
-            event.stopPropagation();
-            setSelectedId(item.id);
-            checkpoint("text-move:" + Date.now());
-            const point = svgPoint(event);
-            setDrag({ id: item.id, dx: point.x - item.x, dy: point.y - item.y });
-          };
-          const onDbl = (event: React.MouseEvent) => { event.stopPropagation(); checkpoint("text-edit:" + item.id); startEditing(item); };
-          const isSel = item.id === selectedId;
-          return (
-            <g key={item.id}>
-              {isSel && box && (
-                <rect x={box.x} y={box.y} width={box.w} height={box.h} fill="transparent"
-                  className={active ? "cursor-move" : "pointer-events-none"} onPointerDown={onDown} onDoubleClick={onDbl} />
-              )}
-              <text
-                ref={(el) => { textEls.current[item.id] = el; if (isSel) selTextRef.current = el; }}
-                data-text-id={item.id}
-                x={item.x} y={item.y + fontSize} fill={item.color}
-                style={textStyle} textAnchor={item.align === "left" ? "start" : item.align === "center" ? "middle" : "end"}
-                className={active ? "cursor-move" : "pointer-events-none"}
-                onPointerDown={onDown}
-                onDoubleClick={onDbl}
-              >
-                {shownText(item).split("\n").map((line, index) =>
-                  <tspan key={index} x={item.x} dy={index ? fontSize * 1.15 : 0}>{line || " "}</tspan>)}
-              </text>
-              {item.field && fieldBoxes[item.id] && (() => {
-                const fb = fieldBoxes[item.id]!;
-                return (
-                  <g className="pointer-events-none" data-screen-only>
-                    <rect x={fb.x} y={fb.y} width={fb.w} height={fb.h} className="fill-none stroke-cyan" strokeWidth={1} strokeDasharray="3 2" vectorEffect="non-scaling-stroke" />
-                    <text x={fb.x} y={fb.y - unit * 0.4} fontSize={unit * 1.1} className="fill-cyan font-mono">{item.field === "nome" ? "NOME" : "Nº"}</text>
-                    {(() => {
-                      const a = item.fieldAnchor ?? "centro";
-                      const ax = a === "esquerda" ? fb.x : a === "direita" ? fb.x + fb.w : fb.x + fb.w / 2;
-                      return <line x1={ax} x2={ax} y1={fb.y - unit * 0.8} y2={fb.y + fb.h + unit * 0.8} className="stroke-cyan" strokeWidth={2} vectorEffect="non-scaling-stroke" />;
-                    })()}
+        ) : (
+          (() => {
+            const active = tool === "selecao" || tool === "texto";
+            const onDown = (event: React.PointerEvent) => {
+              if (!active) return;
+              if (multiPick?.(event, { kind: "text", id: item.id })) return;
+              if (event.button !== 0) return;
+              event.stopPropagation();
+              setSelectedId(item.id);
+              checkpoint("text-move:" + Date.now());
+              const point = svgPoint(event);
+              setDrag({ id: item.id, dx: point.x - item.x, dy: point.y - item.y });
+            };
+            const onDbl = (event: React.MouseEvent) => {
+              event.stopPropagation();
+              checkpoint("text-edit:" + item.id);
+              startEditing(item);
+            };
+            const isSel = item.id === selectedId;
+            return (
+              <g key={item.id}>
+                {isSel && box && (
+                  <rect
+                    x={box.x}
+                    y={box.y}
+                    width={box.w}
+                    height={box.h}
+                    fill="transparent"
+                    className={active ? "cursor-move" : "pointer-events-none"}
+                    onPointerDown={onDown}
+                    onDoubleClick={onDbl}
+                  />
+                )}
+                <text
+                  ref={(el) => {
+                    textEls.current[item.id] = el;
+                    if (isSel) selTextRef.current = el;
+                  }}
+                  data-text-id={item.id}
+                  x={item.x}
+                  y={item.y + fontSize}
+                  fill={item.color}
+                  style={textStyle}
+                  textAnchor={
+                    item.align === "left" ? "start" : item.align === "center" ? "middle" : "end"
+                  }
+                  className={active ? "cursor-move" : "pointer-events-none"}
+                  onPointerDown={onDown}
+                  onDoubleClick={onDbl}
+                >
+                  {shownText(item)
+                    .split("\n")
+                    .map((line, index) => (
+                      <tspan key={index} x={item.x} dy={index ? fontSize * 1.15 : 0}>
+                        {line || " "}
+                      </tspan>
+                    ))}
+                </text>
+                {item.field &&
+                  fieldBoxes[item.id] &&
+                  (() => {
+                    const fb = fieldBoxes[item.id]!;
+                    return (
+                      <g className="pointer-events-none" data-screen-only>
+                        <rect
+                          x={fb.x}
+                          y={fb.y}
+                          width={fb.w}
+                          height={fb.h}
+                          className="fill-none stroke-cyan"
+                          strokeWidth={1}
+                          strokeDasharray="3 2"
+                          vectorEffect="non-scaling-stroke"
+                        />
+                        <text
+                          x={fb.x}
+                          y={fb.y - unit * 0.4}
+                          fontSize={unit * 1.1}
+                          className="fill-cyan font-mono"
+                        >
+                          {item.field === "nome" ? "NOME" : "Nº"}
+                        </text>
+                        {(() => {
+                          const a = item.fieldAnchor ?? "centro";
+                          const ax =
+                            a === "esquerda"
+                              ? fb.x
+                              : a === "direita"
+                                ? fb.x + fb.w
+                                : fb.x + fb.w / 2;
+                          return (
+                            <line
+                              x1={ax}
+                              x2={ax}
+                              y1={fb.y - unit * 0.8}
+                              y2={fb.y + fb.h + unit * 0.8}
+                              className="stroke-cyan"
+                              strokeWidth={2}
+                              vectorEffect="non-scaling-stroke"
+                            />
+                          );
+                        })()}
+                      </g>
+                    );
+                  })()}
+                {isSel && box && !multiActive && (
+                  <g transform={`translate(${box.x + box.w / 2} ${box.y + box.h / 2})`}>
+                    {tool === "selecao" ? (
+                      selectionBox(box.w, box.h, "amber", startResize)
+                    ) : (
+                      <rect
+                        x={-box.w / 2}
+                        y={-box.h / 2}
+                        width={box.w}
+                        height={box.h}
+                        className="fill-none stroke-amber pointer-events-none"
+                        strokeWidth={1}
+                        strokeDasharray="4 3"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    )}
+                    {tool === "selecao" && (
+                      <text
+                        x={0}
+                        y={box.h / 2 + unit * 2.2}
+                        textAnchor="middle"
+                        fontSize={unit * 1.1}
+                        className="fill-amber font-mono pointer-events-none"
+                      >
+                        {fmt(box.w)} × {fmt(box.h)} cm
+                      </text>
+                    )}
                   </g>
-                );
-              })()}
-              {isSel && box && !multiActive && (
-                <g transform={`translate(${box.x + box.w / 2} ${box.y + box.h / 2})`}>
-                  {tool === "selecao"
-                    ? selectionBox(box.w, box.h, "amber", startResize)
-                    : <rect x={-box.w / 2} y={-box.h / 2} width={box.w} height={box.h} className="fill-none stroke-amber pointer-events-none" strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />}
-                  {tool === "selecao" && (
-                    <text x={0} y={box.h / 2 + unit * 2.2} textAnchor="middle" fontSize={unit * 1.1} className="fill-amber font-mono pointer-events-none">
-                      {fmt(box.w)} × {fmt(box.h)} cm
-                    </text>
-                  )}
-                </g>
-              )}
-            </g>
-          );
-        })();
+                )}
+              </g>
+            );
+          })()
+        );
       })}
-      {tool === "texto" && panelHost && createPortal(
-        <div
-          className="pointer-events-auto absolute left-3 top-3 z-20 w-64 space-y-2 rounded-md border border-line bg-panel p-3 text-xs shadow-lg"
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-faint">Texto</div>
-          <select value={current.fontFamily} onChange={(event) => updateSelected({ fontFamily: event.target.value })} className="h-8 w-full rounded-md border border-input bg-panel2 px-2 text-xs text-foreground" aria-label="Fonte">
-            {TEXT_FONTS.map((font) => <option key={font} value={font}>{font}</option>)}
-          </select>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <input type="number" min="1" value={current.fontSize} onChange={(event) => updateSelected({ fontSize: Number(event.target.value) || 1 })} className="h-8 w-16 rounded-md border border-input bg-panel2 px-2 text-xs text-foreground" aria-label="Tamanho da fonte" />
-            {([
-              ["Negrito", Bold, current.bold, { bold: !current.bold }],
-              ["Itálico", Italic, current.italic, { italic: !current.italic }],
-              ["Sublinhado", Underline, current.underline, { underline: !current.underline }],
-            ] as const).map(([label, Icon, on, patch]) => (
-              <button key={label} type="button" title={label} aria-label={label} onMouseDown={(event) => event.preventDefault()} onClick={() => updateSelected(patch)} className={"grid size-8 place-items-center rounded-md border " + (on ? "border-primary text-primary" : "border-line text-foreground")}><Icon className="size-4" /></button>
-            ))}
-            <input type="color" value={current.color} onChange={(event) => updateSelected({ color: event.target.value })} title="Cor do texto" aria-label="Cor do texto" className="size-8 cursor-pointer rounded border border-line bg-panel2 p-0.5" />
-          </div>
-          <div className="grid grid-cols-3 gap-1">
-            {([
-              ["left", "Alinhar à esquerda", AlignLeft],
-              ["center", "Centralizar", AlignCenter],
-              ["right", "Alinhar à direita", AlignRight],
-            ] as const).map(([align, label, Icon]) => (
-              <button key={align} type="button" title={label} aria-label={label} onMouseDown={(event) => event.preventDefault()} onClick={() => updateSelected({ align })} className={"grid h-8 place-items-center rounded-md border " + (current.align === align ? "border-primary text-primary" : "border-line text-foreground")}><Icon className="size-4" /></button>
-            ))}
-          </div>
-          <label className="block space-y-1">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-faint">Campo do time</span>
-            <select value={current.field ?? "fixo"} onChange={(event) => setField(event.target.value as "fixo" | "nome" | "numero")} className="h-8 w-full rounded-md border border-input bg-panel2 px-2 text-xs text-foreground" aria-label="Campo do time">
-              <option value="fixo">Texto fixo</option>
-              <option value="nome">Nome do jogador</option>
-              <option value="numero">Número do jogador</option>
-            </select>
-          </label>
-          {current.field === "nome" && (
-            <>
-              <label className="flex items-center gap-2 text-foreground">
-                <input type="checkbox" checked={!!current.upper} onChange={(event) => updateSelected({ upper: event.target.checked })} />
-                MAIÚSCULAS
-              </label>
-              <label className="block space-y-1">
-                <span className="text-faint">Largura máxima (cm)</span>
-                <input type="number" min="0" step="0.1" value={current.fitWidth ?? ""} placeholder="sem limite"
-                  onChange={(event) => { const v = Number(event.target.value); updateSelected({ fitWidth: event.target.value && v > 0 ? v : undefined }); }}
-                  className="h-8 w-full rounded-md border border-input bg-panel2 px-2 text-xs text-foreground" aria-label="Largura máxima (cm)" />
-              </label>
-              <button type="button" disabled={!selected || !box} onMouseDown={(event) => event.preventDefault()}
-                onClick={() => box && updateSelected({ fitWidth: Math.round(box.w * 10) / 10 })}
-                className="h-8 w-full rounded-md border border-line text-foreground disabled:opacity-50">Usar a largura atual do texto</button>
-            </>
-          )}
-          {current.field && (
-            <div className="space-y-1">
-              <span className="text-faint">Ponto fixo</span>
-              <div className="grid grid-cols-3 gap-1">
-                {(["esquerda", "centro", "direita"] as const).map((a) => (
-                  <button key={a} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => updateSelected({ fieldAnchor: a })}
-                    className={"h-8 rounded-md border text-xs " + ((current.fieldAnchor ?? "centro") === a ? "border-primary text-primary" : "border-line text-foreground")}>
-                    {a === "esquerda" ? "Esquerda" : a === "centro" ? "Centro" : "Direita"}
-                  </button>
-                ))}
-              </div>
+      {tool === "texto" &&
+        panelHost &&
+        createPortal(
+          <div
+            className="pointer-events-auto absolute left-3 top-3 z-20 w-64 space-y-2 rounded-md border border-line bg-panel p-3 text-xs shadow-lg"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-faint">
+              Texto
             </div>
-          )}
-          {current.field && (
-            <label className="flex items-center gap-2 text-foreground">
-              <input type="checkbox" checked={current.scaleWithSize !== false} onChange={(event) => updateSelected({ scaleWithSize: event.target.checked })} />
-              Escalar com o tamanho
+            <select
+              value={current.fontFamily}
+              onChange={(event) => updateSelected({ fontFamily: event.target.value })}
+              className="h-8 w-full rounded-md border border-input bg-panel2 px-2 text-xs text-foreground"
+              aria-label="Fonte"
+            >
+              {TEXT_FONTS.map((font) => (
+                <option key={font} value={font}>
+                  {font}
+                </option>
+              ))}
+            </select>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <input
+                type="number"
+                min="1"
+                value={current.fontSize}
+                onChange={(event) => updateSelected({ fontSize: Number(event.target.value) || 1 })}
+                className="h-8 w-16 rounded-md border border-input bg-panel2 px-2 text-xs text-foreground"
+                aria-label="Tamanho da fonte"
+              />
+              {(
+                [
+                  ["Negrito", Bold, current.bold, { bold: !current.bold }],
+                  ["Itálico", Italic, current.italic, { italic: !current.italic }],
+                  ["Sublinhado", Underline, current.underline, { underline: !current.underline }],
+                ] as const
+              ).map(([label, Icon, on, patch]) => (
+                <button
+                  key={label}
+                  type="button"
+                  title={label}
+                  aria-label={label}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => updateSelected(patch)}
+                  className={
+                    "grid size-8 place-items-center rounded-md border " +
+                    (on ? "border-primary text-primary" : "border-line text-foreground")
+                  }
+                >
+                  <Icon className="size-4" />
+                </button>
+              ))}
+              <input
+                type="color"
+                value={current.color}
+                onChange={(event) => updateSelected({ color: event.target.value })}
+                title="Cor do texto"
+                aria-label="Cor do texto"
+                className="size-8 cursor-pointer rounded border border-line bg-panel2 p-0.5"
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-1">
+              {(
+                [
+                  ["left", "Alinhar à esquerda", AlignLeft],
+                  ["center", "Centralizar", AlignCenter],
+                  ["right", "Alinhar à direita", AlignRight],
+                ] as const
+              ).map(([align, label, Icon]) => (
+                <button
+                  key={align}
+                  type="button"
+                  title={label}
+                  aria-label={label}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => updateSelected({ align })}
+                  className={
+                    "grid h-8 place-items-center rounded-md border " +
+                    (current.align === align
+                      ? "border-primary text-primary"
+                      : "border-line text-foreground")
+                  }
+                >
+                  <Icon className="size-4" />
+                </button>
+              ))}
+            </div>
+            <label className="block space-y-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-faint">
+                Campo do time
+              </span>
+              <select
+                value={current.field ?? "fixo"}
+                onChange={(event) => setField(event.target.value as "fixo" | "nome" | "numero")}
+                className="h-8 w-full rounded-md border border-input bg-panel2 px-2 text-xs text-foreground"
+                aria-label="Campo do time"
+              >
+                <option value="fixo">Texto fixo</option>
+                <option value="nome">Nome do jogador</option>
+                <option value="numero">Número do jogador</option>
+              </select>
             </label>
-          )}
-        </div>, panelHost)}
+            {current.field === "nome" && (
+              <>
+                <label className="flex items-center gap-2 text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={!!current.upper}
+                    onChange={(event) => updateSelected({ upper: event.target.checked })}
+                  />
+                  MAIÚSCULAS
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-faint">Largura máxima (cm)</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={current.fitWidth ?? ""}
+                    placeholder="sem limite"
+                    onChange={(event) => {
+                      const v = Number(event.target.value);
+                      updateSelected({ fitWidth: event.target.value && v > 0 ? v : undefined });
+                    }}
+                    className="h-8 w-full rounded-md border border-input bg-panel2 px-2 text-xs text-foreground"
+                    aria-label="Largura máxima (cm)"
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={!selected || !box}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => box && updateSelected({ fitWidth: Math.round(box.w * 10) / 10 })}
+                  className="h-8 w-full rounded-md border border-line text-foreground disabled:opacity-50"
+                >
+                  Usar a largura atual do texto
+                </button>
+              </>
+            )}
+            {current.field && (
+              <div className="space-y-1">
+                <span className="text-faint">Ponto fixo</span>
+                <div className="grid grid-cols-3 gap-1">
+                  {(["esquerda", "centro", "direita"] as const).map((a) => (
+                    <button
+                      key={a}
+                      type="button"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => updateSelected({ fieldAnchor: a })}
+                      className={
+                        "h-8 rounded-md border text-xs " +
+                        ((current.fieldAnchor ?? "centro") === a
+                          ? "border-primary text-primary"
+                          : "border-line text-foreground")
+                      }
+                    >
+                      {a === "esquerda" ? "Esquerda" : a === "centro" ? "Centro" : "Direita"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {current.field && (
+              <label className="flex items-center gap-2 text-foreground">
+                <input
+                  type="checkbox"
+                  checked={current.scaleWithSize !== false}
+                  onChange={(event) => updateSelected({ scaleWithSize: event.target.checked })}
+                />
+                Escalar com o tamanho
+              </label>
+            )}
+          </div>,
+          panelHost,
+        )}
     </g>
   );
 }
@@ -1458,7 +1998,10 @@ function StorageBanner() {
   useEffect(() => setSafe(isSafeMode()), []);
   if (!safe && tab !== "secondary") return null;
   return (
-    <div role="status" className="fixed inset-x-0 top-0 z-[90] flex items-center justify-center gap-3 border-b border-amber bg-amber/15 px-4 py-1.5 text-xs font-medium text-foreground backdrop-blur">
+    <div
+      role="status"
+      className="fixed inset-x-0 top-0 z-[90] flex items-center justify-center gap-3 border-b border-amber bg-amber/15 px-4 py-1.5 text-xs font-medium text-foreground backdrop-blur"
+    >
       <span>
         {safe
           ? "Modo seguro: nada está sendo salvo automaticamente. Use Arquivo > Salvar"
@@ -1493,7 +2036,9 @@ function Index() {
     (o) => tamanhosExibidos.includes(o.label) || tamanhosExibidos.includes(o.id),
   );
   const [table, setTable] = useState<Grading>(DEFAULT_TABLE);
-  const [profiles, setProfiles] = useState<GradeProfile[]>(() => [{ name: DEFAULT_PROFILE_NAME, tables: defaultTablesForProfiles() }]);
+  const [profiles, setProfiles] = useState<GradeProfile[]>(() => [
+    { name: DEFAULT_PROFILE_NAME, tables: defaultTablesForProfiles() },
+  ]);
   const [activeProfile, setActiveProfile] = useState(DEFAULT_PROFILE_NAME);
   const profileRootRef = useRef<Root | null>(null);
   const profileHostRef = useRef<HTMLDivElement | null>(null);
@@ -1575,12 +2120,14 @@ function Index() {
   const [cropRect, setCropRect] = useState(true);
   const [exporting, setExporting] = useState(false);
 
-
   const deleteSelectionRef = useRef<() => boolean>(() => false);
   const alignKeyRef = useRef<(e: KeyboardEvent) => boolean>(() => false);
   const selectedLayer = () => {
     if (!selLayer) return null;
-    return layers[view].find((layer) => String((layer as Layer & { id?: string }).id) === selLayer) ?? null;
+    return (
+      layers[view].find((layer) => String((layer as Layer & { id?: string }).id) === selLayer) ??
+      null
+    );
   };
 
   const copySelectedLayer = () => {
@@ -1594,7 +2141,12 @@ function Index() {
     if (!selectedLayer()) return;
     checkpoint("layers");
     setLayers((current) => {
-      const next = { ...current, [view]: current[view].filter((layer) => String((layer as Layer & { id?: string }).id) !== selLayer) };
+      const next = {
+        ...current,
+        [view]: current[view].filter(
+          (layer) => String((layer as Layer & { id?: string }).id) !== selLayer,
+        ),
+      };
       saveLS(LS_LAYERS, next);
       return next;
     });
@@ -1630,9 +2182,12 @@ function Index() {
   const moveSelectedLayer = (direction: "front" | "back") => {
     if (!selLayer) return;
     const current = layers[view];
-    const index = current.findIndex((layer) => String((layer as Layer & { id?: string }).id) === selLayer);
+    const index = current.findIndex(
+      (layer) => String((layer as Layer & { id?: string }).id) === selLayer,
+    );
     if (index < 0) return;
-    const target = direction === "front" ? Math.min(current.length - 1, index + 1) : Math.max(0, index - 1);
+    const target =
+      direction === "front" ? Math.min(current.length - 1, index + 1) : Math.max(0, index - 1);
     if (target === index) return;
     checkpoint("layers");
     const nextView = [...current];
@@ -1699,55 +2254,71 @@ function Index() {
     };
   }, []);
 
-
   // Carregar do armazenamento local
   useEffect(() => {
     let alive = true;
     void getBig().then((big) => {
-    if (!alive) return;
-    try {
-      const issues: string[] = [];
-      const g = lsGet(LS_GRADING);
-      if (g) {
-        let saved: unknown = null;
-        try { saved = JSON.parse(g); } catch { issues.push("medidas inválidas"); }
-        const r = sanitizeGrading(saved, DEFAULT_TABLE);
-        issues.push(...r.issues);
-        setTable(migrateGradingSleeves(r.value as Grading));
+      if (!alive) return;
+      try {
+        const issues: string[] = [];
+        const g = lsGet(LS_GRADING);
+        if (g) {
+          let saved: unknown = null;
+          try {
+            saved = JSON.parse(g);
+          } catch {
+            issues.push("medidas inválidas");
+          }
+          const r = sanitizeGrading(saved, DEFAULT_TABLE);
+          issues.push(...r.issues);
+          setTable(migrateGradingSleeves(r.value as Grading));
+        }
+        const mm = lsGet(LS_MOTHER) as Size | null;
+        if (mm && SIZES.includes(mm)) setMother(mm);
+        const san = sanitizeDrawing(
+          big[LS_ART],
+          big[LS_STYLES],
+          big[LS_SHAPES],
+          big[LS_LAYERS],
+          big[LS_TEXTS],
+          DEFAULT_SHAPES,
+        );
+        issues.push(...san.issues);
+        if (big[LS_ART] != null) setArtworks(san.artworks);
+        if (big[LS_STYLES] != null) setStyles(san.styles);
+        if (big[LS_SHAPES] != null) setShapes(san.shapes);
+        if (big[LS_GUIDES]) setGuides(sanitizeGuides(big[LS_GUIDES]));
+        if (big[LS_LAYERS] != null) setLayers(san.layers);
+        if (big[LS_TEXTS] != null) setTexts(san.texts);
+        if (issues.length) {
+          void backupOriginal(big);
+          toast.warning("Alguns dados salvos estavam inválidos e foram corrigidos", {
+            description: summarizeIssues(issues),
+          });
+          // Grava a versão corrigida assim que a gravação for liberada.
+          setTimeout(() => {
+            saveLS(LS_ART, san.artworks);
+            saveLS(LS_STYLES, san.styles);
+            saveLS(LS_SHAPES, san.shapes);
+            saveLS(LS_LAYERS, san.layers);
+            saveLS(LS_TEXTS, san.texts);
+          }, 0);
+        }
+        textsHydrated.current = true;
+        const sb = lsGet(LS_SIDEBARS);
+        if (sb) {
+          const o = JSON.parse(sb) as Record<string, unknown> | null;
+          const pick = (v: unknown, d: boolean) => (typeof v === "boolean" ? v : d);
+          if (o && typeof o === "object")
+            setSidebars((cur) => ({
+              left: pick(o["left"], cur.left),
+              right: pick(o["right"], cur.right),
+            }));
+        }
+      } catch {
+        /* ignora dados corrompidos */
       }
-      const mm = lsGet(LS_MOTHER) as Size | null;
-      if (mm && SIZES.includes(mm)) setMother(mm);
-      const san = sanitizeDrawing(big[LS_ART], big[LS_STYLES], big[LS_SHAPES], big[LS_LAYERS], big[LS_TEXTS], DEFAULT_SHAPES);
-      issues.push(...san.issues);
-      if (big[LS_ART] != null) setArtworks(san.artworks);
-      if (big[LS_STYLES] != null) setStyles(san.styles);
-      if (big[LS_SHAPES] != null) setShapes(san.shapes);
-      if (big[LS_GUIDES]) setGuides(sanitizeGuides(big[LS_GUIDES]));
-      if (big[LS_LAYERS] != null) setLayers(san.layers);
-      if (big[LS_TEXTS] != null) setTexts(san.texts);
-      if (issues.length) {
-        void backupOriginal(big);
-        toast.warning("Alguns dados salvos estavam inválidos e foram corrigidos", { description: summarizeIssues(issues) });
-        // Grava a versão corrigida assim que a gravação for liberada.
-        setTimeout(() => {
-          saveLS(LS_ART, san.artworks);
-          saveLS(LS_STYLES, san.styles);
-          saveLS(LS_SHAPES, san.shapes);
-          saveLS(LS_LAYERS, san.layers);
-          saveLS(LS_TEXTS, san.texts);
-        }, 0);
-      }
-      textsHydrated.current = true;
-      const sb = lsGet(LS_SIDEBARS);
-      if (sb) {
-        const o = JSON.parse(sb) as Record<string, unknown> | null;
-        const pick = (v: unknown, d: boolean) => (typeof v === "boolean" ? v : d);
-        if (o && typeof o === "object") setSidebars((cur) => ({ left: pick(o["left"], cur.left), right: pick(o["right"], cur.right) }));
-      }
-    } catch {
-      /* ignora dados corrompidos */
-    }
-    bigHydrated = true;
+      bigHydrated = true;
     });
     return () => {
       alive = false;
@@ -1769,8 +2340,26 @@ function Index() {
   }, [texts]);
 
   /* ---------- Histórico (Desfazer / Refazer) ---------- */
-  type Snap = { clothingType: ClothingType; table: Grading; guides: Guides; shapes: Shapes; artworks: Artworks; styles: Styles; layers: Layers; texts: TextsByView };
-  const snapRef = useRef<Snap>({ clothingType, table, guides, shapes, artworks, styles, layers, texts });
+  type Snap = {
+    clothingType: ClothingType;
+    table: Grading;
+    guides: Guides;
+    shapes: Shapes;
+    artworks: Artworks;
+    styles: Styles;
+    layers: Layers;
+    texts: TextsByView;
+  };
+  const snapRef = useRef<Snap>({
+    clothingType,
+    table,
+    guides,
+    shapes,
+    artworks,
+    styles,
+    layers,
+    texts,
+  });
   snapRef.current = { clothingType, table, guides, shapes, artworks, styles, layers, texts };
   const [past, setPast] = useState<Snap[]>([]);
   const [future, setFuture] = useState<Snap[]>([]);
@@ -1850,7 +2439,9 @@ function Index() {
   const [savedRev, setSavedRev] = useState(0);
   const cleanUntil = useRef(Date.now() + 1500);
   const fileHandle = useRef<FileHandle | null>(null);
-  const [askUnsaved, setAskUnsaved] = useState<null | ((c: "save" | "discard" | "cancel") => void)>(null);
+  const [askUnsaved, setAskUnsaved] = useState<null | ((c: "save" | "discard" | "cancel") => void)>(
+    null,
+  );
   const dirty = rev !== savedRev;
   const markClean = () => {
     cleanUntil.current = Date.now() + 400;
@@ -1862,7 +2453,21 @@ function Index() {
       if (Date.now() < cleanUntil.current) setSavedRev(n);
       return n;
     });
-  }, [table, guides, shapes, artworks, styles, layers, texts, mother, clothingType, profiles, activeProfile, roster, teamImages]);
+  }, [
+    table,
+    guides,
+    shapes,
+    artworks,
+    styles,
+    layers,
+    texts,
+    mother,
+    clothingType,
+    profiles,
+    activeProfile,
+    roster,
+    teamImages,
+  ]);
   useEffect(() => {
     if (!dirty) return;
     const h = (e: BeforeUnloadEvent) => {
@@ -1874,7 +2479,21 @@ function Index() {
   }, [dirty]);
 
   const projectText = (name: string) =>
-    buildProjectFile(name, { grading: table, mother, clothingType, guides, shapes, artworks, styles, layers, texts, profiles, activeProfile, roster, teamImages });
+    buildProjectFile(name, {
+      grading: table,
+      mother,
+      clothingType,
+      guides,
+      shapes,
+      artworks,
+      styles,
+      layers,
+      texts,
+      profiles,
+      activeProfile,
+      roster,
+      teamImages,
+    });
 
   const saveProject = async (as: boolean): Promise<boolean> => {
     try {
@@ -1958,7 +2577,20 @@ function Index() {
       return;
     }
     const d = parsed.data;
-    const KNOWN = ["grading", "mother", "clothingType", "shapes", "artworks", "styles", "layers", "texts", "profiles", "roster", "teamImages", "guides"] as const;
+    const KNOWN = [
+      "grading",
+      "mother",
+      "clothingType",
+      "shapes",
+      "artworks",
+      "styles",
+      "layers",
+      "texts",
+      "profiles",
+      "roster",
+      "teamImages",
+      "guides",
+    ] as const;
     if (!KNOWN.some((k) => d[k] != null)) {
       toast.error("O arquivo não contém nenhuma parte aproveitável do projeto. Nada foi alterado.");
       return;
@@ -1969,19 +2601,48 @@ function Index() {
       const gr = sanitizeGrading(d.grading, DEFAULT_TABLE);
       issues.push(...gr.issues);
       const grading = migrateGradingSleeves(gr.value as Grading);
-      const san = sanitizeDrawing(d.artworks, d.styles, d.shapes, d.layers, d.texts, defaultShapesFor(nType));
+      const san = sanitizeDrawing(
+        d.artworks,
+        d.styles,
+        d.shapes,
+        d.layers,
+        d.texts,
+        defaultShapesFor(nType),
+      );
       issues.push(...san.issues);
-      const { artworks: nArt, styles: nStyles, shapes: nShapes, layers: nLayers, texts: nTexts } = san;
-      const nMother = (SIZES as readonly string[]).includes(d.mother ?? "") ? (d.mother as Size) : mother;
+      const {
+        artworks: nArt,
+        styles: nStyles,
+        shapes: nShapes,
+        layers: nLayers,
+        texts: nTexts,
+      } = san;
+      const nMother = (SIZES as readonly string[]).includes(d.mother ?? "")
+        ? (d.mother as Size)
+        : mother;
       // Perfis: adiciona por nome, sem sobrescrever perfis locais.
-      const pr = sanitizeProfiles(d.profiles, defaultTablesForProfiles() as unknown as Record<string, SGrading>);
+      const pr = sanitizeProfiles(
+        d.profiles,
+        defaultTablesForProfiles() as unknown as Record<string, SGrading>,
+      );
       issues.push(...pr.issues);
       const merged = [...profiles];
       for (const p of pr.value) {
         if (merged.some((m) => m.name.toLowerCase() === p.name.toLowerCase())) continue;
-        merged.push({ name: p.name, tables: Object.fromEntries(Object.entries(p.tables).map(([t, g]) => [t, migrateGradingSleeves(g as Grading, OLD_FOR_TYPE(t))])) as ProfileTables });
+        merged.push({
+          name: p.name,
+          tables: Object.fromEntries(
+            Object.entries(p.tables).map(([t, g]) => [
+              t,
+              migrateGradingSleeves(g as Grading, OLD_FOR_TYPE(t)),
+            ]),
+          ) as ProfileTables,
+        });
       }
-      const nActive = typeof d.activeProfile === "string" && merged.some((m) => m.name === d.activeProfile) ? d.activeProfile : activeProfile;
+      const nActive =
+        typeof d.activeProfile === "string" && merged.some((m) => m.name === d.activeProfile)
+          ? d.activeProfile
+          : activeProfile;
       const nGuides = sanitizeGuides(d.guides);
       const nRoster = sanitizeRoster(d.roster);
       const nImgs = sanitizeImages(d.teamImages);
@@ -2019,7 +2680,11 @@ function Index() {
       setProjectName(parsed.name.trim() || nameFromFile(res.name));
       if (res.handle) setProjectName(nameFromFile(res.name));
       markClean();
-      if (issues.length) toast.warning("Projeto aberto com correções", { description: summarizeIssues(issues), duration: 10000 });
+      if (issues.length)
+        toast.warning("Projeto aberto com correções", {
+          description: summarizeIssues(issues),
+          duration: 10000,
+        });
       else toast.success("Projeto aberto");
     } catch {
       toast.error("Arquivo inválido ou corrompido.");
@@ -2059,12 +2724,15 @@ function Index() {
   useEffect(() => {
     const storedProfiles = readGradeProfiles();
     const storedActive = lsGet(LS_ACTIVE_PROFILE) ?? DEFAULT_PROFILE_NAME;
-    const selected = storedProfiles.find((profile) => profile.name === storedActive) ?? storedProfiles[0]!;
+    const selected =
+      storedProfiles.find((profile) => profile.name === storedActive) ?? storedProfiles[0]!;
     setProfiles(storedProfiles);
     setActiveProfile(selected.name);
     const storedType = asClothingType(lsGet(LS_TYPE));
     setClothingType(storedType);
-    setTable(cloneGrading(selected.tables[storedType] ?? PRESET_TABLES[storedType] ?? DEFAULT_TABLE));
+    setTable(
+      cloneGrading(selected.tables[storedType] ?? PRESET_TABLES[storedType] ?? DEFAULT_TABLE),
+    );
   }, []);
 
   useEffect(() => {
@@ -2091,7 +2759,11 @@ function Index() {
         onCreate={() => {
           const name = window.prompt("Nome do Perfil do Cliente (ex: Grade do Paulo)");
           const normalized = name?.trim();
-          if (!normalized || profiles.some((profile) => profile.name.toLowerCase() === normalized.toLowerCase())) return;
+          if (
+            !normalized ||
+            profiles.some((profile) => profile.name.toLowerCase() === normalized.toLowerCase())
+          )
+            return;
           const nextProfile = { name: normalized, tables: defaultTablesForProfiles() };
           const nextProfiles = [...profiles, nextProfile];
           setProfiles(nextProfiles);
@@ -2131,7 +2803,8 @@ function Index() {
     };
   }, []);
 
-  const updateTable = (sz: Size, key: Field, v: number) => updateMeasures(sz, { [key]: v }, `table:${sz}:${key}`);
+  const updateTable = (sz: Size, key: Field, v: number) =>
+    updateMeasures(sz, { [key]: v }, `table:${sz}:${key}`);
 
   const updateMeasures = (sz: Size, patch: Partial<Measurements>, key = `table:${sz}`) => {
     checkpoint(key);
@@ -2300,7 +2973,9 @@ function Index() {
       : it.kind === "art"
         ? !!art && size === mother && (art.clipped === false || pcEdit)
         : texts[view].some((t) => t.id === it.id);
-  const selExtra = principalItem ? selExtraRaw.filter((it) => selItemAlive(it) && !sameSelItem(it, principalItem)) : [];
+  const selExtra = principalItem
+    ? selExtraRaw.filter((it) => selItemAlive(it) && !sameSelItem(it, principalItem))
+    : [];
   /** Conjunto selecionado em ordem: extras primeiro, principal (objeto ativo) por último. */
   const selectionItems = (): SelItem[] => (principalItem ? [...selExtra, principalItem] : []);
   const multiSel = selExtra.length > 0 ? selectionItems() : null;
@@ -2341,11 +3016,23 @@ function Index() {
     return () => window.removeEventListener("keydown", onKey);
   });
   /** Arrastar o conjunto: todos com o mesmo delta em cm, um passo de desfazer por arrasto. */
-  const multiOrig = useRef<{ layers: Layer[]; art: Artwork | null; texts: TextElement[]; key: string; cp: boolean } | null>(null);
+  const multiOrig = useRef<{
+    layers: Layer[];
+    art: Artwork | null;
+    texts: TextElement[];
+    key: string;
+    cp: boolean;
+  } | null>(null);
   const multiMove = (phase: "start" | "move", dx = 0, dy = 0) => {
     if (!multiSel) return;
     if (phase === "start") {
-      multiOrig.current = { layers: layers[view], art, texts: texts[view], key: "multi-move:" + Date.now(), cp: false };
+      multiOrig.current = {
+        layers: layers[view],
+        art,
+        texts: texts[view],
+        key: "multi-move:" + Date.now(),
+        cp: false,
+      };
       return;
     }
     const o = multiOrig.current;
@@ -2359,17 +3046,32 @@ function Index() {
     const W = pieceW;
     const H = pieceH;
     if (ids.size) {
-      const all = { ...snapRef.current.layers, [view]: o.layers.map((l) => (ids.has(l.id) ? { ...l, cx: l.cx + dx / W, cy: l.cy + dy / H } : l)) };
+      const all = {
+        ...snapRef.current.layers,
+        [view]: o.layers.map((l) =>
+          ids.has(l.id) ? { ...l, cx: l.cx + dx / W, cy: l.cy + dy / H } : l,
+        ),
+      };
       setLayers(all);
       saveLS(LS_LAYERS, all);
     }
     if (o.art && multiSel.some((i) => i.kind === "art")) {
-      const all = { ...snapRef.current.artworks, [view]: { ...o.art, cx: o.art.cx + dx / W, cy: o.art.cy + dy / H } };
+      const all = {
+        ...snapRef.current.artworks,
+        [view]: { ...o.art, cx: o.art.cx + dx / W, cy: o.art.cy + dy / H },
+      };
       setArtworks(all);
-      try { saveLS(LS_ART, all); } catch { /* imagem grande demais */ }
+      try {
+        saveLS(LS_ART, all);
+      } catch {
+        /* imagem grande demais */
+      }
     }
     if (tids.size) {
-      setTexts((prev) => ({ ...prev, [view]: o.texts.map((t) => (tids.has(t.id) ? { ...t, x: t.x + dx, y: t.y + dy } : t)) }));
+      setTexts((prev) => ({
+        ...prev,
+        [view]: o.texts.map((t) => (tids.has(t.id) ? { ...t, x: t.x + dx, y: t.y + dy } : t)),
+      }));
     }
   };
   /** Apaga todos os itens do conjunto com um único passo de desfazer. O molde nunca. */
@@ -2386,9 +3088,14 @@ function Index() {
     if (multiSel.some((i) => i.kind === "art")) {
       const all = { ...snapRef.current.artworks, [view]: null };
       setArtworks(all);
-      try { saveLS(LS_ART, all); } catch { /* ignora */ }
+      try {
+        saveLS(LS_ART, all);
+      } catch {
+        /* ignora */
+      }
     }
-    if (tids.size) setTexts((prev) => ({ ...prev, [view]: prev[view].filter((t) => !tids.has(t.id)) }));
+    if (tids.size)
+      setTexts((prev) => ({ ...prev, [view]: prev[view].filter((t) => !tids.has(t.id)) }));
     clearSelection();
     setMenu(null);
     return true;
@@ -2399,7 +3106,15 @@ function Index() {
     const ids = new Set(multiSel.filter((i) => i.kind === "layer").map((i) => i.id));
     commitView(
       "pc-multi:" + Date.now(),
-      layers[view].map((l) => (ids.has(l.id) && !l.clipped ? { ...l, clipped: true, init: { cx: l.cx, cy: l.cy, w: l.w, ratio: l.ratio, rot: l.rot ?? 0 } } : l)),
+      layers[view].map((l) =>
+        ids.has(l.id) && !l.clipped
+          ? {
+              ...l,
+              clipped: true,
+              init: { cx: l.cx, cy: l.cy, w: l.w, ratio: l.ratio, rot: l.rot ?? 0 },
+            }
+          : l,
+      ),
       undefined,
     );
     clearSelection();
@@ -2411,12 +3126,21 @@ function Index() {
   const [alignRect, setAlignRect] = useState<"molde" | "midia">("molde");
   const [alignOpen, setAlignOpen] = useState(false);
   useEffect(() => {
-    try { if (lsGet("moldecore.alinharAberto") === "1") setAlignOpen(true); } catch { /* sem storage */ }
+    try {
+      if (lsGet("moldecore.alinharAberto") === "1") setAlignOpen(true);
+    } catch {
+      /* sem storage */
+    }
   }, []);
-  const toggleAlign = () => setAlignOpen((v) => {
-    try { lsSet("moldecore.alinharAberto", v ? "0" : "1"); } catch { /* sem storage */ }
-    return !v;
-  });
+  const toggleAlign = () =>
+    setAlignOpen((v) => {
+      try {
+        lsSet("moldecore.alinharAberto", v ? "0" : "1");
+      } catch {
+        /* sem storage */
+      }
+      return !v;
+    });
   const itemBox = (it: SelItem): Box | null => {
     if (it.kind === "layer") {
       const l = layers[view].find((x) => x.id === it.id);
@@ -2429,7 +3153,9 @@ function Index() {
       const aw = art.w * pieceW;
       return rotatedBox((art.cx - 0.5) * pieceW, art.cy * pieceH, aw, aw * art.ratio, art.rot ?? 0);
     }
-    const el = document.querySelector(`[data-text-id="${CSS.escape(it.id)}"]`) as SVGTextElement | null;
+    const el = document.querySelector(
+      `[data-text-id="${CSS.escape(it.id)}"]`,
+    ) as SVGTextElement | null;
     if (!el) return null;
     try {
       const b = el.getBBox();
@@ -2440,7 +3166,10 @@ function Index() {
   };
   const moldRect = (): Box | null => {
     const seam = buildPath(shapes[view], pieceW, pieceH);
-    const d = alignRect === "midia" ? guidePaths(seam, pieceW, pieceH, guides[view]).frameSrc || seam : seam;
+    const d =
+      alignRect === "midia"
+        ? guidePaths(seam, pieceW, pieceH, guides[view]).frameSrc || seam
+        : seam;
     const b = pathBounds(d);
     return b ? { x0: b.minX, y0: b.minY, x1: b.maxX, y1: b.maxY } : null;
   };
@@ -2467,17 +3196,37 @@ function Index() {
       else ad = d;
     });
     if (lm.size) {
-      const all = { ...snapRef.current.layers, [view]: layers[view].map((l) => { const d = lm.get(l.id); return d ? { ...l, cx: l.cx + d.dx / pieceW, cy: l.cy + d.dy / pieceH } : l; }) };
+      const all = {
+        ...snapRef.current.layers,
+        [view]: layers[view].map((l) => {
+          const d = lm.get(l.id);
+          return d ? { ...l, cx: l.cx + d.dx / pieceW, cy: l.cy + d.dy / pieceH } : l;
+        }),
+      };
       setLayers(all);
       saveLS(LS_LAYERS, all);
     }
     const a2 = ad as { dx: number; dy: number } | null;
     if (a2 && art) {
-      const all = { ...snapRef.current.artworks, [view]: { ...art, cx: art.cx + a2.dx / pieceW, cy: art.cy + a2.dy / pieceH } };
+      const all = {
+        ...snapRef.current.artworks,
+        [view]: { ...art, cx: art.cx + a2.dx / pieceW, cy: art.cy + a2.dy / pieceH },
+      };
       setArtworks(all);
-      try { saveLS(LS_ART, all); } catch { /* imagem grande demais */ }
+      try {
+        saveLS(LS_ART, all);
+      } catch {
+        /* imagem grande demais */
+      }
     }
-    if (tm.size) setTexts((prev) => ({ ...prev, [view]: prev[view].map((t) => { const d = tm.get(t.id); return d ? { ...t, x: t.x + d.dx, y: t.y + d.dy } : t; }) }));
+    if (tm.size)
+      setTexts((prev) => ({
+        ...prev,
+        [view]: prev[view].map((t) => {
+          const d = tm.get(t.id);
+          return d ? { ...t, x: t.x + d.dx, y: t.y + d.dy } : t;
+        }),
+      }));
   };
   alignKeyRef.current = (e: KeyboardEvent) => {
     if (e.altKey || tool !== "selecao" || viewPlayer || !principalItem) return false;
@@ -2493,7 +3242,9 @@ function Index() {
   const setPieceDims = (w: number, h: number) =>
     updateMeasures(
       size,
-      isBodyView ? { bodyWidth: round1(w), bodyHeight: round1(h) } : { sleeveWidth: round1(w), sleeveHeight: round1(h) },
+      isBodyView
+        ? { bodyWidth: round1(w), bodyHeight: round1(h) }
+        : { sleeveWidth: round1(w), sleeveHeight: round1(h) },
       `resize:${size}:${isBodyView ? "corpo" : "manga"}`,
     );
 
@@ -2504,7 +3255,8 @@ function Index() {
     setLayers(next);
     saveLS(LS_LAYERS, next);
   };
-  const setViewLayers = (arr: Layer[], key?: string) => updateLayers({ ...snapRef.current.layers, [view]: arr }, key);
+  const setViewLayers = (arr: Layer[], key?: string) =>
+    updateLayers({ ...snapRef.current.layers, [view]: arr }, key);
   const selObj = curLayers.find((l) => l.id === selLayer) ?? null;
 
   const flash = (m: string) => {
@@ -2607,12 +3359,22 @@ function Index() {
     const i = arr.findIndex((l) => l.id === id);
     if (i < 0) return;
     const [l] = arr.splice(i, 1);
-    const j = dir === "front" ? arr.length : dir === "back" ? 0 : dir === "up" ? Math.min(arr.length, i + 1) : Math.max(0, i - 1);
+    const j =
+      dir === "front"
+        ? arr.length
+        : dir === "back"
+          ? 0
+          : dir === "up"
+            ? Math.min(arr.length, i + 1)
+            : Math.max(0, i - 1);
     arr.splice(j, 0, l!);
     setViewLayers(arr, "order:" + Date.now());
   };
   const deleteLayer = (id: string) => {
-    setViewLayers(curLayers.filter((l) => l.id !== id), "del:" + Date.now());
+    setViewLayers(
+      curLayers.filter((l) => l.id !== id),
+      "del:" + Date.now(),
+    );
     if (selLayer === id) setSelLayer(null);
   };
   const setSlot = (id: string, slot: LayerSlot | undefined) =>
@@ -2625,13 +3387,22 @@ function Index() {
       "slot:" + Date.now(),
     );
   const toggleHidden = (id: string) =>
-    setViewLayers(curLayers.map((l) => (l.id === id ? { ...l, hidden: !l.hidden } : l)), "hide:" + Date.now());
+    setViewLayers(
+      curLayers.map((l) => (l.id === id ? { ...l, hidden: !l.hidden } : l)),
+      "hide:" + Date.now(),
+    );
 
   const layerToPowerClip = (id: string) => {
     if (!curLayers.some((x) => x.id === id)) return;
     setViewLayers(
       curLayers.map((l) =>
-        l.id === id ? { ...l, clipped: true, init: { cx: l.cx, cy: l.cy, w: l.w, ratio: l.ratio, rot: l.rot ?? 0 } } : l,
+        l.id === id
+          ? {
+              ...l,
+              clipped: true,
+              init: { cx: l.cx, cy: l.cy, w: l.w, ratio: l.ratio, rot: l.rot ?? 0 },
+            }
+          : l,
       ),
       "pc-layer:" + Date.now(),
     );
@@ -2644,7 +3415,9 @@ function Index() {
     const l = curLayers.find((x) => x.id === id);
     if (!l?.paths) return;
     const subs = l.paths.flatMap((p) => p.subs);
-    const sub = [...subs].sort((a, b) => Number(b.closed) - Number(a.closed) || b.nodes.length - a.nodes.length)[0];
+    const sub = [...subs].sort(
+      (a, b) => Number(b.closed) - Number(a.closed) || b.nodes.length - a.nodes.length,
+    )[0];
     if (!sub || sub.nodes.length < 3) return;
     const m = table[mother];
     const isBody = view === "frente" || view === "costas";
@@ -2687,7 +3460,7 @@ function Index() {
   };
 
   /* ---------- Pré-visualização do jogador (somente leitura, fora do desfazer) ---------- */
-  const viewPlayer = teamView ? roster.find((p) => p.id === teamView.id) ?? null : null;
+  const viewPlayer = teamView ? (roster.find((p) => p.id === teamView.id) ?? null) : null;
   const playerSizeOk = (p: Player) => sizeIdsForGarment(clothingType).includes(p.tamanho);
   const startTeamView = (id: string) => {
     const p = roster.find((x) => x.id === id);
@@ -2713,7 +3486,10 @@ function Index() {
   /** Troca os espaços de imagem (Layer.slot) pelas imagens do jogador. */
   const playerSlotLayers = (arr: Layer[], p: Player, sz: Size, v: View) => {
     const isBody = v === "frente" || v === "costas";
-    const dims = (s: Size) => (isBody ? { W: table[s].bodyWidth, H: table[s].bodyHeight } : { W: table[s].sleeveWidth, H: table[s].sleeveHeight });
+    const dims = (s: Size) =>
+      isBody
+        ? { W: table[s].bodyWidth, H: table[s].bodyHeight }
+        : { W: table[s].sleeveWidth, H: table[s].sleeveHeight };
     const { W, H } = dims(sz);
     const Wm = dims(mother).W;
     const missing = new Set<"nome" | "numero">();
@@ -2725,7 +3501,7 @@ function Index() {
         continue;
       }
       const id = l.slot.kind === "nome" ? p.imgNome : p.imgNumero;
-      const img = id ? teamImages.find((i) => i.id === id) ?? null : null;
+      const img = id ? (teamImages.find((i) => i.id === id) ?? null) : null;
       const r = resolveTeamSlot(l, { img, W, H, Wm });
       if (!r) {
         missing.add(l.slot.kind);
@@ -2738,7 +3514,10 @@ function Index() {
     return { layers: out, missing, lowDpi };
   };
   const previewSlots = useMemo(
-    () => (viewPlayer ? playerSlotLayers(layers[view], viewPlayer, viewPlayer.tamanho as Size, view) : null),
+    () =>
+      viewPlayer
+        ? playerSlotLayers(layers[view], viewPlayer, viewPlayer.tamanho as Size, view)
+        : null,
     [viewPlayer, layers, view, teamImages, table, mother],
   );
   const teamPreview = useMemo<{ texts: TextElement[]; overflow: boolean } | null>(() => {
@@ -2748,7 +3527,8 @@ function Index() {
     const out: TextElement[] = [];
     let overflow = false;
     for (const t of texts[view]) {
-      const value = t.field === "nome" ? viewPlayer.nome : t.field === "numero" ? viewPlayer.numero : null;
+      const value =
+        t.field === "nome" ? viewPlayer.nome : t.field === "numero" ? viewPlayer.numero : null;
       const r = resolveTeamText(t, { value, sx, sy, measure: measureText });
       if (teamTextOverflows(r, W)) overflow = true;
       if (r && r.text.trim()) {
@@ -2760,17 +3540,39 @@ function Index() {
   }, [viewPlayer, table, mother, view, texts, fontsTick]);
   const teamPreviewTexts = teamPreview?.texts ?? null;
 
-  const selTextEl = selText ? texts[view].find((t) => t.id === selText) ?? null : null;
+  const selTextEl = selText ? (texts[view].find((t) => t.id === selText) ?? null) : null;
   const colorKind: "vetor" | "texto" | "imagem" | "molde" =
-    selObj && selObj.paths && !selObj.src ? "vetor" : selTextEl ? "texto" : selObj || (selPart === "estampa" && art) ? "imagem" : "molde";
+    selObj && selObj.paths && !selObj.src
+      ? "vetor"
+      : selTextEl
+        ? "texto"
+        : selObj || (selPart === "estampa" && art)
+          ? "imagem"
+          : "molde";
   const colorLabel =
-    colorKind === "vetor" ? selObj!.name : colorKind === "texto" ? "Texto" : colorKind === "imagem" ? "(imagem sem cor)" : "Molde";
-  const colorCurrent: { stroke: string | null; fill: string | null; mixedFill?: boolean; mixedStroke?: boolean } = (() => {
+    colorKind === "vetor"
+      ? selObj!.name
+      : colorKind === "texto"
+        ? "Texto"
+        : colorKind === "imagem"
+          ? "(imagem sem cor)"
+          : "Molde";
+  const colorCurrent: {
+    stroke: string | null;
+    fill: string | null;
+    mixedFill?: boolean;
+    mixedStroke?: boolean;
+  } = (() => {
     if (colorKind === "vetor") {
       const ps = selObj!.paths!;
       const f = ps[0]?.fill ?? null;
       const s = ps[0]?.stroke ?? null;
-      return { fill: f, stroke: s, mixedFill: ps.some((p) => p.fill !== f), mixedStroke: ps.some((p) => p.stroke !== s) };
+      return {
+        fill: f,
+        stroke: s,
+        mixedFill: ps.some((p) => p.fill !== f),
+        mixedStroke: ps.some((p) => p.stroke !== s),
+      };
     }
     if (colorKind === "texto") return { fill: selTextEl!.color, stroke: null };
     if (colorKind === "imagem") return { fill: null, stroke: null };
@@ -2782,7 +3584,10 @@ function Index() {
     if (colorKind === "texto") {
       if (t !== "preenchimento" || !hex) return;
       checkpoint("color:" + Date.now());
-      setTexts({ ...texts, [view]: texts[view].map((x) => (x.id === selText ? { ...x, color: hex } : x)) });
+      setTexts({
+        ...texts,
+        [view]: texts[view].map((x) => (x.id === selText ? { ...x, color: hex } : x)),
+      });
       return;
     }
     if (colorKind === "vetor" && selObj) {
@@ -2803,7 +3608,10 @@ function Index() {
       return;
     }
     checkpoint("color:" + Date.now());
-    const next = { ...styles, [view]: { ...styles[view], [t === "contorno" ? "stroke" : "fill"]: hex } };
+    const next = {
+      ...styles,
+      [view]: { ...styles[view], [t === "contorno" ? "stroke" : "fill"]: hex },
+    };
     setStyles(next);
     saveLS(LS_STYLES, next);
   };
@@ -2815,17 +3623,34 @@ function Index() {
     const ns = shapes[view];
     const xs = ns.map((n) => n.x);
     const ys = ns.map((n) => n.y);
-    return { x: Math.max(1e-3, Math.max(...xs) - Math.min(...xs)), y: Math.max(1e-3, Math.max(...ys) - Math.min(...ys)) };
+    return {
+      x: Math.max(1e-3, Math.max(...xs) - Math.min(...xs)),
+      y: Math.max(1e-3, Math.max(...ys) - Math.min(...ys)),
+    };
   })();
-  const boxInfo = <T extends BoxObject>(o: T, label: string, apply: (next: T) => void): SelectionInfo => {
+  const boxInfo = <T extends BoxObject>(
+    o: T,
+    label: string,
+    apply: (next: T) => void,
+  ): SelectionInfo => {
     const w = o.w * pieceW;
-    return { label, w, h: w * o.ratio, set: (nw, nh) => apply({ ...o, w: nw / pieceW, ratio: nh / nw }) };
+    return {
+      label,
+      w,
+      h: w * o.ratio,
+      set: (nw, nh) => apply({ ...o, w: nw / pieceW, ratio: nh / nw }),
+    };
   };
   const selInfo: SelectionInfo | null =
     tool !== "selecao"
       ? null
       : selObj
-        ? boxInfo(selObj, selObj.name, (next) => setViewLayers(curLayers.map((l) => (l.id === next.id ? next : l)), `resize:${next.id}`))
+        ? boxInfo(selObj, selObj.name, (next) =>
+            setViewLayers(
+              curLayers.map((l) => (l.id === next.id ? next : l)),
+              `resize:${next.id}`,
+            ),
+          )
         : selPart === "estampa" && art && size === mother && (art.clipped === false || pcEdit)
           ? boxInfo(art, "Estampa", setArt)
           : selPart === "peca"
@@ -2843,7 +3668,8 @@ function Index() {
         ...art,
         clipped: true,
         init: art.init ?? { cx: art.cx, cy: art.cy, w: art.w, ratio: art.ratio, rot: art.rot ?? 0 },
-        pre: art.clipped === false ? { cx: art.cx, cy: art.cy, w: art.w, rot: art.rot ?? 0 } : art.pre,
+        pre:
+          art.clipped === false ? { cx: art.cx, cy: art.cy, w: art.w, rot: art.rot ?? 0 } : art.pre,
       });
     setPcEdit(false);
     if (selPart === "estampa") setSelPart(null);
@@ -2852,7 +3678,8 @@ function Index() {
   const hasClipped = curLayers.some((l) => l.clipped);
   const pcHasContent = (!!art && art.clipped !== false) || hasClipped;
   useEffect(() => {
-    if (!pcEdit && selLayer && layers[view].find((l) => l.id === selLayer)?.clipped) setSelLayer(null);
+    if (!pcEdit && selLayer && layers[view].find((l) => l.id === selLayer)?.clipped)
+      setSelLayer(null);
   }, [pcEdit, selLayer, layers, view]);
   // Ao sair da edição do PowerClip, limpa qualquer seleção fantasma da arte recortada.
   useEffect(() => {
@@ -2865,7 +3692,11 @@ function Index() {
   };
   pcEditStartRef.current = pcEditStart;
   /** Aplica camadas e/ou estampa da vista atual com UM único passo de desfazer. */
-  const commitView = (key: string, nextLayers: Layer[] | null, nextArt: Artwork | null | undefined) => {
+  const commitView = (
+    key: string,
+    nextLayers: Layer[] | null,
+    nextArt: Artwork | null | undefined,
+  ) => {
     checkpoint(key);
     if (nextLayers) {
       const all = { ...snapRef.current.layers, [view]: nextLayers };
@@ -2883,14 +3714,19 @@ function Index() {
     }
   };
   const artClipped = !!art && art.clipped !== false;
-  const selClippedLayer = pcEdit && selLayer ? curLayers.find((l) => l.id === selLayer && l.clipped) ?? null : null;
+  const selClippedLayer =
+    pcEdit && selLayer ? (curLayers.find((l) => l.id === selLayer && l.clipped) ?? null) : null;
   const selClippedArt = pcEdit && selPart === "estampa" && artClipped;
   const canExtractSelected = !!selClippedLayer || selClippedArt;
   /** Em edição: tira só o item selecionado, mantém posição/seleção e a edição ativa. */
   const pcExtractSelected = () => {
     if (selClippedLayer) {
       const id = selClippedLayer.id;
-      commitView("pc-out:" + Date.now(), curLayers.map((l) => (l.id === id ? { ...l, clipped: false } : l)), undefined);
+      commitView(
+        "pc-out:" + Date.now(),
+        curLayers.map((l) => (l.id === id ? { ...l, clipped: false } : l)),
+        undefined,
+      );
       setSelLayer(id);
       return;
     }
@@ -2923,7 +3759,11 @@ function Index() {
   const deleteSelection = (includeText = false) => {
     if (multiSel) return deleteMulti();
     if (selObj) {
-      commitView("del:" + Date.now(), curLayers.filter((l) => l.id !== selObj.id), undefined);
+      commitView(
+        "del:" + Date.now(),
+        curLayers.filter((l) => l.id !== selObj.id),
+        undefined,
+      );
       setSelLayer(null);
       setMenu(null);
       return true;
@@ -2949,7 +3789,11 @@ function Index() {
   const pcRemove = () => {
     if (selClippedLayer) {
       const id = selClippedLayer.id;
-      commitView("pc-rm:" + Date.now(), curLayers.map((l) => (l.id === id ? { ...l, clipped: false } : l)), undefined);
+      commitView(
+        "pc-rm:" + Date.now(),
+        curLayers.map((l) => (l.id === id ? { ...l, clipped: false } : l)),
+        undefined,
+      );
       setSelLayer(id);
       return;
     }
@@ -2959,20 +3803,21 @@ function Index() {
     }
   };
   /** Item recortado selecionado, adaptado para o painel Editor do PowerClip. */
-  const pcTarget: Artwork | null = selClippedArt && art
-    ? art
-    : selClippedLayer
-      ? {
-          src: selClippedLayer.src ?? vectorDataUrl(selClippedLayer),
-          name: selClippedLayer.name,
-          cx: selClippedLayer.cx,
-          cy: selClippedLayer.cy,
-          w: selClippedLayer.w,
-          ratio: selClippedLayer.ratio,
-          rot: selClippedLayer.rot ?? 0,
-          ...(selClippedLayer.init ? { init: selClippedLayer.init } : {}),
-        }
-      : null;
+  const pcTarget: Artwork | null =
+    selClippedArt && art
+      ? art
+      : selClippedLayer
+        ? {
+            src: selClippedLayer.src ?? vectorDataUrl(selClippedLayer),
+            name: selClippedLayer.name,
+            cx: selClippedLayer.cx,
+            cy: selClippedLayer.cy,
+            w: selClippedLayer.w,
+            ratio: selClippedLayer.ratio,
+            rot: selClippedLayer.rot ?? 0,
+            ...(selClippedLayer.init ? { init: selClippedLayer.init } : {}),
+          }
+        : null;
   const pcTargetChange = (next: Artwork) => {
     if (selClippedArt) return setArt(next);
     const l = selClippedLayer;
@@ -2981,34 +3826,54 @@ function Index() {
     setViewLayers(
       curLayers.map((x) =>
         x.id === l.id
-          ? { ...x, cx: next.cx, cy: next.cy, w: next.w, ratio: next.ratio, rot: next.rot ?? 0, ...(isImg ? { src: next.src, name: next.name ?? x.name } : {}) }
+          ? {
+              ...x,
+              cx: next.cx,
+              cy: next.cy,
+              w: next.w,
+              ratio: next.ratio,
+              rot: next.rot ?? 0,
+              ...(isImg ? { src: next.src, name: next.name ?? x.name } : {}),
+            }
           : x,
       ),
       "pc-edit:" + l.id,
     );
   };
   const pcFrame = (() => {
-    const b = pathBounds(guidePaths(buildPath(shapes[view], pieceW, pieceH), pieceW, pieceH, guides[view]).frameSrc) ?? {
-      minX: -pieceW / 2 - PLOTTER_MARGIN, minY: -PLOTTER_MARGIN, maxX: pieceW / 2 + PLOTTER_MARGIN, maxY: pieceH + PLOTTER_MARGIN,
+    const b = pathBounds(
+      guidePaths(buildPath(shapes[view], pieceW, pieceH), pieceW, pieceH, guides[view]).frameSrc,
+    ) ?? {
+      minX: -pieceW / 2 - PLOTTER_MARGIN,
+      minY: -PLOTTER_MARGIN,
+      maxX: pieceW / 2 + PLOTTER_MARGIN,
+      maxY: pieceH + PLOTTER_MARGIN,
     };
     return { x: b.minX, y: b.minY, w: b.maxX - b.minX, h: b.maxY - b.minY };
   })();
-  const pcFileBase = `MOLDE_${partLabel(view, clothingType).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, "_")}_TAMANHO_${size}`;
+  const pcFileBase = `MOLDE_${partLabel(view, clothingType)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/\s+/g, "_")}_TAMANHO_${size}`;
   const showPcEditor = tool === "selecao" && pcEdit && size === mother && !!pcTarget;
   const pcState = pcEdit ? "editing" : pcHasContent ? "locked" : art ? "free" : "none";
   const artFree = !!art && art.clipped === false;
 
-
-
-
   /* ================= Exportação inteligente para Plotter ================= */
 
-
-
-  const buildPlotterSvgFor = (o: { view: View; size: Size; hideTechnical: boolean; crop: boolean; player?: Player }) => {
+  const buildPlotterSvgFor = (o: {
+    view: View;
+    size: Size;
+    hideTechnical: boolean;
+    crop: boolean;
+    player?: Player;
+  }) => {
     const { view, size } = o;
     const art = artworks[view];
-    const curLayers = o.player ? playerSlotLayers(layers[view], o.player, size, view).layers : layers[view];
+    const curLayers = o.player
+      ? playerSlotLayers(layers[view], o.player, size, view).layers
+      : layers[view];
     const isBody = view === "frente" || view === "costas";
     const mm = table[size];
     const W = isBody ? mm.bodyWidth : mm.sleeveWidth;
@@ -3023,9 +3888,13 @@ function Index() {
     const gp = guidePaths(path, W, H, guides[view]);
     const bleedPath = gp.frameSrc;
     const safetyPath = gp.safety;
-    const bleed = !gp.bleed ? "" : `<path d="${attr(bleedPath)}" fill="none" stroke="#38bdf8" stroke-width="0.06" stroke-linejoin="round"/>`;
+    const bleed = !gp.bleed
+      ? ""
+      : `<path d="${attr(bleedPath)}" fill="none" stroke="#38bdf8" stroke-width="0.06" stroke-linejoin="round"/>`;
     const seamLine = `<path d="${attr(path)}" fill="none" stroke="#111827" stroke-width="0.06" stroke-linejoin="round"/>`;
-    const safety = !safetyPath ? "" : `<path d="${attr(safetyPath)}" fill="none" stroke="#ef4444" stroke-width="0.06" stroke-dasharray="0.5 0.35" stroke-linejoin="round"/>`;
+    const safety = !safetyPath
+      ? ""
+      : `<path d="${attr(safetyPath)}" fill="none" stroke="#ef4444" stroke-width="0.06" stroke-dasharray="0.5 0.35" stroke-linejoin="round"/>`;
     const tech = o.hideTechnical ? "" : bleed + seamLine + safety;
 
     let img = "";
@@ -3034,7 +3903,13 @@ function Index() {
       img = art.clipped === false ? im : `<g clip-path="url(#moldeClip)">${im}</g>`;
     }
 
-    const objs = curLayers.map((l) => (l.clipped ? `<g clip-path="url(#moldeClip)">${layerMarkup(l, W, H)}</g>` : layerMarkup(l, W, H))).join("");
+    const objs = curLayers
+      .map((l) =>
+        l.clipped
+          ? `<g clip-path="url(#moldeClip)">${layerMarkup(l, W, H)}</g>`
+          : layerMarkup(l, W, H),
+      )
+      .join("");
     const body = `<path d="${attr(path)}" fill="${color(st.fill ?? "none")}"/>`;
     const outline = o.hideTechnical
       ? ""
@@ -3044,13 +3919,12 @@ function Index() {
        EXATAMENTE com a Linha Azul de Sangria. Os limites (X_min, X_max, Y_min,
        Y_max) são lidos do próprio traçado da sangria — nada de margem, padding
        ou sobra cinza/branca em cima, embaixo ou nas laterais. */
-    const bb =
-      pathBounds(bleedPath) ?? {
-        minX: -W / 2 - PLOTTER_MARGIN,
-        minY: -PLOTTER_MARGIN,
-        maxX: W / 2 + PLOTTER_MARGIN,
-        maxY: H + PLOTTER_MARGIN,
-      };
+    const bb = pathBounds(bleedPath) ?? {
+      minX: -W / 2 - PLOTTER_MARGIN,
+      minY: -PLOTTER_MARGIN,
+      maxX: W / 2 + PLOTTER_MARGIN,
+      maxY: H + PLOTTER_MARGIN,
+    };
     const cmW = Math.max(0.1, bb.maxX - bb.minX);
     const cmH = Math.max(0.1, bb.maxY - bb.minY);
     const x0 = bb.minX;
@@ -3069,7 +3943,10 @@ function Index() {
       body +
       img +
       objs +
-      textMarkup(texts[view], o.player ? { resolve: teamResolver(o.player, size, view) } : undefined) +
+      textMarkup(
+        texts[view],
+        o.player ? { resolve: teamResolver(o.player, size, view) } : undefined,
+      ) +
       tech +
       outline +
       frame +
@@ -3078,7 +3955,8 @@ function Index() {
     return { svg, cmW, cmH, safetyFailed: gp.safetyFailed };
   };
 
-  const buildPlotterSvg = (o: { hideTechnical: boolean; crop: boolean }) => buildPlotterSvgFor({ ...o, view, size });
+  const buildPlotterSvg = (o: { hideTechnical: boolean; crop: boolean }) =>
+    buildPlotterSvgFor({ ...o, view, size });
 
   /** Largura da peça (cm) no tamanho e vista. */
   function pieceWidth(sz: Size, v: View) {
@@ -3099,17 +3977,27 @@ function Index() {
   const teamMaxPiece = (players: Player[], views: View[]) => {
     let best = { cmW: 0, cmH: 0 };
     const seen = new Set<string>();
-    for (const p of players) for (const v of views) {
-      const k = p.tamanho + "|" + v;
-      if (seen.has(k) || !(p.tamanho in table)) continue;
-      seen.add(k);
-      const { cmW, cmH } = buildPlotterSvgFor({ view: v, size: p.tamanho as Size, hideTechnical: true, crop: true });
-      if (cmW * cmH > best.cmW * best.cmH) best = { cmW, cmH };
-    }
+    for (const p of players)
+      for (const v of views) {
+        const k = p.tamanho + "|" + v;
+        if (seen.has(k) || !(p.tamanho in table)) continue;
+        seen.add(k);
+        const { cmW, cmH } = buildPlotterSvgFor({
+          view: v,
+          size: p.tamanho as Size,
+          hideTechnical: true,
+          crop: true,
+        });
+        if (cmW * cmH > best.cmW * best.cmH) best = { cmW, cmH };
+      }
     return best;
   };
 
-  const exportTeam = async (opt: TeamExportOpts, onProgress: (done: number, total: number) => void, signal: { cancelled: boolean }) => {
+  const exportTeam = async (
+    opt: TeamExportOpts,
+    onProgress: (done: number, total: number) => void,
+    signal: { cancelled: boolean },
+  ) => {
     await fontsReady();
     const files: Record<string, Uint8Array> = {};
     const used = new Set<string>();
@@ -3122,22 +4010,53 @@ function Index() {
       for (const v of opt.views) {
         if (signal.cancelled) return null;
         const sz = p.tamanho as Size;
-        const { svg, cmW, cmH, safetyFailed } = buildPlotterSvgFor({ view: v, size: sz, hideTechnical: opt.hideTechnical, crop: true, player: p });
+        const { svg, cmW, cmH, safetyFailed } = buildPlotterSvgFor({
+          view: v,
+          size: sz,
+          hideTechnical: opt.hideTechnical,
+          crop: true,
+          player: p,
+        });
         const label = sizeLabel(clothingType, sz);
-        if (safetyFailed && !opt.hideTechnical) warnings.push(`${label} ${partLabel(v, clothingType)}: zona de segurança maior que a peça (linha não gerada)`);
-        const name = uniqueName(teamFileName(opt.template, { numero: p.numero, nome: p.nome, tamanho: label, vista: garmentFamily(clothingType) === "camisa" ? v : slugLabel(viewLabel(clothingType, v)).toLowerCase().replace(/_/g, "-") }, ext), used);
+        if (safetyFailed && !opt.hideTechnical)
+          warnings.push(
+            `${label} ${partLabel(v, clothingType)}: zona de segurança maior que a peça (linha não gerada)`,
+          );
+        const name = uniqueName(
+          teamFileName(
+            opt.template,
+            {
+              numero: p.numero,
+              nome: p.nome,
+              tamanho: label,
+              vista:
+                garmentFamily(clothingType) === "camisa"
+                  ? v
+                  : slugLabel(viewLabel(clothingType, v)).toLowerCase().replace(/_/g, "-"),
+            },
+            ext,
+          ),
+          used,
+        );
         const r = await renderPiece(svg, cmW, cmH, opt.format, opt.dpi, opt.quality, name);
-        if (r.reduced) warnings.push(`${label} (${v}) gerado a ${r.dpi} DPI para caber no navegador`);
+        if (r.reduced)
+          warnings.push(`${label} (${v}) gerado a ${r.dpi} DPI para caber no navegador`);
         const res = teamResolver(p, sz, v);
         const W = pieceWidth(sz, v);
         if (texts[v].some((t) => t.field && teamTextOverflows(res(t), W)))
-          warnings.push(`${p.numero || "—"} ${p.nome || "(sem nome)"} (${partLabel(v, clothingType)}): o nome passa da largura da peça`);
+          warnings.push(
+            `${p.numero || "—"} ${p.nome || "(sem nome)"} (${partLabel(v, clothingType)}): o nome passa da largura da peça`,
+          );
         const sl = playerSlotLayers(layers[v], p, sz, v);
         const who = `${p.numero || "—"} ${p.nome || "(sem nome)"}`;
         if (sl.missing.size)
-          warnings.push(`${who}: falta a imagem ${[...sl.missing].map((k) => (k === "nome" ? "do nome" : "do número")).join(" e ")}`);
+          warnings.push(
+            `${who}: falta a imagem ${[...sl.missing].map((k) => (k === "nome" ? "do nome" : "do número")).join(" e ")}`,
+          );
         for (const d of sl.lowDpi)
-          warnings.push(`${who} (${partLabel(v, clothingType)}): imagem ${d.kind === "nome" ? "do nome" : "do número"} com ${d.dpi} DPI (abaixo de 150)`);
+          warnings.push(
+            `${who} (${partLabel(v, clothingType)}): imagem ${d.kind === "nome" ? "do nome" : "do número"} com ${d.dpi} DPI (abaixo de 150)`,
+          );
         files[name] = r.bytes;
         n++;
         onProgress(n, total);
@@ -3147,7 +4066,10 @@ function Index() {
     if (signal.cancelled) return null;
     const zip = await zipFiles(files, opt.format);
     if (signal.cancelled) return null;
-    downloadBlob(new Blob([zip as BlobPart], { type: "application/zip" }), `Time_${todayStamp()}.zip`);
+    downloadBlob(
+      new Blob([zip as BlobPart], { type: "application/zip" }),
+      `Time_${todayStamp()}.zip`,
+    );
     return { players: opt.players.length, files: n, warnings: [...new Set(warnings)] };
   };
 
@@ -3205,18 +4127,34 @@ function Index() {
   const ALL_VIEWS: View[] = viewsFor(clothingType);
   const exportTargets = () => {
     const allSizes = sizeIdsForGarment(clothingType);
-    const sizes = expSizeMode === "atual" ? [size] : expSizeMode === "todos" ? [...allSizes] : allSizes.filter((s) => expSizes.includes(s));
-    const views = expViewMode === "atual" ? [view] : expViewMode === "todas" ? ALL_VIEWS : ALL_VIEWS.filter((v) => expViews.includes(v));
+    const sizes =
+      expSizeMode === "atual"
+        ? [size]
+        : expSizeMode === "todos"
+          ? [...allSizes]
+          : allSizes.filter((s) => expSizes.includes(s));
+    const views =
+      expViewMode === "atual"
+        ? [view]
+        : expViewMode === "todas"
+          ? ALL_VIEWS
+          : ALL_VIEWS.filter((v) => expViews.includes(v));
     return { sizes, views, count: sizes.length * views.length };
   };
   const exportMaxPiece = () => {
     const { sizes, views } = exportTargets();
     let best = { cmW: 0, cmH: 0 };
-    for (const s of sizes) for (const v of views) {
-      if (!(s in table)) continue;
-      const { cmW, cmH } = buildPlotterSvgFor({ view: v, size: s, hideTechnical: hideTech, crop: cropRect });
-      if (cmW * cmH > best.cmW * best.cmH) best = { cmW, cmH };
-    }
+    for (const s of sizes)
+      for (const v of views) {
+        if (!(s in table)) continue;
+        const { cmW, cmH } = buildPlotterSvgFor({
+          view: v,
+          size: s,
+          hideTechnical: hideTech,
+          crop: cropRect,
+        });
+        if (cmW * cmH > best.cmW * best.cmH) best = { cmW, cmH };
+      }
     return best;
   };
 
@@ -3237,10 +4175,16 @@ function Index() {
       if (count === 1) {
         const s = sizes[0]!;
         const v = views[0]!;
-        const { svg, cmW, cmH } = buildPlotterSvgFor({ view: v, size: s, hideTechnical: hideTech, crop: cropRect });
+        const { svg, cmW, cmH } = buildPlotterSvgFor({
+          view: v,
+          size: s,
+          hideTechnical: hideTech,
+          crop: cropRect,
+        });
         const base = exportName(clothingType, s, v);
         if (exportFmt === "pdf") {
-          if (printVectorPdf(await embedFonts(svg), cmW, cmH, base)) flashSaved("Arquivo 1:1 pronto — na janela de impressão escolha Salvar como PDF");
+          if (printVectorPdf(await embedFonts(svg), cmW, cmH, base))
+            flashSaved("Arquivo 1:1 pronto — na janela de impressão escolha Salvar como PDF");
           else {
             const r = await renderPiece(svg, cmW, cmH, "pdf", expDpi, expQuality, base);
             downloadBlob(new Blob([r.bytes as BlobPart], { type: MIME.pdf }), `${base}.pdf`);
@@ -3248,8 +4192,14 @@ function Index() {
           }
         } else {
           const r = await renderPiece(svg, cmW, cmH, exportFmt, expDpi, expQuality, base);
-          downloadBlob(new Blob([r.bytes as BlobPart], { type: MIME[exportFmt] }), `${base}.${ext}`);
-          flashSaved(`${exportFmt.toUpperCase()} ${r.dpi} DPI gerado no tamanho real` + (r.reduced ? " (DPI reduzido para caber no navegador)" : ""));
+          downloadBlob(
+            new Blob([r.bytes as BlobPart], { type: MIME[exportFmt] }),
+            `${base}.${ext}`,
+          );
+          flashSaved(
+            `${exportFmt.toUpperCase()} ${r.dpi} DPI gerado no tamanho real` +
+              (r.reduced ? " (DPI reduzido para caber no navegador)" : ""),
+          );
         }
         setPlotterOpen(false);
         return;
@@ -3259,23 +4209,42 @@ function Index() {
       const warnings: string[] = [];
       let n = 0;
       setExpProgress({ done: 0, total: count });
-      for (const s of sizes) for (const v of views) {
-        if (sig.cancelled) return flashSaved("Exportação cancelada", 3000);
-        const { svg, cmW, cmH, safetyFailed } = buildPlotterSvgFor({ view: v, size: s, hideTechnical: hideTech, crop: cropRect });
-        if (safetyFailed && !hideTech) warnings.push(`${sizeLabel(clothingType, s)} ${partLabel(v, clothingType)} sem zona de segurança (maior que a peça)`);
-        const name = uniqueName(`${exportName(clothingType, s, v)}.${ext}`, used);
-        const r = await renderPiece(svg, cmW, cmH, exportFmt, expDpi, expQuality, name);
-        if (r.reduced) warnings.push(`${sizeLabel(clothingType, s)} ${partLabel(v, clothingType)} a ${r.dpi} DPI`);
-        files[name] = r.bytes;
-        n++;
-        setExpProgress({ done: n, total: count });
-        await yieldFrame();
-      }
+      for (const s of sizes)
+        for (const v of views) {
+          if (sig.cancelled) return flashSaved("Exportação cancelada", 3000);
+          const { svg, cmW, cmH, safetyFailed } = buildPlotterSvgFor({
+            view: v,
+            size: s,
+            hideTechnical: hideTech,
+            crop: cropRect,
+          });
+          if (safetyFailed && !hideTech)
+            warnings.push(
+              `${sizeLabel(clothingType, s)} ${partLabel(v, clothingType)} sem zona de segurança (maior que a peça)`,
+            );
+          const name = uniqueName(`${exportName(clothingType, s, v)}.${ext}`, used);
+          const r = await renderPiece(svg, cmW, cmH, exportFmt, expDpi, expQuality, name);
+          if (r.reduced)
+            warnings.push(
+              `${sizeLabel(clothingType, s)} ${partLabel(v, clothingType)} a ${r.dpi} DPI`,
+            );
+          files[name] = r.bytes;
+          n++;
+          setExpProgress({ done: n, total: count });
+          await yieldFrame();
+        }
       if (sig.cancelled) return flashSaved("Exportação cancelada", 3000);
       const zip = await zipFiles(files, exportFmt);
       if (sig.cancelled) return flashSaved("Exportação cancelada", 3000);
-      downloadBlob(new Blob([zip as BlobPart], { type: "application/zip" }), `MoldeCore_${clothingType.replace(/\s+/g, "_")}_${todayStamp()}.zip`);
-      flashSaved(`${n} arquivos ${exportFmt.toUpperCase()} no ZIP` + (warnings.length ? ` · Avisos: ${warnings.join(", ")}` : ""), warnings.length ? 9000 : 4500);
+      downloadBlob(
+        new Blob([zip as BlobPart], { type: "application/zip" }),
+        `MoldeCore_${clothingType.replace(/\s+/g, "_")}_${todayStamp()}.zip`,
+      );
+      flashSaved(
+        `${n} arquivos ${exportFmt.toUpperCase()} no ZIP` +
+          (warnings.length ? ` · Avisos: ${warnings.join(", ")}` : ""),
+        warnings.length ? 9000 : 4500,
+      );
       setPlotterOpen(false);
     } catch {
       flashSaved("Não foi possível gerar o arquivo de exportação", 3500);
@@ -3294,7 +4263,8 @@ function Index() {
         if (!m) return false;
         const W = isB ? m.bodyWidth : m.sleeveWidth;
         const H = isB ? m.bodyHeight : m.sleeveHeight;
-        return guidePaths(buildPath(shapes[v], W, H), W, H, { bleed: 0, safety: guides[v].safety }).safetyFailed;
+        return guidePaths(buildPath(shapes[v], W, H), W, H, { bleed: 0, safety: guides[v].safety })
+          .safetyFailed;
       })
       .map((s) => sizeLabel(clothingType, s));
     return bad.length ? [{ view: v, text: `${VIEW_SHORT[v]} (${bad.join(", ")})` }] : [];
@@ -3308,12 +4278,34 @@ function Index() {
   };
 
   const techRows = [
-    { key: "seam", label: "Linha de Costura", dot: "bg-ink", on: showSeam, toggle: () => setShowSeam((v) => !v) },
-    { key: "bleed", label: `Margem de Sangria +${fmtCm(guides[view].bleed)} cm`, dot: "bg-sky-400", on: showBleed, toggle: () => setShowBleed((v) => !v) },
-    { key: "safety", label: `Zona de Segurança −${fmtCm(guides[view].safety)} cm`, warn: safetyFailures.some((f) => f.view === view), dot: "bg-red-500", on: showSafety, toggle: () => setShowSafety((v) => !v) },
+    {
+      key: "seam",
+      label: "Linha de Costura",
+      dot: "bg-ink",
+      on: showSeam,
+      toggle: () => setShowSeam((v) => !v),
+    },
+    {
+      key: "bleed",
+      label: `Margem de Sangria +${fmtCm(guides[view].bleed)} cm`,
+      dot: "bg-sky-400",
+      on: showBleed,
+      toggle: () => setShowBleed((v) => !v),
+    },
+    {
+      key: "safety",
+      label: `Zona de Segurança −${fmtCm(guides[view].safety)} cm`,
+      warn: safetyFailures.some((f) => f.view === view),
+      dot: "bg-red-500",
+      on: showSafety,
+      toggle: () => setShowSafety((v) => !v),
+    },
   ];
 
-  const VIEWS: { key: View; label: string }[] = viewsFor(clothingType).map((key) => ({ key, label: viewLabel(clothingType, key) }));
+  const VIEWS: { key: View; label: string }[] = viewsFor(clothingType).map((key) => ({
+    key,
+    label: viewLabel(clothingType, key),
+  }));
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground font-display antialiased flex">
@@ -3326,360 +4318,444 @@ function Index() {
         }
         inert={!sidebars.left}
       >
-      <aside className="w-64 shrink-0 bg-panel border-r border-line flex flex-col">
-        <div className="px-5 pt-6 pb-5 border-b border-line">
-          <div className="flex items-center gap-3">
-            <div className="size-10 rounded-lg bg-cyan/10 border border-cyan/40 grid place-items-center shrink-0">
-              <Shirt className="size-5 text-cyan" strokeWidth={2} />
-            </div>
-            <div>
-              <div className="text-lg font-bold tracking-tight text-foreground leading-none">
-                Molde<span className="text-cyan">Core</span>
+        <aside className="w-64 shrink-0 bg-panel border-r border-line flex flex-col">
+          <div className="px-5 pt-6 pb-5 border-b border-line">
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-lg bg-cyan/10 border border-cyan/40 grid place-items-center shrink-0">
+                <Shirt className="size-5 text-cyan" strokeWidth={2} />
               </div>
-              <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-faint mt-1.5">
-                Motor de Moldes
+              <div>
+                <div className="text-lg font-bold tracking-tight text-foreground leading-none">
+                  Molde<span className="text-cyan">Core</span>
+                </div>
+                <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-faint mt-1.5">
+                  Motor de Moldes
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="px-5 py-5 border-b border-line">
-          <label className="block text-[10px] font-mono uppercase tracking-[0.18em] text-muted-foreground mb-2">
-            Tipo de Peça
-          </label>
-          <div className="relative">
-            <select
-              value={clothingType}
-              onChange={(e) => changeClothingType(e.target.value as ClothingType)}
-              className="w-full appearance-none bg-panel2 border border-line rounded-md pl-3 pr-9 py-2.5 text-sm text-foreground font-medium focus:outline-none focus:border-cyan/60 cursor-pointer"
-            >
-              {CLOTHING_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-cyan size-4" />
+          <div className="px-5 py-5 border-b border-line">
+            <label className="block text-[10px] font-mono uppercase tracking-[0.18em] text-muted-foreground mb-2">
+              Tipo de Peça
+            </label>
+            <div className="relative">
+              <select
+                value={clothingType}
+                onChange={(e) => changeClothingType(e.target.value as ClothingType)}
+                className="w-full appearance-none bg-panel2 border border-line rounded-md pl-3 pr-9 py-2.5 text-sm text-foreground font-medium focus:outline-none focus:border-cyan/60 cursor-pointer"
+              >
+                {CLOTHING_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-cyan size-4" />
+            </div>
           </div>
-        </div>
 
-        <div className="px-5 py-5">
-          <button className="w-full flex items-center justify-center gap-2 bg-cyan text-primary-foreground font-semibold text-sm rounded-md py-3 hover:bg-cyan/90 transition-colors">
-            <Plus className="size-4" strokeWidth={2.5} />
-            Criar Novo Molde
-          </button>
-        </div>
-
-        {/* ===== Camadas técnicas do canvas — olhos de visibilidade ===== */}
-        <div className="px-5 pb-5 border-b border-line">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-faint">Camadas Técnicas</div>
-            <button
-              onClick={() => setGuidesOpen((o) => !o)}
-              title="Ajustar distâncias"
-              aria-label="Ajustar distâncias"
-              aria-pressed={guidesOpen}
-              className={"p-1 rounded hover:bg-panel2 " + (guidesOpen ? "text-cyan" : "text-faint")}
-            >
-              <SlidersHorizontal className="size-3.5" />
+          <div className="px-5 py-5">
+            <button className="w-full flex items-center justify-center gap-2 bg-cyan text-primary-foreground font-semibold text-sm rounded-md py-3 hover:bg-cyan/90 transition-colors">
+              <Plus className="size-4" strokeWidth={2.5} />
+              Criar Novo Molde
             </button>
           </div>
-          <div className="space-y-1">
-            {techRows.map((row) => (
+
+          {/* ===== Camadas técnicas do canvas — olhos de visibilidade ===== */}
+          <div className="px-5 pb-5 border-b border-line">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-faint">
+                Camadas Técnicas
+              </div>
               <button
-                key={row.key}
-                onClick={row.toggle}
-                aria-pressed={row.on}
-                title={(row.on ? "Ocultar " : "Mostrar ") + row.label}
+                onClick={() => setGuidesOpen((o) => !o)}
+                title="Ajustar distâncias"
+                aria-label="Ajustar distâncias"
+                aria-pressed={guidesOpen}
                 className={
-                  "w-full flex items-center gap-2 px-2.5 py-2 rounded-md border text-[11px] text-left transition-colors " +
-                  (row.on
-                    ? "border-cyan/30 bg-cyan/5 text-foreground"
-                    : "border-line text-faint hover:text-foreground")
+                  "p-1 rounded hover:bg-panel2 " + (guidesOpen ? "text-cyan" : "text-faint")
                 }
               >
-                <span className={"size-1.5 shrink-0 rounded-full " + row.dot} />
-                <span className="flex-1 leading-tight">{row.label}</span>
-                {"warn" in row && row.warn && (
-                  <span className="text-destructive" title="Distância maior que a peça nesta vista">⚠</span>
-                )}
-                {row.on ? <Eye className="size-3.5 text-cyan" /> : <EyeOff className="size-3.5" />}
+                <SlidersHorizontal className="size-3.5" />
               </button>
-            ))}
-          </div>
-          {guidesOpen && (
-            <GuidesPanel
-              key={clothingType}
-              guides={guides}
-              view={view}
-              groups={guideGroupsFor(clothingType)}
-              names={VIEW_SHORT}
-              failures={safetyFailures.map((f) => f.text)}
-              onApply={applyGuides}
-            />
-          )}
-        </div>
-
-        {/* ===== Exportação para plotter ===== */}
-        <div className="px-5 py-5 border-b border-line">
-          <button
-            onClick={() => setPlotterOpen(true)}
-            className="w-full flex items-center justify-center gap-2 bg-panel2 border border-cyan/40 text-cyan font-semibold text-sm rounded-md py-3 hover:bg-cyan/10 transition-colors"
-          >
-            <Download className="size-4" strokeWidth={2.5} />
-            Exportar para Plotter
-          </button>
-        </div>
-
-        {plotterOpen && (
-          <div
-            className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4"
-            onClick={() => setPlotterOpen(false)}
-          >
-            <div
-              className="w-full max-w-md bg-panel border border-line rounded-xl shadow-2xl overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="h-12 px-4 border-b border-line flex items-center justify-between">
-                <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <Download className="size-4 text-cyan" />
-                  Exportar para Plotter
-                </span>
+            </div>
+            <div className="space-y-1">
+              {techRows.map((row) => (
                 <button
-                  onClick={() => setPlotterOpen(false)}
-                  aria-label="Fechar exportação"
-                  className="text-muted-foreground hover:text-cyan"
+                  key={row.key}
+                  onClick={row.toggle}
+                  aria-pressed={row.on}
+                  title={(row.on ? "Ocultar " : "Mostrar ") + row.label}
+                  className={
+                    "w-full flex items-center gap-2 px-2.5 py-2 rounded-md border text-[11px] text-left transition-colors " +
+                    (row.on
+                      ? "border-cyan/30 bg-cyan/5 text-foreground"
+                      : "border-line text-faint hover:text-foreground")
+                  }
                 >
-                  <X className="size-4" />
-                </button>
-              </div>
-
-              <div className="p-4 space-y-4">
-                <div>
-                  <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-faint mb-2">
-                    Formato do arquivo
-                  </div>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {([
-                      ["pdf", "PDF", "Vetor 1:1"],
-                      ["png", "PNG", "Imagem"],
-                      ["jpeg", "JPEG", "Imagem leve"],
-                    ] as const).map(([k, l, d]) => (
-                      <button
-                        key={k}
-                        onClick={() => setExportFmt(k)}
-                        className={
-                          "px-2 py-2 rounded-md border text-xs text-center transition-colors " +
-                          (exportFmt === k ? "border-cyan/50 bg-cyan/10 text-cyan font-semibold" : "border-line text-muted-foreground hover:text-foreground")
-                        }
-                      >
-                        {l}
-                        <span className="block text-[10px] font-mono text-faint font-normal">{d}</span>
-                      </button>
-                    ))}
-                  </div>
-                  {exportFmt !== "pdf" && (
-                    <div className="mt-2 space-y-2">
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="text-muted-foreground w-20">Resolução</span>
-                        <div className="flex gap-1">
-                          {TEAM_DPIS.map((d) => (
-                            <button
-                              key={d}
-                              onClick={() => setExpDpi(d)}
-                              className={"px-2 py-1 rounded border text-[11px] font-mono " + (expDpi === d ? "border-cyan/50 bg-cyan/10 text-cyan" : "border-line text-muted-foreground")}
-                            >
-                              {d}
-                            </button>
-                          ))}
-                          <span className="self-center text-[10px] text-faint">DPI</span>
-                        </div>
-                      </div>
-                      {exportFmt === "jpeg" && (
-                        <label className="flex items-center gap-2 text-xs">
-                          <span className="text-muted-foreground w-20">Qualidade</span>
-                          <input type="range" min={60} max={100} value={expQuality} onChange={(e) => setExpQuality(+e.target.value)} className="flex-1 accent-cyan" />
-                          <span className="font-mono text-[11px] w-9 text-right">{expQuality}%</span>
-                        </label>
-                      )}
-                    </div>
+                  <span className={"size-1.5 shrink-0 rounded-full " + row.dot} />
+                  <span className="flex-1 leading-tight">{row.label}</span>
+                  {"warn" in row && row.warn && (
+                    <span
+                      className="text-destructive"
+                      title="Distância maior que a peça nesta vista"
+                    >
+                      ⚠
+                    </span>
                   )}
+                  {row.on ? (
+                    <Eye className="size-3.5 text-cyan" />
+                  ) : (
+                    <EyeOff className="size-3.5" />
+                  )}
+                </button>
+              ))}
+            </div>
+            {guidesOpen && (
+              <GuidesPanel
+                key={clothingType}
+                guides={guides}
+                view={view}
+                groups={guideGroupsFor(clothingType)}
+                names={VIEW_SHORT}
+                failures={safetyFailures.map((f) => f.text)}
+                onApply={applyGuides}
+              />
+            )}
+          </div>
+
+          {/* ===== Exportação para plotter ===== */}
+          <div className="px-5 py-5 border-b border-line">
+            <button
+              onClick={() => setPlotterOpen(true)}
+              className="w-full flex items-center justify-center gap-2 bg-panel2 border border-cyan/40 text-cyan font-semibold text-sm rounded-md py-3 hover:bg-cyan/10 transition-colors"
+            >
+              <Download className="size-4" strokeWidth={2.5} />
+              Exportar para Plotter
+            </button>
+          </div>
+
+          {plotterOpen && (
+            <div
+              className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm flex items-center justify-center p-4"
+              onClick={() => setPlotterOpen(false)}
+            >
+              <div
+                className="w-full max-w-md bg-panel border border-line rounded-xl shadow-2xl overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="h-12 px-4 border-b border-line flex items-center justify-between">
+                  <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <Download className="size-4 text-cyan" />
+                    Exportar para Plotter
+                  </span>
+                  <button
+                    onClick={() => setPlotterOpen(false)}
+                    aria-label="Fechar exportação"
+                    className="text-muted-foreground hover:text-cyan"
+                  >
+                    <X className="size-4" />
+                  </button>
                 </div>
 
-                <div>
-                  <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-faint mb-2">O que exportar</div>
-                  {(
-                    [
+                <div className="p-4 space-y-4">
+                  <div>
+                    <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-faint mb-2">
+                      Formato do arquivo
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {(
+                        [
+                          ["pdf", "PDF", "Vetor 1:1"],
+                          ["png", "PNG", "Imagem"],
+                          ["jpeg", "JPEG", "Imagem leve"],
+                        ] as const
+                      ).map(([k, l, d]) => (
+                        <button
+                          key={k}
+                          onClick={() => setExportFmt(k)}
+                          className={
+                            "px-2 py-2 rounded-md border text-xs text-center transition-colors " +
+                            (exportFmt === k
+                              ? "border-cyan/50 bg-cyan/10 text-cyan font-semibold"
+                              : "border-line text-muted-foreground hover:text-foreground")
+                          }
+                        >
+                          {l}
+                          <span className="block text-[10px] font-mono text-faint font-normal">
+                            {d}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                    {exportFmt !== "pdf" && (
+                      <div className="mt-2 space-y-2">
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-muted-foreground w-20">Resolução</span>
+                          <div className="flex gap-1">
+                            {TEAM_DPIS.map((d) => (
+                              <button
+                                key={d}
+                                onClick={() => setExpDpi(d)}
+                                className={
+                                  "px-2 py-1 rounded border text-[11px] font-mono " +
+                                  (expDpi === d
+                                    ? "border-cyan/50 bg-cyan/10 text-cyan"
+                                    : "border-line text-muted-foreground")
+                                }
+                              >
+                                {d}
+                              </button>
+                            ))}
+                            <span className="self-center text-[10px] text-faint">DPI</span>
+                          </div>
+                        </div>
+                        {exportFmt === "jpeg" && (
+                          <label className="flex items-center gap-2 text-xs">
+                            <span className="text-muted-foreground w-20">Qualidade</span>
+                            <input
+                              type="range"
+                              min={60}
+                              max={100}
+                              value={expQuality}
+                              onChange={(e) => setExpQuality(+e.target.value)}
+                              className="flex-1 accent-cyan"
+                            />
+                            <span className="font-mono text-[11px] w-9 text-right">
+                              {expQuality}%
+                            </span>
+                          </label>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-faint mb-2">
+                      O que exportar
+                    </div>
+                    {[
                       {
                         title: "Tamanhos",
                         mode: expSizeMode,
                         setMode: setExpSizeMode as (m: string) => void,
-                        opts: [["atual", `Apenas o atual (${sizeLabel(clothingType, size)})`], ["todos", "Todos"], ["escolher", "Escolher…"]],
-                        items: sizesForGarment(clothingType).map((o) => ({ id: o.id as string, label: o.label })),
+                        opts: [
+                          ["atual", `Apenas o atual (${sizeLabel(clothingType, size)})`],
+                          ["todos", "Todos"],
+                          ["escolher", "Escolher…"],
+                        ],
+                        items: sizesForGarment(clothingType).map((o) => ({
+                          id: o.id as string,
+                          label: o.label,
+                        })),
                         sel: expSizes as string[],
-                        toggle: (id: string) => setExpSizes((a) => (a.includes(id as Size) ? a.filter((x) => x !== id) : [...a, id as Size])),
+                        toggle: (id: string) =>
+                          setExpSizes((a) =>
+                            a.includes(id as Size) ? a.filter((x) => x !== id) : [...a, id as Size],
+                          ),
                       },
                       {
                         title: "Vistas",
                         mode: expViewMode,
                         setMode: setExpViewMode as (m: string) => void,
-                        opts: [["atual", "Apenas a atual"], ["todas", "Todas"], ["escolher", "Escolher…"]],
+                        opts: [
+                          ["atual", "Apenas a atual"],
+                          ["todas", "Todas"],
+                          ["escolher", "Escolher…"],
+                        ],
                         items: VIEWS.map((v) => ({ id: v.key as string, label: v.label })),
                         sel: expViews as string[],
-                        toggle: (id: string) => setExpViews((a) => (a.includes(id as View) ? a.filter((x) => x !== id) : [...a, id as View])),
+                        toggle: (id: string) =>
+                          setExpViews((a) =>
+                            a.includes(id as View) ? a.filter((x) => x !== id) : [...a, id as View],
+                          ),
                       },
-                    ]
-                  ).map((g) => (
-                    <div key={g.title} className="mb-2">
-                      <div className="text-xs text-muted-foreground mb-1">{g.title}</div>
-                      <div className="flex flex-wrap gap-1">
-                        {g.opts.map(([k, l]) => (
-                          <button
-                            key={k}
-                            onClick={() => g.setMode(k!)}
-                            className={"px-2 py-1 rounded border text-[11px] " + (g.mode === k ? "border-cyan/50 bg-cyan/10 text-cyan" : "border-line text-muted-foreground")}
-                          >
-                            {l}
-                          </button>
-                        ))}
-                      </div>
-                      {g.mode === "escolher" && (
-                        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                          {g.items.map((it) => (
-                            <label key={it.id} className="flex items-center gap-1 text-[11px] cursor-pointer">
-                              <input type="checkbox" checked={g.sel.includes(it.id)} onChange={() => g.toggle(it.id)} className="accent-cyan" />
-                              {it.label}
-                            </label>
+                    ].map((g) => (
+                      <div key={g.title} className="mb-2">
+                        <div className="text-xs text-muted-foreground mb-1">{g.title}</div>
+                        <div className="flex flex-wrap gap-1">
+                          {g.opts.map(([k, l]) => (
+                            <button
+                              key={k}
+                              onClick={() => g.setMode(k!)}
+                              className={
+                                "px-2 py-1 rounded border text-[11px] " +
+                                (g.mode === k
+                                  ? "border-cyan/50 bg-cyan/10 text-cyan"
+                                  : "border-line text-muted-foreground")
+                              }
+                            >
+                              {l}
+                            </button>
                           ))}
                         </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                <div>
-                  <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-faint mb-2">
-                    Opções de exportação
-                  </div>
-                  <div className="space-y-2">
-                    <label className="flex items-start gap-2.5 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={hideTech}
-                        onChange={(e) => setHideTech(e.target.checked)}
-                        className="mt-0.5 size-4 shrink-0 accent-cyan"
-                      />
-                      <span className="text-xs text-foreground leading-snug">
-                        Esconder Linhas Técnicas de Segurança
-                        <span className="block text-[10px] font-mono text-faint">
-                          Remove a sangria azul, a costura preta e a zona vermelha — sai só a estampa
-                        </span>
-                      </span>
-                    </label>
-                    <label className="flex items-start gap-2.5 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={cropRect}
-                        onChange={(e) => setCropRect(e.target.checked)}
-                        className="mt-0.5 size-4 shrink-0 accent-cyan"
-                      />
-                      <span className="text-xs text-foreground leading-snug">
-                        Manter Apenas o Retângulo com a Estampa
-                        <span className="block text-[10px] font-mono text-faint">
-                          Recorta a saída exatamente na borda do quadro de mídia
-                        </span>
-                      </span>
-                    </label>
-                  </div>
-                </div>
-
-                {(() => {
-                  const t = exportTargets();
-                  const multi = t.count > 1;
-                  const vector = exportFmt === "pdf" && !multi;
-                  const mp = exportMaxPiece();
-                  const d = fitDpi(mp.cmW, mp.cmH, expDpi);
-                  return (
-                    <div className="rounded-md border border-line bg-panel2 p-2.5 text-[10px] font-mono text-muted-foreground leading-snug space-y-1">
-                      <div>
-                        SAÍDA · {t.count} {t.count === 1 ? "arquivo" : "arquivos"} {exportFmt.toUpperCase()}
-                        {multi ? " em ZIP" : ""} · {vector ? "vetor 1:1" : `maior peça ${fmt(mp.cmW)} × ${fmt(mp.cmH)} cm · ${cmToPx(mp.cmW, d)} × ${cmToPx(mp.cmH, d)} px`}
-                        {!vector && d < expDpi ? ` · DPI reduzido para ${d}` : ""}
-                      </div>
-                      {exportFmt === "pdf" && multi && (
-                        <div className="text-faint">PDF em lote usa imagem de alta resolução; para PDF vetorial exporte um arquivo por vez</div>
-                      )}
-                      {expProgress && (
-                        <div className="pt-1">
-                          <div className="h-1.5 rounded bg-line overflow-hidden">
-                            <div className="h-full bg-cyan transition-all" style={{ width: `${(expProgress.done / Math.max(1, expProgress.total)) * 100}%` }} />
+                        {g.mode === "escolher" && (
+                          <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                            {g.items.map((it) => (
+                              <label
+                                key={it.id}
+                                className="flex items-center gap-1 text-[11px] cursor-pointer"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={g.sel.includes(it.id)}
+                                  onChange={() => g.toggle(it.id)}
+                                  className="accent-cyan"
+                                />
+                                {it.label}
+                              </label>
+                            ))}
                           </div>
-                          <div className="mt-1">{expProgress.done} / {expProgress.total}</div>
-                        </div>
-                      )}
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div>
+                    <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-faint mb-2">
+                      Opções de exportação
                     </div>
-                  );
-                })()}
-              </div>
+                    <div className="space-y-2">
+                      <label className="flex items-start gap-2.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={hideTech}
+                          onChange={(e) => setHideTech(e.target.checked)}
+                          className="mt-0.5 size-4 shrink-0 accent-cyan"
+                        />
+                        <span className="text-xs text-foreground leading-snug">
+                          Esconder Linhas Técnicas de Segurança
+                          <span className="block text-[10px] font-mono text-faint">
+                            Remove a sangria azul, a costura preta e a zona vermelha — sai só a
+                            estampa
+                          </span>
+                        </span>
+                      </label>
+                      <label className="flex items-start gap-2.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={cropRect}
+                          onChange={(e) => setCropRect(e.target.checked)}
+                          className="mt-0.5 size-4 shrink-0 accent-cyan"
+                        />
+                        <span className="text-xs text-foreground leading-snug">
+                          Manter Apenas o Retângulo com a Estampa
+                          <span className="block text-[10px] font-mono text-faint">
+                            Recorta a saída exatamente na borda do quadro de mídia
+                          </span>
+                        </span>
+                      </label>
+                    </div>
+                  </div>
 
-              <div className="px-4 py-3 border-t border-line flex gap-2">
-                <button
-                  onClick={() => {
-                    if (exporting) expSignal.current.cancelled = true;
-                    else setPlotterOpen(false);
-                  }}
-                  className="flex-1 py-2.5 rounded-md border border-line text-sm font-medium text-muted-foreground hover:text-foreground"
+                  {(() => {
+                    const t = exportTargets();
+                    const multi = t.count > 1;
+                    const vector = exportFmt === "pdf" && !multi;
+                    const mp = exportMaxPiece();
+                    const d = fitDpi(mp.cmW, mp.cmH, expDpi);
+                    return (
+                      <div className="rounded-md border border-line bg-panel2 p-2.5 text-[10px] font-mono text-muted-foreground leading-snug space-y-1">
+                        <div>
+                          SAÍDA · {t.count} {t.count === 1 ? "arquivo" : "arquivos"}{" "}
+                          {exportFmt.toUpperCase()}
+                          {multi ? " em ZIP" : ""} ·{" "}
+                          {vector
+                            ? "vetor 1:1"
+                            : `maior peça ${fmt(mp.cmW)} × ${fmt(mp.cmH)} cm · ${cmToPx(mp.cmW, d)} × ${cmToPx(mp.cmH, d)} px`}
+                          {!vector && d < expDpi ? ` · DPI reduzido para ${d}` : ""}
+                        </div>
+                        {exportFmt === "pdf" && multi && (
+                          <div className="text-faint">
+                            PDF em lote usa imagem de alta resolução; para PDF vetorial exporte um
+                            arquivo por vez
+                          </div>
+                        )}
+                        {expProgress && (
+                          <div className="pt-1">
+                            <div className="h-1.5 rounded bg-line overflow-hidden">
+                              <div
+                                className="h-full bg-cyan transition-all"
+                                style={{
+                                  width: `${(expProgress.done / Math.max(1, expProgress.total)) * 100}%`,
+                                }}
+                              />
+                            </div>
+                            <div className="mt-1">
+                              {expProgress.done} / {expProgress.total}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <div className="px-4 py-3 border-t border-line flex gap-2">
+                  <button
+                    onClick={() => {
+                      if (exporting) expSignal.current.cancelled = true;
+                      else setPlotterOpen(false);
+                    }}
+                    className="flex-1 py-2.5 rounded-md border border-line text-sm font-medium text-muted-foreground hover:text-foreground"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={runExport}
+                    disabled={exporting || exportTargets().count === 0}
+                    className="flex-1 py-2.5 rounded-md bg-cyan text-primary-foreground text-sm font-semibold hover:bg-cyan/90 disabled:opacity-60"
+                  >
+                    {exporting ? "Gerando…" : "Exportar"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="px-5 pb-2 text-[10px] font-mono uppercase tracking-[0.18em] text-faint">
+            Biblioteca
+          </div>
+          <nav className="px-3 pb-4 space-y-1">
+            {LIBRARY.map((item) => (
+              <a
+                key={item.name}
+                href="#"
+                className={
+                  "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors " +
+                  (item.active
+                    ? "bg-cyan/10 border border-cyan/25 text-cyan"
+                    : "text-muted-foreground hover:bg-panel2 hover:text-foreground")
+                }
+              >
+                <span
+                  className={"size-1.5 rounded-full " + (item.active ? "bg-cyan" : "bg-faint")}
+                />
+                <span className="flex-1">{item.name}</span>
+                <span
+                  className={"text-[10px] font-mono " + (item.active ? "text-cyan" : "text-faint")}
                 >
-                  Cancelar
-                </button>
-                <button
-                  onClick={runExport}
-                  disabled={exporting || exportTargets().count === 0}
-                  className="flex-1 py-2.5 rounded-md bg-cyan text-primary-foreground text-sm font-semibold hover:bg-cyan/90 disabled:opacity-60"
-                >
-                  {exporting ? "Gerando…" : "Exportar"}
-                </button>
+                  {item.size}
+                </span>
+              </a>
+            ))}
+          </nav>
+
+          <div className="mt-auto px-5 py-4 border-t border-line">
+            <div className="flex items-center gap-3">
+              <div className="size-9 rounded-full bg-panel2 border border-line grid place-items-center text-xs font-semibold text-cyan">
+                AV
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm text-foreground truncate">Aria Vance</div>
+                <div className="text-[10px] font-mono uppercase tracking-wider text-faint">
+                  Modelista
+                </div>
               </div>
             </div>
           </div>
-        )}
-
-        <div className="px-5 pb-2 text-[10px] font-mono uppercase tracking-[0.18em] text-faint">
-          Biblioteca
-        </div>
-        <nav className="px-3 pb-4 space-y-1">
-          {LIBRARY.map((item) => (
-            <a
-              key={item.name}
-              href="#"
-              className={
-                "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors " +
-                (item.active
-                  ? "bg-cyan/10 border border-cyan/25 text-cyan"
-                  : "text-muted-foreground hover:bg-panel2 hover:text-foreground")
-              }
-            >
-              <span className={"size-1.5 rounded-full " + (item.active ? "bg-cyan" : "bg-faint")} />
-              <span className="flex-1">{item.name}</span>
-              <span className={"text-[10px] font-mono " + (item.active ? "text-cyan" : "text-faint")}>
-                {item.size}
-              </span>
-            </a>
-          ))}
-        </nav>
-
-        <div className="mt-auto px-5 py-4 border-t border-line">
-          <div className="flex items-center gap-3">
-            <div className="size-9 rounded-full bg-panel2 border border-line grid place-items-center text-xs font-semibold text-cyan">
-              AV
-            </div>
-            <div className="min-w-0">
-              <div className="text-sm text-foreground truncate">Aria Vance</div>
-              <div className="text-[10px] font-mono uppercase tracking-wider text-faint">Modelista</div>
-            </div>
-          </div>
-        </div>
-      </aside>
+        </aside>
       </div>
 
       {/* ============ PRINCIPAL ============ */}
@@ -3687,100 +4763,160 @@ function Index() {
         <header className="h-16 shrink-0 border-b border-line bg-panel flex items-center justify-between px-6 gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <SidebarToggle
-              label={sidebars.left ? "Recolher barra lateral esquerda" : "Mostrar barra lateral esquerda"}
+              label={
+                sidebars.left ? "Recolher barra lateral esquerda" : "Mostrar barra lateral esquerda"
+              }
               Icon={sidebars.left ? PanelLeftClose : PanelLeftOpen}
               onClick={() => toggleSidebar("left")}
             />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button type="button" className="flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-line bg-panel2 text-xs font-medium text-foreground hover:text-cyan hover:bg-cyan/10">
+                <button
+                  type="button"
+                  className="flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-line bg-panel2 text-xs font-medium text-foreground hover:text-cyan hover:bg-cyan/10"
+                >
                   <FileText className="size-3.5" /> Arquivo <ChevronDown className="size-3" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-60">
                 <DropdownMenuItem onSelect={() => void newProject()}>Novo projeto</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => void openProject()}>Abrir projeto…<DropdownMenuShortcut>Ctrl+O</DropdownMenuShortcut></DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void openProject()}>
+                  Abrir projeto…<DropdownMenuShortcut>Ctrl+O</DropdownMenuShortcut>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => void saveProject(false)}>Salvar<DropdownMenuShortcut>Ctrl+S</DropdownMenuShortcut></DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => void saveProject(true)}>Salvar como…<DropdownMenuShortcut>Ctrl+Shift+S</DropdownMenuShortcut></DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void saveProject(false)}>
+                  Salvar<DropdownMenuShortcut>Ctrl+S</DropdownMenuShortcut>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void saveProject(true)}>
+                  Salvar como…<DropdownMenuShortcut>Ctrl+Shift+S</DropdownMenuShortcut>
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <span className="text-sm font-medium text-foreground truncate max-w-[180px]" title={dirty ? "Alterações não salvas" : "Projeto salvo"}>
-              {projectName}{dirty && <span className="text-amber-600 ml-1" aria-label="alterações não salvas">•</span>}
+            <span
+              className="text-sm font-medium text-foreground truncate max-w-[180px]"
+              title={dirty ? "Alterações não salvas" : "Projeto salvo"}
+            >
+              {projectName}
+              {dirty && (
+                <span className="text-amber-600 ml-1" aria-label="alterações não salvas">
+                  •
+                </span>
+              )}
             </span>
-              <AlertDialog open={!!typeConfirm} onOpenChange={(o) => !o && setTypeConfirm(null)}>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Trocar tipo de peça</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Trocar para {typeConfirm} substitui os moldes das peças e remove desenhos, imagens, textos e cores do projeto atual. Você pode desfazer com Ctrl+Z. Dica: salve o projeto antes (Arquivo &gt; Salvar).
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => { const t = typeConfirm; setTypeConfirm(null); if (t) changeClothingType(t, true); }}>Trocar de tipo</AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+            <AlertDialog open={!!typeConfirm} onOpenChange={(o) => !o && setTypeConfirm(null)}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Trocar tipo de peça</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Trocar para {typeConfirm} substitui os moldes das peças e remove desenhos,
+                    imagens, textos e cores do projeto atual. Você pode desfazer com Ctrl+Z. Dica:
+                    salve o projeto antes (Arquivo &gt; Salvar).
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => {
+                      const t = typeConfirm;
+                      setTypeConfirm(null);
+                      if (t) changeClothingType(t, true);
+                    }}
+                  >
+                    Trocar de tipo
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
             {askUnsaved && (
               <div className="fixed inset-0 z-[100] flex items-center justify-center bg-foreground/30">
                 <div className="w-[380px] rounded-lg border border-line bg-panel p-5 shadow-xl">
                   <h2 className="text-sm font-semibold text-foreground">Alterações não salvas</h2>
-                  <p className="mt-2 text-sm text-muted-foreground">O projeto "{projectName}" tem alterações não salvas. Deseja salvar antes de continuar?</p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    O projeto "{projectName}" tem alterações não salvas. Deseja salvar antes de
+                    continuar?
+                  </p>
                   <div className="mt-4 flex justify-end gap-2">
-                    <button type="button" onClick={() => askUnsaved("cancel")} className="h-8 px-3 rounded-md border border-line text-xs">Cancelar</button>
-                    <button type="button" onClick={() => askUnsaved("discard")} className="h-8 px-3 rounded-md border border-line text-xs text-destructive">Descartar</button>
-                    <button type="button" onClick={() => askUnsaved("save")} className="h-8 px-3 rounded-md bg-cyan text-xs font-semibold text-primary-foreground">Salvar</button>
+                    <button
+                      type="button"
+                      onClick={() => askUnsaved("cancel")}
+                      className="h-8 px-3 rounded-md border border-line text-xs"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => askUnsaved("discard")}
+                      className="h-8 px-3 rounded-md border border-line text-xs text-destructive"
+                    >
+                      Descartar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => askUnsaved("save")}
+                      className="h-8 px-3 rounded-md bg-cyan text-xs font-semibold text-primary-foreground"
+                    >
+                      Salvar
+                    </button>
                   </div>
                 </div>
               </div>
             )}
             <span className="text-faint">/</span>
-            <span className="text-[10px] font-mono uppercase tracking-[0.18em] text-faint">Área de Trabalho</span>
+            <span className="text-[10px] font-mono uppercase tracking-[0.18em] text-faint">
+              Área de Trabalho
+            </span>
             <span className="text-faint">/</span>
-            <span className="text-sm font-medium text-foreground truncate">{clothingType} — Sublimação</span>
+            <span className="text-sm font-medium text-foreground truncate">
+              {clothingType} — Sublimação
+            </span>
           </div>
           <div className="flex items-center gap-3">
-          <div className="flex items-center bg-panel2 border border-line rounded-md p-1">
-            {(
-              [
-                ["Desfazer", Undo2, undo, past.length === 0, "Ctrl+Z"],
-                ["Refazer", Redo2, redo, future.length === 0, "Ctrl+Y"],
-              ] as const
-            ).map(([label, Icon, run, disabled, kbd]) => (
-              <button
-                key={label}
-                onClick={run}
-                disabled={disabled}
-                title={`${label} (${kbd})`}
-                aria-label={label}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium text-muted-foreground hover:text-cyan hover:bg-cyan/10 disabled:opacity-30 disabled:pointer-events-none"
-              >
-                <Icon className="size-3.5" /> <span className="hidden lg:inline">{label}</span>
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-1 bg-panel2 border border-line rounded-md p-1">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-faint px-2">Tamanho</span>
-            {visibleSizeOptions.map((o) => (
-              <button
-                key={o.id}
-                onClick={() => setSize(o.id)}
-                className={
-                  "px-2 py-1 rounded text-xs font-mono font-semibold transition-colors " +
-                  (o.id === size ? "bg-cyan text-primary-foreground" : "text-muted-foreground hover:text-foreground")
-                }
-              >
-                {o.label}
-                {o.id === mother && <Crown className="inline size-2.5 ml-0.5 -mt-0.5" />}
-              </button>
-            ))}
-          </div>
-          <SidebarToggle
-            label={sidebars.right ? "Recolher barra lateral direita" : "Mostrar barra lateral direita"}
-            Icon={sidebars.right ? PanelRightClose : PanelRightOpen}
-            onClick={() => toggleSidebar("right")}
-          />
+            <div className="flex items-center bg-panel2 border border-line rounded-md p-1">
+              {(
+                [
+                  ["Desfazer", Undo2, undo, past.length === 0, "Ctrl+Z"],
+                  ["Refazer", Redo2, redo, future.length === 0, "Ctrl+Y"],
+                ] as const
+              ).map(([label, Icon, run, disabled, kbd]) => (
+                <button
+                  key={label}
+                  onClick={run}
+                  disabled={disabled}
+                  title={`${label} (${kbd})`}
+                  aria-label={label}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium text-muted-foreground hover:text-cyan hover:bg-cyan/10 disabled:opacity-30 disabled:pointer-events-none"
+                >
+                  <Icon className="size-3.5" /> <span className="hidden lg:inline">{label}</span>
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1 bg-panel2 border border-line rounded-md p-1">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-faint px-2">
+                Tamanho
+              </span>
+              {visibleSizeOptions.map((o) => (
+                <button
+                  key={o.id}
+                  onClick={() => setSize(o.id)}
+                  className={
+                    "px-2 py-1 rounded text-xs font-mono font-semibold transition-colors " +
+                    (o.id === size
+                      ? "bg-cyan text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground")
+                  }
+                >
+                  {o.label}
+                  {o.id === mother && <Crown className="inline size-2.5 ml-0.5 -mt-0.5" />}
+                </button>
+              ))}
+            </div>
+            <SidebarToggle
+              label={
+                sidebars.right ? "Recolher barra lateral direita" : "Mostrar barra lateral direita"
+              }
+              Icon={sidebars.right ? PanelRightClose : PanelRightOpen}
+              onClick={() => toggleSidebar("right")}
+            />
           </div>
         </header>
 
@@ -3805,157 +4941,234 @@ function Index() {
                 ))}
               </div>
               <div className="flex items-center gap-3">
-              {importMsg && <span className="text-[10px] font-mono text-amber whitespace-nowrap">{importMsg}</span>}
-              <input
-                ref={importRef}
-                type="file"
-                accept=".pdf,.svg,.png,.jpg,.jpeg,application/pdf,image/svg+xml,image/png,image/jpeg"
-                multiple
-                className="hidden"
-                onChange={(e) => {
-                  const fs = Array.from(e.target.files ?? []);
-                  e.target.value = "";
-                  void (async () => {
-                    for (const [i, f] of fs.entries()) await onImport(f, fs.length > 1 ? { x: 0.5 + i * 0.03, y: 0.4 + i * 0.03 } : undefined);
-                  })();
-                }}
-              />
-              <button
-                onClick={() => importRef.current?.click()}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap bg-cyan text-primary-foreground hover:bg-cyan/90"
-              >
-                <FileUp className="size-3.5" /> Importar
-              </button>
-              <button
-                onClick={() => setTeamOpen((v) => !v)}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap border ${teamOpen ? "bg-cyan/10 border-cyan text-cyan" : "border-border text-foreground hover:bg-muted"}`}
-              >
-                <Users className="size-3.5" /> Time{roster.length > 0 && ` (${roster.length})`}
-              </button>
-              <button
-                onClick={toggleAlign}
-                aria-pressed={alignOpen}
-                className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap border ${alignOpen ? "bg-cyan/10 border-cyan text-cyan" : "border-border text-foreground hover:bg-muted"}`}
-              >
-                <AlignHorizontalJustifyCenter className="size-3.5" /> Alinhar
-                {!alignOpen && selectionItems().length >= 2 && (
-                  <span className="absolute -right-1.5 -top-1.5 grid min-w-4 h-4 place-items-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">{selectionItems().length}</span>
+                {importMsg && (
+                  <span className="text-[10px] font-mono text-amber whitespace-nowrap">
+                    {importMsg}
+                  </span>
                 )}
-              </button>
-              <TeamPanel
-                open={teamOpen}
-                onClose={() => setTeamOpen(false)}
-                roster={roster}
-                setRoster={setRoster}
-                options={sizesForGarment(clothingType)}
-                garment={clothingType}
-                viewingId={teamView?.id ?? null}
-                onView={(p) => startTeamView(p.id)}
-                viewOptions={VIEWS}
-                teamViews={viewsFor(clothingType).filter((v) => texts[v].some((t) => t.field === "nome" || t.field === "numero"))}
-                onExportTeam={exportTeam}
-                measurePieces={teamMaxPiece}
-                images={teamImages}
-                setImages={setTeamImages}
-                slotNeeds={{
-                  nome: Object.values(layers).some((ls) => ls.some((l) => l.slot?.kind === "nome")),
-                  numero: Object.values(layers).some((ls) => ls.some((l) => l.slot?.kind === "numero")),
-                }}
-                labelOf={(s) => sizesForGarment(clothingType).find((o) => o.id === s)?.label ?? s}
-              />
-              {(art || hasClipped || (selObj && !selObj.clipped)) && ((() => {
-                const freeSel: "layer" | "art" | null = !pcEdit && selObj && !selObj.clipped ? "layer" : !pcEdit && selPart === "estampa" && !!art && art.clipped === false ? "art" : null;
-                return (
-                <>
-                  <button
-                    onClick={() => {
-                      if (pcEdit) return pcApply();
-                      if (freeSel === "layer" && selObj) return layerToPowerClip(selObj.id);
-                      if (freeSel === "art") return pcApply();
-                      if (pcHasContent) return pcEditStart();
-                      if (art && art.clipped === false) return pcApply();
-                    }}
-                    className={
-                      "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap border " +
-                      (pcEdit ? "border-amber/60 text-amber bg-amber/10" : "border-line text-muted-foreground hover:text-foreground")
-                    }
-                  >
-                    <Crop className="size-3.5" />
-                    {pcEdit ? "Concluir Edição" : freeSel ? "Aplicar PowerClip" : pcHasContent ? "Editar Conteúdo do PowerClip" : "Aplicar PowerClip"}
-                  </button>
-                  {!!art && <button
-                    onClick={() => setArt(null)}
-                    aria-label="Remover estampa"
-                    className="p-1.5 rounded-md text-muted-foreground hover:text-destructive"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </button>}
-                </>
-                );
-              })())}
-              <label className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground cursor-pointer">
                 <input
-                  type="checkbox"
-                  checked={overlay}
-                  onChange={(e) => setOverlay(e.target.checked)}
-                  className="accent-[var(--color-cyan)]"
+                  ref={importRef}
+                  type="file"
+                  accept=".pdf,.svg,.png,.jpg,.jpeg,application/pdf,image/svg+xml,image/png,image/jpeg"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    const fs = Array.from(e.target.files ?? []);
+                    e.target.value = "";
+                    void (async () => {
+                      for (const [i, f] of fs.entries())
+                        await onImport(
+                          f,
+                          fs.length > 1 ? { x: 0.5 + i * 0.03, y: 0.4 + i * 0.03 } : undefined,
+                        );
+                    })();
+                  }}
                 />
-                Sobrepor
-              </label>
+                <button
+                  onClick={() => importRef.current?.click()}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap bg-cyan text-primary-foreground hover:bg-cyan/90"
+                >
+                  <FileUp className="size-3.5" /> Importar
+                </button>
+                <button
+                  onClick={() => setTeamOpen((v) => !v)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap border ${teamOpen ? "bg-cyan/10 border-cyan text-cyan" : "border-border text-foreground hover:bg-muted"}`}
+                >
+                  <Users className="size-3.5" /> Time{roster.length > 0 && ` (${roster.length})`}
+                </button>
+                <button
+                  onClick={toggleAlign}
+                  aria-pressed={alignOpen}
+                  className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap border ${alignOpen ? "bg-cyan/10 border-cyan text-cyan" : "border-border text-foreground hover:bg-muted"}`}
+                >
+                  <AlignHorizontalJustifyCenter className="size-3.5" /> Alinhar
+                  {!alignOpen && selectionItems().length >= 2 && (
+                    <span className="absolute -right-1.5 -top-1.5 grid min-w-4 h-4 place-items-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                      {selectionItems().length}
+                    </span>
+                  )}
+                </button>
+                <TeamPanel
+                  open={teamOpen}
+                  onClose={() => setTeamOpen(false)}
+                  roster={roster}
+                  setRoster={setRoster}
+                  options={sizesForGarment(clothingType)}
+                  garment={clothingType}
+                  viewingId={teamView?.id ?? null}
+                  onView={(p) => startTeamView(p.id)}
+                  viewOptions={VIEWS}
+                  teamViews={viewsFor(clothingType).filter((v) =>
+                    texts[v].some((t) => t.field === "nome" || t.field === "numero"),
+                  )}
+                  onExportTeam={exportTeam}
+                  measurePieces={teamMaxPiece}
+                  images={teamImages}
+                  setImages={setTeamImages}
+                  slotNeeds={{
+                    nome: Object.values(layers).some((ls) =>
+                      ls.some((l) => l.slot?.kind === "nome"),
+                    ),
+                    numero: Object.values(layers).some((ls) =>
+                      ls.some((l) => l.slot?.kind === "numero"),
+                    ),
+                  }}
+                  labelOf={(s) => sizesForGarment(clothingType).find((o) => o.id === s)?.label ?? s}
+                />
+                {(art || hasClipped || (selObj && !selObj.clipped)) &&
+                  (() => {
+                    const freeSel: "layer" | "art" | null =
+                      !pcEdit && selObj && !selObj.clipped
+                        ? "layer"
+                        : !pcEdit && selPart === "estampa" && !!art && art.clipped === false
+                          ? "art"
+                          : null;
+                    return (
+                      <>
+                        <button
+                          onClick={() => {
+                            if (pcEdit) return pcApply();
+                            if (freeSel === "layer" && selObj) return layerToPowerClip(selObj.id);
+                            if (freeSel === "art") return pcApply();
+                            if (pcHasContent) return pcEditStart();
+                            if (art && art.clipped === false) return pcApply();
+                          }}
+                          className={
+                            "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap border " +
+                            (pcEdit
+                              ? "border-amber/60 text-amber bg-amber/10"
+                              : "border-line text-muted-foreground hover:text-foreground")
+                          }
+                        >
+                          <Crop className="size-3.5" />
+                          {pcEdit
+                            ? "Concluir Edição"
+                            : freeSel
+                              ? "Aplicar PowerClip"
+                              : pcHasContent
+                                ? "Editar Conteúdo do PowerClip"
+                                : "Aplicar PowerClip"}
+                        </button>
+                        {!!art && (
+                          <button
+                            onClick={() => setArt(null)}
+                            aria-label="Remover estampa"
+                            className="p-1.5 rounded-md text-muted-foreground hover:text-destructive"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        )}
+                      </>
+                    );
+                  })()}
+                <label className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={overlay}
+                    onChange={(e) => setOverlay(e.target.checked)}
+                    className="accent-[var(--color-cyan)]"
+                  />
+                  Sobrepor
+                </label>
               </div>
             </div>
 
-            {alignOpen && (() => {
-              const n = selectionItems().length;
-              const ok = n >= 2 && tool === "selecao" && !viewPlayer;
-              const tip = ok ? undefined : "Selecione 2 ou mais objetos";
-              const ops: [AlignOp, typeof AlignStartVertical, string, string][] = [
-                ["left", AlignStartVertical, "Alinhar à esquerda", "L"],
-                ["centerX", AlignCenterVertical, "Centrar horizontalmente", "E"],
-                ["right", AlignEndVertical, "Alinhar à direita", "R"],
-                ["top", AlignStartHorizontal, "Alinhar ao topo", "T"],
-                ["centerY", AlignCenterHorizontal, "Centrar verticalmente", "C"],
-                ["bottom", AlignEndHorizontal, "Alinhar à base", "B"],
-              ];
-              const btn = "grid size-7 shrink-0 place-items-center rounded-md border border-line text-foreground hover:border-primary hover:text-primary disabled:pointer-events-none disabled:opacity-40";
-              const group = (title: string, toMold: boolean) => (
-                <div className="flex shrink-0 items-center gap-1">
-                  <span className="whitespace-nowrap pr-1 text-[10px] font-semibold uppercase tracking-wider text-faint">{title}</span>
-                  {ops.map(([op, Icon, name, k]) => (
-                    <button key={op} type="button" className={btn} disabled={!ok} onClick={() => runAlign(op, toMold)}
-                      title={tip ?? `${name} (${toMold ? "Shift+" : ""}${k})`} aria-label={`${name} ${toMold ? "ao molde" : "entre objetos"}`}>
-                      <Icon className="size-3.5" />
+            {alignOpen &&
+              (() => {
+                const n = selectionItems().length;
+                const ok = n >= 2 && tool === "selecao" && !viewPlayer;
+                const tip = ok ? undefined : "Selecione 2 ou mais objetos";
+                const ops: [AlignOp, typeof AlignStartVertical, string, string][] = [
+                  ["left", AlignStartVertical, "Alinhar à esquerda", "L"],
+                  ["centerX", AlignCenterVertical, "Centrar horizontalmente", "E"],
+                  ["right", AlignEndVertical, "Alinhar à direita", "R"],
+                  ["top", AlignStartHorizontal, "Alinhar ao topo", "T"],
+                  ["centerY", AlignCenterHorizontal, "Centrar verticalmente", "C"],
+                  ["bottom", AlignEndHorizontal, "Alinhar à base", "B"],
+                ];
+                const btn =
+                  "grid size-7 shrink-0 place-items-center rounded-md border border-line text-foreground hover:border-primary hover:text-primary disabled:pointer-events-none disabled:opacity-40";
+                const group = (title: string, toMold: boolean) => (
+                  <div className="flex shrink-0 items-center gap-1">
+                    <span className="whitespace-nowrap pr-1 text-[10px] font-semibold uppercase tracking-wider text-faint">
+                      {title}
+                    </span>
+                    {ops.map(([op, Icon, name, k]) => (
+                      <button
+                        key={op}
+                        type="button"
+                        className={btn}
+                        disabled={!ok}
+                        onClick={() => runAlign(op, toMold)}
+                        title={tip ?? `${name} (${toMold ? "Shift+" : ""}${k})`}
+                        aria-label={`${name} ${toMold ? "ao molde" : "entre objetos"}`}
+                      >
+                        <Icon className="size-3.5" />
+                      </button>
+                    ))}
+                  </div>
+                );
+                return (
+                  <div
+                    className="flex h-10 shrink-0 items-center gap-3 overflow-x-auto whitespace-nowrap border-b border-line bg-panel px-3 text-xs"
+                    role="toolbar"
+                    aria-label="Alinhamento"
+                  >
+                    {group("Entre objetos", false)}
+                    <span className="h-5 w-px shrink-0 bg-line" />
+                    {group("Ao molde", true)}
+                    <button
+                      type="button"
+                      disabled={!ok}
+                      title={tip ?? "Centro do molde (P)"}
+                      className="flex h-7 shrink-0 items-center gap-1 rounded-md border border-line px-2 text-foreground hover:border-primary hover:text-primary disabled:pointer-events-none disabled:opacity-40"
+                      onClick={() => runAlign("center", true)}
+                    >
+                      <Crosshair className="size-3.5" /> Centro do molde
                     </button>
-                  ))}
-                </div>
-              );
-              return (
-                <div className="flex h-10 shrink-0 items-center gap-3 overflow-x-auto whitespace-nowrap border-b border-line bg-panel px-3 text-xs" role="toolbar" aria-label="Alinhamento">
-                  {group("Entre objetos", false)}
-                  <span className="h-5 w-px shrink-0 bg-line" />
-                  {group("Ao molde", true)}
-                  <button type="button" disabled={!ok} title={tip ?? "Centro do molde (P)"} className="flex h-7 shrink-0 items-center gap-1 rounded-md border border-line px-2 text-foreground hover:border-primary hover:text-primary disabled:pointer-events-none disabled:opacity-40" onClick={() => runAlign("center", true)}>
-                    <Crosshair className="size-3.5" /> Centro do molde
-                  </button>
-                  <label className={"flex shrink-0 items-center gap-1 text-faint " + (ok ? "" : "opacity-40")} title={tip}>Referência
-                    <select disabled={!ok} value={alignRef} onChange={(e) => setAlignRef(e.target.value as AlignRefKind)} className="h-7 rounded-md border border-input bg-panel2 px-1 text-xs text-foreground">
-                      <option value="last">Último selecionado</option>
-                      <option value="first">Primeiro selecionado</option>
-                      <option value="group">Conjunto</option>
-                    </select>
-                  </label>
-                  <label className={"flex shrink-0 items-center gap-1 text-faint " + (ok ? "" : "opacity-40")} title={tip}>Retângulo
-                    <select disabled={!ok} value={alignRect} onChange={(e) => setAlignRect(e.target.value as "molde" | "midia")} className="h-7 rounded-md border border-input bg-panel2 px-1 text-xs text-foreground">
-                      <option value="molde">Molde</option>
-                      <option value="midia">Quadro de mídia</option>
-                    </select>
-                  </label>
-                  <span className="ml-auto shrink-0 pl-2 text-muted-foreground" role="status">
-                    {n >= 2 ? `${n} objetos selecionados` : "Selecione 2 ou mais objetos (Shift+clique)"}
-                  </span>
-                </div>
-              );
-            })()}
+                    <label
+                      className={
+                        "flex shrink-0 items-center gap-1 text-faint " + (ok ? "" : "opacity-40")
+                      }
+                      title={tip}
+                    >
+                      Referência
+                      <select
+                        disabled={!ok}
+                        value={alignRef}
+                        onChange={(e) => setAlignRef(e.target.value as AlignRefKind)}
+                        className="h-7 rounded-md border border-input bg-panel2 px-1 text-xs text-foreground"
+                      >
+                        <option value="last">Último selecionado</option>
+                        <option value="first">Primeiro selecionado</option>
+                        <option value="group">Conjunto</option>
+                      </select>
+                    </label>
+                    <label
+                      className={
+                        "flex shrink-0 items-center gap-1 text-faint " + (ok ? "" : "opacity-40")
+                      }
+                      title={tip}
+                    >
+                      Retângulo
+                      <select
+                        disabled={!ok}
+                        value={alignRect}
+                        onChange={(e) => setAlignRect(e.target.value as "molde" | "midia")}
+                        className="h-7 rounded-md border border-input bg-panel2 px-1 text-xs text-foreground"
+                      >
+                        <option value="molde">Molde</option>
+                        <option value="midia">Quadro de mídia</option>
+                      </select>
+                    </label>
+                    <span className="ml-auto shrink-0 pl-2 text-muted-foreground" role="status">
+                      {n >= 2
+                        ? `${n} objetos selecionados`
+                        : "Selecione 2 ou mais objetos (Shift+clique)"}
+                    </span>
+                  </div>
+                );
+              })()}
             <div className="flex-1 min-h-0 flex">
               <div className="w-12 shrink-0 bg-panel border-r border-line flex flex-col items-center py-2 gap-1 z-10">
                 {TOOLS.map((t) => (
@@ -4042,21 +5255,55 @@ function Index() {
                   onMultiBox={setMultiBox}
                 />
                 {viewPlayer && (
-                  <div className="absolute top-3 left-1/2 z-30 -translate-x-1/2 flex items-center gap-1.5 rounded-md border border-cyan bg-panel px-2 py-1 text-xs shadow" role="status">
-                    <button onClick={() => stepPlayer(-1)} aria-label="Jogador anterior" className="p-1 rounded hover:bg-muted"><ChevronLeft className="size-3.5" /></button>
+                  <div
+                    className="absolute top-3 left-1/2 z-30 -translate-x-1/2 flex items-center gap-1.5 rounded-md border border-cyan bg-panel px-2 py-1 text-xs shadow"
+                    role="status"
+                  >
+                    <button
+                      onClick={() => stepPlayer(-1)}
+                      aria-label="Jogador anterior"
+                      className="p-1 rounded hover:bg-muted"
+                    >
+                      <ChevronLeft className="size-3.5" />
+                    </button>
                     <span className="font-medium text-foreground">
-                      Visualizando: {viewPlayer.numero || "—"} · {viewPlayer.nome || "(sem nome)"} ({sizesForGarment(clothingType).find((o) => o.id === viewPlayer.tamanho)?.label ?? viewPlayer.tamanho})
+                      Visualizando: {viewPlayer.numero || "—"} · {viewPlayer.nome || "(sem nome)"} (
+                      {sizesForGarment(clothingType).find((o) => o.id === viewPlayer.tamanho)
+                        ?.label ?? viewPlayer.tamanho}
+                      )
                     </span>
                     {previewSlots && previewSlots.missing.size > 0 && (
-                      <span className="text-destructive font-medium">⚠ Faltam: {[...previewSlots.missing].map((k) => (k === "nome" ? "imagem do nome" : "imagem do número")).join(" / ")}</span>
+                      <span className="text-destructive font-medium">
+                        ⚠ Faltam:{" "}
+                        {[...previewSlots.missing]
+                          .map((k) => (k === "nome" ? "imagem do nome" : "imagem do número"))
+                          .join(" / ")}
+                      </span>
                     )}
-                    {teamPreview?.overflow && <span className="text-destructive font-medium">⚠ O nome passa da largura da peça — defina a largura máxima do campo</span>}
-                    <button onClick={() => stepPlayer(1)} aria-label="Próximo jogador" className="p-1 rounded hover:bg-muted"><ChevronRight className="size-3.5" /></button>
-                    <button onClick={exitTeamView} className="ml-1 px-2 py-0.5 rounded bg-cyan text-primary-foreground hover:bg-cyan/90">Sair</button>
+                    {teamPreview?.overflow && (
+                      <span className="text-destructive font-medium">
+                        ⚠ O nome passa da largura da peça — defina a largura máxima do campo
+                      </span>
+                    )}
+                    <button
+                      onClick={() => stepPlayer(1)}
+                      aria-label="Próximo jogador"
+                      className="p-1 rounded hover:bg-muted"
+                    >
+                      <ChevronRight className="size-3.5" />
+                    </button>
+                    <button
+                      onClick={exitTeamView}
+                      className="ml-1 px-2 py-0.5 rounded bg-cyan text-primary-foreground hover:bg-cyan/90"
+                    >
+                      Sair
+                    </button>
                   </div>
                 )}
                 <div id="text-panel-host" className="pointer-events-none absolute inset-0 z-20" />
-                {(tool === "caneta" || tool === "formas") && <DrawOptionsPanel mode={tool} opts={drawOpts} onChange={setDrawOpts} />}
+                {(tool === "caneta" || tool === "formas") && (
+                  <DrawOptionsPanel mode={tool} opts={drawOpts} onChange={setDrawOpts} />
+                )}
                 {showPcEditor && pcTarget && (
                   <PowerClipEditor
                     key={selClippedLayer?.id ?? "estampa"}
@@ -4074,7 +5321,12 @@ function Index() {
                     }}
                     features={
                       selClippedLayer
-                        ? { flip: false, opacity: false, replace: !!selClippedLayer.src, reset: !!selClippedLayer.init }
+                        ? {
+                            flip: false,
+                            opacity: false,
+                            replace: !!selClippedLayer.src,
+                            reset: !!selClippedLayer.init,
+                          }
                         : {}
                     }
                   />
@@ -4089,39 +5341,98 @@ function Index() {
                     }}
                   />
                 )}
-                {selObj?.slot && selObj.kind !== "vetor" && !viewPlayer && (() => {
-                  const sl = selObj.slot;
-                  const up = (p: Partial<LayerSlot>) => setSlot(selObj.id, { ...sl, ...p });
-                  const seg = <K extends keyof LayerSlot>(k: K, opts: [LayerSlot[K], string][]) => (
-                    <div className="flex rounded border border-line overflow-hidden">
-                      {opts.map(([v, lbl]) => (
-                        <button key={String(v)} type="button" onClick={() => up({ [k]: v } as Partial<LayerSlot>)} className={"px-2 py-0.5 text-[11px] " + (sl[k] === v ? "bg-cyan/15 text-cyan font-semibold" : "text-muted-foreground hover:text-foreground")}>{lbl}</button>
-                      ))}
-                    </div>
-                  );
-                  return (
-                    <div className="absolute top-16 left-3 z-20 w-64 space-y-2 rounded-md border border-cyan/40 bg-panel p-2.5 text-xs shadow-lg">
-                      <div className="flex items-center gap-1.5 font-medium text-cyan"><Tag className="size-3.5" /> Espaço de imagem do time</div>
-                      <div className="flex items-center justify-between gap-2"><span className="text-faint">Tipo</span>{seg("kind", [["nome", "Nome"], ["numero", "Número"]])}</div>
-                      <div className="space-y-1"><span className="text-faint">Ponto fixo horizontal</span>{seg("h", [["esquerda", "Esquerda"], ["centro", "Centro"], ["direita", "Direita"]])}</div>
-                      <div className="space-y-1"><span className="text-faint">Ponto fixo vertical</span>{seg("v", [["topo", "Topo"], ["centro", "Centro"], ["base", "Base"]])}</div>
-                      <label className="flex items-center gap-2 text-foreground"><input type="checkbox" checked={sl.scale} onChange={(e) => up({ scale: e.target.checked })} className="accent-[var(--color-cyan)]" /> Escalar com o tamanho</label>
-                    </div>
-                  );
-                })()}
+                {selObj?.slot &&
+                  selObj.kind !== "vetor" &&
+                  !viewPlayer &&
+                  (() => {
+                    const sl = selObj.slot;
+                    const up = (p: Partial<LayerSlot>) => setSlot(selObj.id, { ...sl, ...p });
+                    const seg = <K extends keyof LayerSlot>(
+                      k: K,
+                      opts: [LayerSlot[K], string][],
+                    ) => (
+                      <div className="flex rounded border border-line overflow-hidden">
+                        {opts.map(([v, lbl]) => (
+                          <button
+                            key={String(v)}
+                            type="button"
+                            onClick={() => up({ [k]: v } as Partial<LayerSlot>)}
+                            className={
+                              "px-2 py-0.5 text-[11px] " +
+                              (sl[k] === v
+                                ? "bg-cyan/15 text-cyan font-semibold"
+                                : "text-muted-foreground hover:text-foreground")
+                            }
+                          >
+                            {lbl}
+                          </button>
+                        ))}
+                      </div>
+                    );
+                    return (
+                      <div className="absolute top-16 left-3 z-20 w-64 space-y-2 rounded-md border border-cyan/40 bg-panel p-2.5 text-xs shadow-lg">
+                        <div className="flex items-center gap-1.5 font-medium text-cyan">
+                          <Tag className="size-3.5" /> Espaço de imagem do time
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-faint">Tipo</span>
+                          {seg("kind", [
+                            ["nome", "Nome"],
+                            ["numero", "Número"],
+                          ])}
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-faint">Ponto fixo horizontal</span>
+                          {seg("h", [
+                            ["esquerda", "Esquerda"],
+                            ["centro", "Centro"],
+                            ["direita", "Direita"],
+                          ])}
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-faint">Ponto fixo vertical</span>
+                          {seg("v", [
+                            ["topo", "Topo"],
+                            ["centro", "Centro"],
+                            ["base", "Base"],
+                          ])}
+                        </div>
+                        <label className="flex items-center gap-2 text-foreground">
+                          <input
+                            type="checkbox"
+                            checked={sl.scale}
+                            onChange={(e) => up({ scale: e.target.checked })}
+                            className="accent-[var(--color-cyan)]"
+                          />{" "}
+                          Escalar com o tamanho
+                        </label>
+                      </div>
+                    );
+                  })()}
                 {multiSel && tool === "selecao" && !alignOpen && (
-                  <div className="absolute top-3 left-3 z-10 flex items-center gap-2 rounded-md border border-line bg-panel px-3 py-2 shadow-lg text-xs" role="status">
-                    <span className="font-medium text-foreground">{multiSel.length} objetos selecionados</span>
+                  <div
+                    className="absolute top-3 left-3 z-10 flex items-center gap-2 rounded-md border border-line bg-panel px-3 py-2 shadow-lg text-xs"
+                    role="status"
+                  >
+                    <span className="font-medium text-foreground">
+                      {multiSel.length} objetos selecionados
+                    </span>
                     {multiBox && (
                       <>
                         <span className="h-5 w-px bg-line" />
-                        <span className="font-mono text-muted-foreground">L {fmt(multiBox.w)} × A {fmt(multiBox.h)} cm</span>
+                        <span className="font-mono text-muted-foreground">
+                          L {fmt(multiBox.w)} × A {fmt(multiBox.h)} cm
+                        </span>
                       </>
                     )}
                   </div>
                 )}
                 {selInfo && !multiSel && (
-                  <SelectionPropsBar info={selInfo} locked={lockRatio} onToggleLock={() => setLockRatio((v) => !v)} />
+                  <SelectionPropsBar
+                    info={selInfo}
+                    locked={lockRatio}
+                    onToggleLock={() => setLockRatio((v) => !v)}
+                  />
                 )}
                 {/* Painel de camadas */}
                 <div className="absolute top-3 right-3 w-60 rounded-md border border-line bg-panel shadow-lg text-xs z-10">
@@ -4137,10 +5448,13 @@ function Index() {
                   {layersOpen && (
                     <div className="border-t border-line max-h-64 overflow-y-auto py-1">
                       {curLayers.length === 0 && !art && (
-                        <div className="px-3 py-2 text-[11px] text-faint">Nenhum objeto. Use "Importar" para trazer PDF, SVG, PNG ou JPEG.</div>
+                        <div className="px-3 py-2 text-[11px] text-faint">
+                          Nenhum objeto. Use "Importar" para trazer PDF, SVG, PNG ou JPEG.
+                        </div>
                       )}
                       {[...curLayers].reverse().map((l) => {
-                        const Icon = l.kind === "vetor" ? Spline : l.kind === "pdf" ? FileText : ImageIcon;
+                        const Icon =
+                          l.kind === "vetor" ? Spline : l.kind === "pdf" ? FileText : ImageIcon;
                         const sel = l.id === selLayer;
                         return (
                           <div
@@ -4157,18 +5471,39 @@ function Index() {
                             }}
                             className={
                               "group flex items-center gap-1.5 px-2 py-1.5 cursor-pointer " +
-                              (sel ? "bg-cyan/15 text-cyan" : "text-muted-foreground hover:bg-panel2 hover:text-foreground")
+                              (sel
+                                ? "bg-cyan/15 text-cyan"
+                                : "text-muted-foreground hover:bg-panel2 hover:text-foreground")
                             }
                           >
                             <Icon className="size-3.5 shrink-0" />
-                            <span className={"flex-1 truncate " + (l.hidden ? "opacity-40" : "")} title={l.name}>
+                            <span
+                              className={"flex-1 truncate " + (l.hidden ? "opacity-40" : "")}
+                              title={l.name}
+                            >
                               {l.name}
                             </span>
-                            {l.slot && <span title={l.slot.kind === "nome" ? "Espaço do nome" : "Espaço do número"}><Tag className="size-3 shrink-0 text-cyan" /></span>}
-                            {l.clipped && <span className="shrink-0 rounded bg-cyan/15 px-1 text-[9px] font-mono uppercase text-cyan">PowerClip</span>}
+                            {l.slot && (
+                              <span
+                                title={
+                                  l.slot.kind === "nome" ? "Espaço do nome" : "Espaço do número"
+                                }
+                              >
+                                <Tag className="size-3 shrink-0 text-cyan" />
+                              </span>
+                            )}
+                            {l.clipped && (
+                              <span className="shrink-0 rounded bg-cyan/15 px-1 text-[9px] font-mono uppercase text-cyan">
+                                PowerClip
+                              </span>
+                            )}
                             {(
                               [
-                                [l.hidden ? EyeOff : Eye, l.hidden ? "Mostrar" : "Ocultar", () => toggleHidden(l.id)],
+                                [
+                                  l.hidden ? EyeOff : Eye,
+                                  l.hidden ? "Mostrar" : "Ocultar",
+                                  () => toggleHidden(l.id),
+                                ],
                                 [ArrowUpToLine, "Trazer para Frente", () => reorder(l.id, "front")],
                                 [ArrowDownToLine, "Enviar para Trás", () => reorder(l.id, "back")],
                                 [Trash2, "Excluir", () => deleteLayer(l.id)],
@@ -4193,16 +5528,26 @@ function Index() {
                       {art && (
                         <div className="flex items-center gap-1.5 px-2 py-1.5 text-muted-foreground border-t border-line/60">
                           <Crop className="size-3.5 shrink-0 text-cyan" />
-                          <span className="flex-1 truncate">Estampa{art.clipped !== false ? " · PowerClip" : ""}</span>
+                          <span className="flex-1 truncate">
+                            Estampa{art.clipped !== false ? " · PowerClip" : ""}
+                          </span>
                         </div>
                       )}
                     </div>
                   )}
                 </div>
                 <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between gap-4 text-[10px] font-mono text-faint pointer-events-none">
-                  <span>{pcState === "editing" ? (pcTarget ? "Editando conteúdo do PowerClip · arraste o item e a alça do canto · clique em Concluir Edição para travar" : "Editando PowerClip · clique em um item para editá-lo · Concluir Edição trava") : TOOL_HINTS[tool]}</span>
+                  <span>
+                    {pcState === "editing"
+                      ? pcTarget
+                        ? "Editando conteúdo do PowerClip · arraste o item e a alça do canto · clique em Concluir Edição para travar"
+                        : "Editando PowerClip · clique em um item para editá-lo · Concluir Edição trava"
+                      : TOOL_HINTS[tool]}
+                  </span>
                   <button
-                    onClick={() => updateShapes({ ...shapes, [view]: defaultShapesFor(clothingType)[view] })}
+                    onClick={() =>
+                      updateShapes({ ...shapes, [view]: defaultShapesFor(clothingType)[view] })
+                    }
                     className="pointer-events-auto flex items-center gap-1 text-muted-foreground hover:text-cyan whitespace-nowrap"
                   >
                     <RotateCcw className="size-3" /> Restaurar forma
@@ -4231,17 +5576,35 @@ function Index() {
                     title: "PowerClip",
                     items: [
                       multiSel
-                        ? multiSel.some((i) => i.kind === "layer" && curLayers.some((l) => l.id === i.id && !l.clipped))
+                        ? multiSel.some(
+                            (i) =>
+                              i.kind === "layer" &&
+                              curLayers.some((l) => l.id === i.id && !l.clipped),
+                          )
                           ? { label: "Inserir no PowerClip", run: multiToPowerClip }
                           : null
                         : selObj && !selObj.clipped
-                        ? { label: "Inserir no PowerClip", run: () => setPcPick(selObj.id) }
-                        : artFree
-                          ? { label: "Inserir no PowerClip", run: () => { setSelPart("estampa"); setTimeout(() => setPcPick("art"), 0); } }
-                          : null,
-                      pcHasContent && !pcEdit ? { label: "Editar Conteúdo do PowerClip", run: pcEditStart } : null,
+                          ? { label: "Inserir no PowerClip", run: () => setPcPick(selObj.id) }
+                          : artFree
+                            ? {
+                                label: "Inserir no PowerClip",
+                                run: () => {
+                                  setSelPart("estampa");
+                                  setTimeout(() => setPcPick("art"), 0);
+                                },
+                              }
+                            : null,
+                      pcHasContent && !pcEdit
+                        ? { label: "Editar Conteúdo do PowerClip", run: pcEditStart }
+                        : null,
                       pcEdit ? { label: "Concluir Edição", run: pcApply } : null,
-                      pcEdit && pcHasContent ? { label: "Extrair Selecionado", run: pcExtractSelected, disabled: !canExtractSelected } : null,
+                      pcEdit && pcHasContent
+                        ? {
+                            label: "Extrair Selecionado",
+                            run: pcExtractSelected,
+                            disabled: !canExtractSelected,
+                          }
+                        : null,
                       pcHasContent ? { label: "Extrair Tudo", run: pcExtractAll } : null,
                     ].filter((i): i is CtxItem => !!i),
                   },
@@ -4250,15 +5613,48 @@ function Index() {
                     items:
                       selObj && selObj.kind !== "vetor"
                         ? [
-                            { label: "Definir como espaço do NOME", run: () => setSlot(selObj.id, { kind: "nome", h: "centro", v: "centro", scale: true }) },
-                            { label: "Definir como espaço do NÚMERO", run: () => setSlot(selObj.id, { kind: "numero", h: "centro", v: "centro", scale: true }) },
-                            ...(selObj.slot ? [{ label: "Remover marcação de espaço", run: () => setSlot(selObj.id, undefined) }] : []),
+                            {
+                              label: "Definir como espaço do NOME",
+                              run: () =>
+                                setSlot(selObj.id, {
+                                  kind: "nome",
+                                  h: "centro",
+                                  v: "centro",
+                                  scale: true,
+                                }),
+                            },
+                            {
+                              label: "Definir como espaço do NÚMERO",
+                              run: () =>
+                                setSlot(selObj.id, {
+                                  kind: "numero",
+                                  h: "centro",
+                                  v: "centro",
+                                  scale: true,
+                                }),
+                            },
+                            ...(selObj.slot
+                              ? [
+                                  {
+                                    label: "Remover marcação de espaço",
+                                    run: () => setSlot(selObj.id, undefined),
+                                  },
+                                ]
+                              : []),
                           ]
                         : [],
                   },
                   {
                     title: "Objeto",
-                    items: selObj?.kind === "vetor" ? [{ label: "Converter em contorno da peça", run: () => layerToOutline(selObj.id) }] : [],
+                    items:
+                      selObj?.kind === "vetor"
+                        ? [
+                            {
+                              label: "Converter em contorno da peça",
+                              run: () => layerToOutline(selObj.id),
+                            },
+                          ]
+                        : [],
                   },
                   {
                     title: "Arquivo",
@@ -4280,156 +5676,187 @@ function Index() {
             }
             inert={!sidebars.right}
           >
-          <aside className="w-80 shrink-0 bg-panel border-l border-line flex flex-col">
-            <div className="grid grid-cols-2 border-b border-line">
-              {(
-                [
-                  ["medidas", "Medidas", Ruler],
-                  ["tabela", "Tabela de Tamanhos", Table2],
-                ] as const
-              ).map(([k, label, Icon]) => (
-                <button
-                  key={k}
-                  onClick={() => setPanel(k)}
-                  className={
-                    "flex items-center justify-center gap-1.5 py-3 text-xs font-medium border-b-2 transition-colors " +
-                    (panel === k ? "border-cyan text-cyan" : "border-transparent text-muted-foreground hover:text-foreground")
-                  }
-                >
-                  <Icon className="size-3.5" /> {label}
-                </button>
-              ))}
-            </div>
+            <aside className="w-80 shrink-0 bg-panel border-l border-line flex flex-col">
+              <div className="grid grid-cols-2 border-b border-line">
+                {(
+                  [
+                    ["medidas", "Medidas", Ruler],
+                    ["tabela", "Tabela de Tamanhos", Table2],
+                  ] as const
+                ).map(([k, label, Icon]) => (
+                  <button
+                    key={k}
+                    onClick={() => setPanel(k)}
+                    className={
+                      "flex items-center justify-center gap-1.5 py-3 text-xs font-medium border-b-2 transition-colors " +
+                      (panel === k
+                        ? "border-cyan text-cyan"
+                        : "border-transparent text-muted-foreground hover:text-foreground")
+                    }
+                  >
+                    <Icon className="size-3.5" /> {label}
+                  </button>
+                ))}
+              </div>
 
-            {panel === "medidas" ? (
-              <>
-                <div className="px-5 py-4 border-b border-line">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-sm font-semibold text-foreground">Dimensões do Molde Base</h2>
-                    <label className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-cyan bg-cyan/10 border border-cyan/25 rounded px-1.5 py-0.5">
-                      <Crown className="size-3" /> Molde Mãe
-                      <select
-                        value={mother}
-                        onChange={(e) => changeMother(e.target.value as Size)}
-                        className="bg-transparent text-cyan font-semibold focus:outline-none cursor-pointer"
-                      >
-                        {SIZES.map((s) => (
-                          <option key={s} value={s} className="bg-panel">{s}</option>
-                        ))}
-                      </select>
-                    </label>
+              {panel === "medidas" ? (
+                <>
+                  <div className="px-5 py-4 border-b border-line">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-sm font-semibold text-foreground">
+                        Dimensões do Molde Base
+                      </h2>
+                      <label className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-cyan bg-cyan/10 border border-cyan/25 rounded px-1.5 py-0.5">
+                        <Crown className="size-3" /> Molde Mãe
+                        <select
+                          value={mother}
+                          onChange={(e) => changeMother(e.target.value as Size)}
+                          className="bg-transparent text-cyan font-semibold focus:outline-none cursor-pointer"
+                        >
+                          {SIZES.map((s) => (
+                            <option key={s} value={s} className="bg-panel">
+                              {s}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <p className="text-[11px] text-faint mt-1 font-mono">
+                      Medidas do Tamanho {mother} · estampas são ancoradas aqui
+                    </p>
                   </div>
-                  <p className="text-[11px] text-faint mt-1 font-mono">Medidas do Tamanho {mother} · estampas são ancoradas aqui</p>
-                </div>
-                <div className="px-5 py-5 space-y-5 overflow-y-auto">
-                  {[...new Set(fieldsFor(clothingType).map((f) => f.group))].map((group) => (
-                    <div key={group} className="space-y-3">
-                      <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-cyan">{group}</div>
-                      {fieldsFor(clothingType).filter((f) => f.group === group).map((f) => (
-                        <DimensionInput
-                          key={f.key}
-                          label={`${f.label} (cm)`}
-                          value={table[mother][f.key]}
-                          onChange={(v) => updateTable(mother, f.key, v)}
-                        />
-                      ))}
-                    </div>
-                  ))}
-                  <div className="pt-3 border-t border-line">
-                    <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-muted-foreground mb-2">
-                      Tamanho {size} em exibição
-                    </div>
-                    {fieldsFor(clothingType).map((f) => (
-                      <div key={f.key} className="flex justify-between text-[11px] font-mono py-0.5">
-                        <span className="text-faint">{f.label}</span>
-                        <span className="text-foreground">{fmt(graded[size][f.key])} cm</span>
+                  <div className="px-5 py-5 space-y-5 overflow-y-auto">
+                    {[...new Set(fieldsFor(clothingType).map((f) => f.group))].map((group) => (
+                      <div key={group} className="space-y-3">
+                        <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-cyan">
+                          {group}
+                        </div>
+                        {fieldsFor(clothingType)
+                          .filter((f) => f.group === group)
+                          .map((f) => (
+                            <DimensionInput
+                              key={f.key}
+                              label={`${f.label} (cm)`}
+                              value={table[mother][f.key]}
+                              onChange={(v) => updateTable(mother, f.key, v)}
+                            />
+                          ))}
                       </div>
                     ))}
-                  </div>
-                </div>
-                <div className="px-5 py-4 border-t border-line mt-auto">
-                  <button
-                    onClick={() => setSize(mother)}
-                    className="w-full flex items-center justify-center gap-2 bg-cyan text-primary-foreground font-semibold text-sm rounded-md py-3 hover:bg-cyan/90 transition-colors"
-                  >
-                    <Wand2 className="size-4" strokeWidth={2.5} />
-                    Gerar Molde Base
-                  </button>
-                  <p className="text-[10px] font-mono text-faint text-center mt-2.5">
-                    Graduação pela Tabela de Tamanhos · {SIZES.length} tamanhos
-                  </p>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="px-5 py-4 border-b border-line">
-                  <h2 className="text-sm font-semibold text-foreground">Configurar Tabela de Tamanhos</h2>
-                  <p className="text-[11px] text-faint mt-1 font-mono">
-                    Medidas finais de cada tamanho em cm · aplicadas na hora
-                  </p>
-                </div>
-                <div className="px-3 py-4 overflow-y-auto">
-                  <table className="w-full text-[11px] font-mono">
-                    <thead>
-                      <tr className="text-faint">
-                        <th className="text-left font-normal pb-2 pl-2 align-bottom">Tamanho</th>
-                        <th className="font-normal pb-2 leading-tight">Altura do Corpo (cm)</th>
-                        <th className="font-normal pb-2 leading-tight">Largura do Corpo (cm)</th>
-                        <th className="font-normal pb-2 leading-tight">Altura da Manga (cm)</th>
-                        <th className="font-normal pb-2 leading-tight">Largura da Manga (cm)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {SIZES.map((s) => (
-                        <tr key={s}>
-                          <td className={"pl-2 font-semibold whitespace-nowrap " + (s === mother ? "text-cyan" : "text-foreground")}>
-                            {s}
-                            {s === mother && <Crown className="inline size-3 ml-1 -mt-0.5" />}
-                          </td>
-                          {fieldsFor(clothingType).map((f) => (
-                            <td key={f.key} className="p-0.5">
-                              <input
-                                type="number"
-                                step="0.5"
-                                value={table[s][f.key]}
-                                onChange={(e) => updateTable(s, f.key, parseFloat(e.target.value) || 0)}
-                                className="w-full bg-panel2 border border-line rounded px-1.5 py-1.5 text-center text-foreground disabled:opacity-40 focus:outline-none focus:border-cyan/60"
-                              />
-                            </td>
-                          ))}
-                        </tr>
+                    <div className="pt-3 border-t border-line">
+                      <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-muted-foreground mb-2">
+                        Tamanho {size} em exibição
+                      </div>
+                      {fieldsFor(clothingType).map((f) => (
+                        <div
+                          key={f.key}
+                          className="flex justify-between text-[11px] font-mono py-0.5"
+                        >
+                          <span className="text-faint">{f.label}</span>
+                          <span className="text-foreground">{fmt(graded[size][f.key])} cm</span>
+                        </div>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="px-5 py-4 border-t border-line mt-auto space-y-2">
-                  <button
-                    onClick={saveGrading}
-                    className="w-full flex items-center justify-center gap-2 bg-cyan text-primary-foreground font-semibold text-sm rounded-md py-3 hover:bg-cyan/90 transition-colors"
-                  >
-                    <Save className="size-4" /> Salvar Padrão
-                  </button>
-                  <button
-                    onClick={() => {
-                      checkpoint("table-reset:" + Date.now());
-                      setTable(DEFAULT_TABLE);
-                      lsSet(LS_GRADING, JSON.stringify(DEFAULT_TABLE));
-                    }}
-                    className="w-full text-[11px] font-mono text-muted-foreground hover:text-cyan"
-                  >
-                    Restaurar valores sugeridos
-                  </button>
-                  <p className="text-[10px] font-mono text-center text-cyan h-3">{savedMsg}</p>
-                </div>
-              </>
-            )}
-          </aside>
+                    </div>
+                  </div>
+                  <div className="px-5 py-4 border-t border-line mt-auto">
+                    <button
+                      onClick={() => setSize(mother)}
+                      className="w-full flex items-center justify-center gap-2 bg-cyan text-primary-foreground font-semibold text-sm rounded-md py-3 hover:bg-cyan/90 transition-colors"
+                    >
+                      <Wand2 className="size-4" strokeWidth={2.5} />
+                      Gerar Molde Base
+                    </button>
+                    <p className="text-[10px] font-mono text-faint text-center mt-2.5">
+                      Graduação pela Tabela de Tamanhos · {SIZES.length} tamanhos
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="px-5 py-4 border-b border-line">
+                    <h2 className="text-sm font-semibold text-foreground">
+                      Configurar Tabela de Tamanhos
+                    </h2>
+                    <p className="text-[11px] text-faint mt-1 font-mono">
+                      Medidas finais de cada tamanho em cm · aplicadas na hora
+                    </p>
+                  </div>
+                  <div className="px-3 py-4 overflow-y-auto">
+                    <table className="w-full text-[11px] font-mono">
+                      <thead>
+                        <tr className="text-faint">
+                          <th className="text-left font-normal pb-2 pl-2 align-bottom">Tamanho</th>
+                          <th className="font-normal pb-2 leading-tight">Altura do Corpo (cm)</th>
+                          <th className="font-normal pb-2 leading-tight">Largura do Corpo (cm)</th>
+                          <th className="font-normal pb-2 leading-tight">Altura da Manga (cm)</th>
+                          <th className="font-normal pb-2 leading-tight">Largura da Manga (cm)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {SIZES.map((s) => (
+                          <tr key={s}>
+                            <td
+                              className={
+                                "pl-2 font-semibold whitespace-nowrap " +
+                                (s === mother ? "text-cyan" : "text-foreground")
+                              }
+                            >
+                              {s}
+                              {s === mother && <Crown className="inline size-3 ml-1 -mt-0.5" />}
+                            </td>
+                            {fieldsFor(clothingType).map((f) => (
+                              <td key={f.key} className="p-0.5">
+                                <input
+                                  type="number"
+                                  step="0.5"
+                                  value={table[s][f.key]}
+                                  onChange={(e) =>
+                                    updateTable(s, f.key, parseFloat(e.target.value) || 0)
+                                  }
+                                  className="w-full bg-panel2 border border-line rounded px-1.5 py-1.5 text-center text-foreground disabled:opacity-40 focus:outline-none focus:border-cyan/60"
+                                />
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="px-5 py-4 border-t border-line mt-auto space-y-2">
+                    <button
+                      onClick={saveGrading}
+                      className="w-full flex items-center justify-center gap-2 bg-cyan text-primary-foreground font-semibold text-sm rounded-md py-3 hover:bg-cyan/90 transition-colors"
+                    >
+                      <Save className="size-4" /> Salvar Padrão
+                    </button>
+                    <button
+                      onClick={() => {
+                        checkpoint("table-reset:" + Date.now());
+                        setTable(DEFAULT_TABLE);
+                        lsSet(LS_GRADING, JSON.stringify(DEFAULT_TABLE));
+                      }}
+                      className="w-full text-[11px] font-mono text-muted-foreground hover:text-cyan"
+                    >
+                      Restaurar valores sugeridos
+                    </button>
+                    <p className="text-[10px] font-mono text-center text-cyan h-3">{savedMsg}</p>
+                  </div>
+                </>
+              )}
+            </aside>
           </div>
         </div>
       </main>
 
       {/* Coluna própria no layout: a paleta não cobre mais o painel direito nem o cabeçalho. */}
-      <PaletteDock target={colorTarget} onTarget={setColorTarget} onApply={applyColor} current={colorCurrent} targetLabel={colorLabel} targetKind={colorKind} />
+      <PaletteDock
+        target={colorTarget}
+        onTarget={setColorTarget}
+        onApply={applyColor}
+        current={colorCurrent}
+        targetLabel={colorLabel}
+        targetKind={colorKind}
+      />
     </div>
   );
 }
@@ -4437,7 +5864,15 @@ function Index() {
 type SelectionInfo = { label: string; w: number; h: number; set: (w: number, h: number) => void };
 
 /* Barra de propriedades da Ferramenta Seleção: largura, altura e cadeado de proporção. */
-function SelectionPropsBar({ info, locked, onToggleLock }: { info: SelectionInfo; locked: boolean; onToggleLock: () => void }) {
+function SelectionPropsBar({
+  info,
+  locked,
+  onToggleLock,
+}: {
+  info: SelectionInfo;
+  locked: boolean;
+  onToggleLock: () => void;
+}) {
   const LockIcon = locked ? Lock : LockOpen;
   const setW = (w: number) => info.set(w, locked ? (w * info.h) / info.w : info.h);
   const setH = (h: number) => info.set(locked ? (h * info.w) / info.h : info.w, h);
@@ -4453,10 +5888,16 @@ function SelectionPropsBar({ info, locked, onToggleLock }: { info: SelectionInfo
         onClick={onToggleLock}
         aria-pressed={locked}
         aria-label={locked ? "Proporção travada" : "Proporção livre"}
-        title={locked ? "Proporção travada: largura e altura mudam juntas" : "Proporção livre: largura e altura independentes"}
+        title={
+          locked
+            ? "Proporção travada: largura e altura mudam juntas"
+            : "Proporção livre: largura e altura independentes"
+        }
         className={
           "grid size-7 place-items-center rounded-md border transition-colors " +
-          (locked ? "border-cyan/40 bg-cyan/10 text-cyan" : "border-line text-muted-foreground hover:text-foreground")
+          (locked
+            ? "border-cyan/40 bg-cyan/10 text-cyan"
+            : "border-line text-muted-foreground hover:text-foreground")
         }
       >
         <LockIcon className="size-3.5" />
@@ -4466,7 +5907,17 @@ function SelectionPropsBar({ info, locked, onToggleLock }: { info: SelectionInfo
   );
 }
 
-function DimField({ label, title, value, onCommit }: { label: string; title: string; value: number; onCommit: (v: number) => void }) {
+function DimField({
+  label,
+  title,
+  value,
+  onCommit,
+}: {
+  label: string;
+  title: string;
+  value: number;
+  onCommit: (v: number) => void;
+}) {
   const [draft, setDraft] = useState<string | null>(null);
   const commit = () => {
     if (draft === null) return;
@@ -4531,12 +5982,23 @@ type HandleDir = -1 | 0 | 1;
 type BoxObject = { cx: number; cy: number; w: number; ratio: number; rot?: number };
 /* As 8 alças da caixa de seleção (cantos e meios das bordas), como no CorelDRAW. */
 const HANDLES: { hx: HandleDir; hy: HandleDir }[] = [
-  { hx: -1, hy: -1 }, { hx: 0, hy: -1 }, { hx: 1, hy: -1 },
-  { hx: -1, hy: 0 }, { hx: 1, hy: 0 },
-  { hx: -1, hy: 1 }, { hx: 0, hy: 1 }, { hx: 1, hy: 1 },
+  { hx: -1, hy: -1 },
+  { hx: 0, hy: -1 },
+  { hx: 1, hy: -1 },
+  { hx: -1, hy: 0 },
+  { hx: 1, hy: 0 },
+  { hx: -1, hy: 1 },
+  { hx: 0, hy: 1 },
+  { hx: 1, hy: 1 },
 ];
 const handleCursor = (hx: HandleDir, hy: HandleDir) =>
-  !hx ? "cursor-ns-resize" : !hy ? "cursor-ew-resize" : hx === hy ? "cursor-nwse-resize" : "cursor-nesw-resize";
+  !hx
+    ? "cursor-ns-resize"
+    : !hy
+      ? "cursor-ew-resize"
+      : hx === hy
+        ? "cursor-nwse-resize"
+        : "cursor-nesw-resize";
 const MIN_SIZE_CM = 0.5;
 
 /* Com o cadeado fechado, um único fator vale para os dois eixos: o do eixo que a alça
@@ -4726,7 +6188,10 @@ function PatternCanvas({
       nh = nw * o.ratio;
     }
     const cl = { x: ax + (hx * nw) / 2, y: ay + (hy * nh) / 2 };
-    const gc = { x: c.x + cl.x * Math.cos(r) - cl.y * Math.sin(r), y: c.y + cl.x * Math.sin(r) + cl.y * Math.cos(r) };
+    const gc = {
+      x: c.x + cl.x * Math.cos(r) - cl.y * Math.sin(r),
+      y: c.y + cl.x * Math.sin(r) + cl.y * Math.cos(r),
+    };
     const n = toNorm(gc);
     return { ...o, cx: n.x, cy: n.y, w: nw / W, ratio: nh / nw };
   };
@@ -4787,7 +6252,9 @@ function PatternCanvas({
   const onMultiMoveRef = useRef(onMultiMove);
   onMultiMoveRef.current = onMultiMove;
   /* Caixas de cada item (camada/estampa: caixa que cobre o objeto girado; texto: getBBox). */
-  const [mBoxes, setMBoxes] = useState<{ x: number; y: number; w: number; h: number; main: boolean }[]>([]);
+  const [mBoxes, setMBoxes] = useState<
+    { x: number; y: number; w: number; h: number; main: boolean }[]
+  >([]);
   useLayoutEffect(() => {
     const out: { x: number; y: number; w: number; h: number; main: boolean }[] = [];
     if (multi) {
@@ -4810,12 +6277,16 @@ function PatternCanvas({
           const c = toSvg({ x: artwork.cx, y: artwork.cy });
           out.push({ ...rotBox(c.x, c.y, aw, aw * artwork.ratio, artwork.rot ?? 0), main });
         } else {
-          const el = svgRef.current?.querySelector(`[data-text-id="${CSS.escape(it.id)}"]`) as SVGTextElement | null;
+          const el = svgRef.current?.querySelector(
+            `[data-text-id="${CSS.escape(it.id)}"]`,
+          ) as SVGTextElement | null;
           if (!el) return;
           try {
             const b = el.getBBox();
             out.push({ x: b.x, y: b.y, w: b.width, h: b.height, main });
-          } catch { /* ignora */ }
+          } catch {
+            /* ignora */
+          }
         }
       });
     }
@@ -4844,7 +6315,14 @@ function PatternCanvas({
   /* Desenhos da Caneta viram camadas vetoriais novas; o molde (shapes) nunca é alterado aqui. */
   const addDrawn = (cm: CmNode[], closed: boolean) => {
     const nodesCm = dedupe(cm);
-    const l = layerFromCm(nodesCm, closed && nodesCm.length >= 3, { stroke: drawOpts.penStroke, fill: null, widthCm: drawOpts.penWidth }, nextName("Desenho", layers), W, H);
+    const l = layerFromCm(
+      nodesCm,
+      closed && nodesCm.length >= 3,
+      { stroke: drawOpts.penStroke, fill: null, widthCm: drawOpts.penWidth },
+      nextName("Desenho", layers),
+      W,
+      H,
+    );
     if (!l) return;
     onLayersChange([...layers, l]);
     onSelLayer(l.id);
@@ -4852,7 +6330,11 @@ function PatternCanvas({
   const commitDraft = (closed = false) => {
     if (draft && draft.length >= 2) {
       const cm: CmNode[] = draft.map((n, i) => {
-        const o: CmNode = { x: (n.x - 0.5) * W, y: n.y * H, smooth: n.smooth && (closed || (i > 0 && i < draft.length - 1)) };
+        const o: CmNode = {
+          x: (n.x - 0.5) * W,
+          y: n.y * H,
+          smooth: n.smooth && (closed || (i > 0 && i < draft.length - 1)),
+        };
         if (n.hIn) o.hIn = { x: n.hIn.x * W, y: n.hIn.y * H };
         if (n.hOut) o.hOut = { x: n.hOut.x * W, y: n.hOut.y * H };
         if (n.hIn || n.hOut) o.smooth = n.smooth;
@@ -4876,14 +6358,18 @@ function PatternCanvas({
   /* Retângulo da Plotter (mesma caixa da exportação: limites da Linha de Sangria).
      É o destino/máscara do PowerClip. */
   const frame = (() => {
-    const bb =
-      pathBounds(guidePaths(buildPath(nodes, W, H), W, H, guide).frameSrc) ?? {
-        minX: -W / 2 - PLOTTER_MARGIN,
-        minY: -PLOTTER_MARGIN,
-        maxX: W / 2 + PLOTTER_MARGIN,
-        maxY: H + PLOTTER_MARGIN,
-      };
-    return { x: bb.minX, y: bb.minY, w: Math.max(0.1, bb.maxX - bb.minX), h: Math.max(0.1, bb.maxY - bb.minY) };
+    const bb = pathBounds(guidePaths(buildPath(nodes, W, H), W, H, guide).frameSrc) ?? {
+      minX: -W / 2 - PLOTTER_MARGIN,
+      minY: -PLOTTER_MARGIN,
+      maxX: W / 2 + PLOTTER_MARGIN,
+      maxY: H + PLOTTER_MARGIN,
+    };
+    return {
+      x: bb.minX,
+      y: bb.minY,
+      w: Math.max(0.1, bb.maxX - bb.minX),
+      h: Math.max(0.1, bb.maxY - bb.minY),
+    };
   })();
   /* PowerClip armado: estampa livre selecionada ("art") ou imagem/vetor importado selecionado (id). */
   const pcPickValid =
@@ -4922,7 +6408,13 @@ function PatternCanvas({
           d={`M ${to.x} ${to.y} l ${-head / 2} ${-head} l ${head} 0 Z`}
           className="fill-primary"
         />
-        <text x={(from.x + to.x) / 2} y={sy - unit} textAnchor="middle" fontSize={unit * 1.3} className="fill-primary font-mono font-bold">
+        <text
+          x={(from.x + to.x) / 2}
+          y={sy - unit}
+          textAnchor="middle"
+          fontSize={unit * 1.3}
+          className="fill-primary font-mono font-bold"
+        >
           Clique no retângulo para colocar esta arte dentro dele.
         </text>
       </g>
@@ -4945,7 +6437,14 @@ function PatternCanvas({
     }
     if (tool === "zoom") {
       capture(e);
-      setDrag({ k: "pan", sx: e.clientX, sy: e.clientY, orig: { x: zoom.px, y: zoom.py }, alt: e.altKey, at: p });
+      setDrag({
+        k: "pan",
+        sx: e.clientX,
+        sy: e.clientY,
+        orig: { x: zoom.px, y: zoom.py },
+        alt: e.altKey,
+        at: p,
+      });
     } else if (tool === "fita") {
       setTape((t) => (!t.a || t.b ? { a: p, b: null } : { a: t.a, b: p }));
     } else if (tool === "caneta") {
@@ -4981,7 +6480,11 @@ function PatternCanvas({
     const n = toNorm(p);
     switch (drag.k) {
       case "art":
-        onArtworkChange({ ...drag.orig, cx: drag.orig.cx + n.x - drag.start.x, cy: drag.orig.cy + n.y - drag.start.y });
+        onArtworkChange({
+          ...drag.orig,
+          cx: drag.orig.cx + n.x - drag.start.x,
+          cy: drag.orig.cy + n.y - drag.start.y,
+        });
         break;
       case "bscale": {
         const next = resizeBox(drag.orig, drag.hx, drag.hy, p);
@@ -4993,7 +6496,11 @@ function PatternCanvas({
         resizePiece(drag.hx, drag.hy, p, drag.W, drag.H);
         break;
       case "lmove":
-        setLayer({ ...drag.orig, cx: drag.orig.cx + n.x - drag.start.x, cy: drag.orig.cy + n.y - drag.start.y });
+        setLayer({
+          ...drag.orig,
+          cx: drag.orig.cx + n.x - drag.start.x,
+          cy: drag.orig.cy + n.y - drag.start.y,
+        });
         break;
       case "lrot": {
         const { c } = lg(drag.orig);
@@ -5092,7 +6599,9 @@ function PatternCanvas({
     }
     if (drag?.k === "free") {
       const fpts = freeRef.current;
-      const moved = fpts.length > 2 || (fpts.length > 1 && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) >= 4);
+      const moved =
+        fpts.length > 2 ||
+        (fpts.length > 1 && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) >= 4);
       if (!moved) {
         const n = toNorm(fpts[0]!);
         setDraft([...(draft ?? []), { x: n.x, y: n.y, smooth: false }]);
@@ -5106,7 +6615,11 @@ function PatternCanvas({
           const l = simp[simp.length - 1]!;
           const closed = simp.length >= 3 && Math.hypot(f.x - l.x, f.y - l.y) < unit * 1.5;
           const pts = closed ? simp.slice(0, -1) : simp;
-          const cm = pts.map((q, i) => ({ x: q.x, y: q.y, smooth: closed || (i > 0 && i < pts.length - 1) }));
+          const cm = pts.map((q, i) => ({
+            x: q.x,
+            y: q.y,
+            smooth: closed || (i > 0 && i < pts.length - 1),
+          }));
           addDrawn(cm, closed && cm.length >= 3);
         }
       }
@@ -5192,7 +6705,15 @@ function PatternCanvas({
   const title = viewLabel(clothingType, view).toUpperCase();
   const showNodes = tool === "forma" && !layerNodeMode;
   const nodesInteractive = tool === "forma";
-  const cursor = { selecao: "cursor-default", forma: "cursor-crosshair", caneta: "cursor-crosshair", formas: "cursor-crosshair", zoom: "cursor-zoom-in", fita: "cursor-crosshair", texto: "cursor-text" }[tool];
+  const cursor = {
+    selecao: "cursor-default",
+    forma: "cursor-crosshair",
+    caneta: "cursor-crosshair",
+    formas: "cursor-crosshair",
+    zoom: "cursor-zoom-in",
+    fita: "cursor-crosshair",
+    texto: "cursor-text",
+  }[tool];
   const tapeEnd = tape.b ?? (tape.a ? hover : null);
   const sw = { strokeWidth: 1.5, vectorEffect: "non-scaling-stroke" as const };
 
@@ -5205,21 +6726,42 @@ function PatternCanvas({
     skip?: (hx: HandleDir, hy: HandleDir) => boolean,
   ) => (
     <>
-      <rect x={-aw / 2} y={-ah / 2} width={aw} height={ah} className={`fill-none stroke-${color} pointer-events-none`} strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
+      <rect
+        x={-aw / 2}
+        y={-ah / 2}
+        width={aw}
+        height={ah}
+        className={`fill-none stroke-${color} pointer-events-none`}
+        strokeWidth={1}
+        strokeDasharray="4 3"
+        vectorEffect="non-scaling-stroke"
+      />
       {HANDLES.filter(({ hx, hy }) => !skip?.(hx, hy)).map(({ hx, hy }) =>
-        square({ x: (hx * aw) / 2, y: (hy * ah) / 2 }, `h${hx}${hy}`, `fill-garment stroke-${color} ${handleCursor(hx, hy)}`, (e) => {
-          e.stopPropagation();
-          if (e.button !== 0) return;
-          capture(e);
-          onHandle(e, hx, hy);
-        }),
+        square(
+          { x: (hx * aw) / 2, y: (hy * ah) / 2 },
+          `h${hx}${hy}`,
+          `fill-garment stroke-${color} ${handleCursor(hx, hy)}`,
+          (e) => {
+            e.stopPropagation();
+            if (e.button !== 0) return;
+            capture(e);
+            onHandle(e, hx, hy);
+          },
+        ),
       )}
     </>
   );
 
   const content = (l: Layer, aw: number, ah: number, hit: boolean) =>
     l.src ? (
-      <image href={l.src} x={-aw / 2} y={-ah / 2} width={aw} height={ah} preserveAspectRatio="none" />
+      <image
+        href={l.src}
+        x={-aw / 2}
+        y={-ah / 2}
+        width={aw}
+        height={ah}
+        preserveAspectRatio="none"
+      />
     ) : (
       <>
         {hit && <rect x={-aw / 2} y={-ah / 2} width={aw} height={ah} fill="transparent" />}
@@ -5228,8 +6770,22 @@ function PatternCanvas({
             const d = layerPathD(p, aw, ah);
             return (
               <g key={pi}>
-                {hit && <path d={d} fill="none" stroke="transparent" strokeWidth={Math.max(p.sw * aw, unit * 1.2)} style={{ pointerEvents: "stroke" }} />}
-                <path d={d} fill={p.fill ?? "none"} stroke={p.stroke ?? "none"} strokeWidth={p.sw * aw} fillRule={p.rule} />
+                {hit && (
+                  <path
+                    d={d}
+                    fill="none"
+                    stroke="transparent"
+                    strokeWidth={Math.max(p.sw * aw, unit * 1.2)}
+                    style={{ pointerEvents: "stroke" }}
+                  />
+                )}
+                <path
+                  d={d}
+                  fill={p.fill ?? "none"}
+                  stroke={p.stroke ?? "none"}
+                  strokeWidth={p.sw * aw}
+                  fillRule={p.rule}
+                />
               </g>
             );
           })}
@@ -5237,7 +6793,12 @@ function PatternCanvas({
       </>
     );
 
-  const square = (p: Pt, key: string | number, cls: string, onDown?: (e: React.PointerEvent) => void) => (
+  const square = (
+    p: Pt,
+    key: string | number,
+    cls: string,
+    onDown?: (e: React.PointerEvent) => void,
+  ) => (
     <rect
       key={key}
       x={p.x - unit * 0.7}
@@ -5258,7 +6819,8 @@ function PatternCanvas({
       className={"absolute inset-0 w-full h-full select-none touch-none " + cursor}
       onPointerDownCapture={() => {
         const a = document.activeElement as HTMLElement | null;
-        if (a && (a.tagName === "INPUT" || a.tagName === "SELECT" || a.tagName === "TEXTAREA")) a.blur();
+        if (a && (a.tagName === "INPUT" || a.tagName === "SELECT" || a.tagName === "TEXTAREA"))
+          a.blur();
       }}
       onPointerDown={onBgDown}
       onPointerMove={onMove}
@@ -5271,7 +6833,12 @@ function PatternCanvas({
         onMenu(e.clientX, e.clientY);
       }}
     >
-      <text x={-maxW / 2 - pad * 0.7} y={-pad * 0.5} fontSize={(Math.max(maxW, maxH) / 60) * 1.6} className="fill-faint font-mono">
+      <text
+        x={-maxW / 2 - pad * 0.7}
+        y={-pad * 0.5}
+        fontSize={(Math.max(maxW, maxH) / 60) * 1.6}
+        className="fill-faint font-mono"
+      >
         {title} · TAMANHO {size}
       </text>
 
@@ -5315,63 +6882,84 @@ function PatternCanvas({
       <clipPath id="outline-clip">
         <rect x={frame.x} y={frame.y} width={frame.w} height={frame.h} />
       </clipPath>
-      {artwork && (() => {
-        const aw = artwork.w * W;
-        const ah = aw * artwork.ratio;
-        const c = toSvg({ x: artwork.cx, y: artwork.cy });
-        const clipped = artwork.clipped !== false;
-        const editingNow = clipped && pcEdit && size === mother;
-        // Com PowerClip aplicado, a arte só é interativa durante "Editar Conteúdo do PowerClip".
-        const movable = size === mother && tool === "selecao";
-        const imgProps = {
-          href: artwork.src,
-          x: c.x - aw / 2,
-          y: c.y - ah / 2,
-          width: aw,
-          height: ah,
-          preserveAspectRatio: "none",
-          transform: artTransform(artwork, c.x, c.y),
-        };
-        const down = (e: React.PointerEvent) => {
-          if (multiPick(e, { kind: "art", id: "art" })) return;
-          e.stopPropagation();
-          onSelPart("estampa");
-          if (e.button !== 0) return;
-          capture(e);
-          setDrag({ k: "art", start: toNorm(svgPoint(e)), orig: artwork });
-        };
-        const artSelected = movable && selPart === "estampa" && (!clipped || editingNow);
-        return (
-          <g>
-            {/* PowerClip: a máscara é o retângulo da Plotter, nunca as linhas do molde. */}
-            {(!clipped || editingNow) && (
-              <image
-                {...imgProps}
-                opacity={editingNow ? 0.3 : 1}
-                className={movable ? "cursor-move" : ""}
-                style={{ pointerEvents: movable ? "all" : "none" }}
-                onPointerDown={movable ? down : undefined}
-                onDoubleClick={editingNow && movable ? (e) => { e.stopPropagation(); onEditImage?.(); } : undefined}
-              />
-            )}
-            {clipped && (
-              <g clipPath="url(#outline-clip)">
-                <image {...imgProps} opacity={artwork.opacity ?? 1} style={{ pointerEvents: "none" }} />
-              </g>
-            )}
-            {artSelected && !multi && (
-              <g transform={`translate(${c.x} ${c.y}) rotate(${artwork.rot ?? 0})`}>
-                {selectionBox(aw, ah, "amber", (_, hx, hy) => setDrag({ k: "bscale", target: "art", hx, hy, orig: artwork }))}
-              </g>
-            )}
-            {(artSelected || !clipped) && (
-              <text x={c.x} y={c.y - ah / 2 - unit} textAnchor="middle" fontSize={unit * 1.2} className="fill-amber font-mono pointer-events-none">
-                {fmt(aw)} × {fmt(ah)} cm · {Math.round(artwork.w * 100)}% da largura{size !== mother ? ` · auto de ${mother}` : ""}
-              </text>
-            )}
-          </g>
-        );
-      })()}
+      {artwork &&
+        (() => {
+          const aw = artwork.w * W;
+          const ah = aw * artwork.ratio;
+          const c = toSvg({ x: artwork.cx, y: artwork.cy });
+          const clipped = artwork.clipped !== false;
+          const editingNow = clipped && pcEdit && size === mother;
+          // Com PowerClip aplicado, a arte só é interativa durante "Editar Conteúdo do PowerClip".
+          const movable = size === mother && tool === "selecao";
+          const imgProps = {
+            href: artwork.src,
+            x: c.x - aw / 2,
+            y: c.y - ah / 2,
+            width: aw,
+            height: ah,
+            preserveAspectRatio: "none",
+            transform: artTransform(artwork, c.x, c.y),
+          };
+          const down = (e: React.PointerEvent) => {
+            if (multiPick(e, { kind: "art", id: "art" })) return;
+            e.stopPropagation();
+            onSelPart("estampa");
+            if (e.button !== 0) return;
+            capture(e);
+            setDrag({ k: "art", start: toNorm(svgPoint(e)), orig: artwork });
+          };
+          const artSelected = movable && selPart === "estampa" && (!clipped || editingNow);
+          return (
+            <g>
+              {/* PowerClip: a máscara é o retângulo da Plotter, nunca as linhas do molde. */}
+              {(!clipped || editingNow) && (
+                <image
+                  {...imgProps}
+                  opacity={editingNow ? 0.3 : 1}
+                  className={movable ? "cursor-move" : ""}
+                  style={{ pointerEvents: movable ? "all" : "none" }}
+                  onPointerDown={movable ? down : undefined}
+                  onDoubleClick={
+                    editingNow && movable
+                      ? (e) => {
+                          e.stopPropagation();
+                          onEditImage?.();
+                        }
+                      : undefined
+                  }
+                />
+              )}
+              {clipped && (
+                <g clipPath="url(#outline-clip)">
+                  <image
+                    {...imgProps}
+                    opacity={artwork.opacity ?? 1}
+                    style={{ pointerEvents: "none" }}
+                  />
+                </g>
+              )}
+              {artSelected && !multi && (
+                <g transform={`translate(${c.x} ${c.y}) rotate(${artwork.rot ?? 0})`}>
+                  {selectionBox(aw, ah, "amber", (_, hx, hy) =>
+                    setDrag({ k: "bscale", target: "art", hx, hy, orig: artwork }),
+                  )}
+                </g>
+              )}
+              {(artSelected || !clipped) && (
+                <text
+                  x={c.x}
+                  y={c.y - ah / 2 - unit}
+                  textAnchor="middle"
+                  fontSize={unit * 1.2}
+                  className="fill-amber font-mono pointer-events-none"
+                >
+                  {fmt(aw)} × {fmt(ah)} cm · {Math.round(artwork.w * 100)}% da largura
+                  {size !== mother ? ` · auto de ${mother}` : ""}
+                </text>
+              )}
+            </g>
+          );
+        })()}
 
       {/* Objetos importados (camadas); recortadas ficam dentro do PowerClip */}
       {layers.map((l) => {
@@ -5390,106 +6978,176 @@ function PatternCanvas({
         };
         return (
           <g key={l.id} clipPath={l.clipped && !pcEdit ? "url(#outline-clip)" : undefined}>
-          {l.clipped && pcEdit && (
-            <g clipPath="url(#outline-clip)" style={{ pointerEvents: "none" }}>
-              <g transform={`translate(${c.x} ${c.y}) rotate(${l.rot})`}>{content(l, aw, ah, false)}</g>
-            </g>
-          )}
-          <g transform={`translate(${c.x} ${c.y}) rotate(${l.rot})`}>
-            <g
-              className={tool === "selecao" && pickable ? "cursor-move" : ""}
-              style={{ pointerEvents: pickable ? "all" : "none" }}
-              opacity={l.clipped && pcEdit ? 0.3 : undefined}
-              onPointerDown={down}
-            >
-              {content(l, aw, ah, true)}
-            </g>
-            {l.slot && l.kind !== "vetor" && (
-              <g className="pointer-events-none" data-screen-only>
-                <rect x={-aw / 2} y={-ah / 2} width={aw} height={ah} className="fill-none stroke-cyan" strokeWidth={1} strokeDasharray="3 2" vectorEffect="non-scaling-stroke" />
-                <text x={-aw / 2} y={-ah / 2 - unit * 0.4} fontSize={unit * 1.1} className="fill-cyan font-mono">{l.slot.kind === "nome" ? "ESPAÇO NOME" : "ESPAÇO Nº"}</text>
-                {(() => {
-                  const ax = l.slot.h === "esquerda" ? -aw / 2 : l.slot.h === "direita" ? aw / 2 : 0;
-                  const ay = l.slot.v === "topo" ? -ah / 2 : l.slot.v === "base" ? ah / 2 : 0;
-                  const k = unit * 0.9;
-                  return (
-                    <>
-                      <line x1={ax} x2={ax} y1={ay - k} y2={ay + k} className="stroke-cyan" strokeWidth={2} vectorEffect="non-scaling-stroke" />
-                      <line x1={ax - k} x2={ax + k} y1={ay} y2={ay} className="stroke-cyan" strokeWidth={2} vectorEffect="non-scaling-stroke" />
-                    </>
-                  );
-                })()}
+            {l.clipped && pcEdit && (
+              <g clipPath="url(#outline-clip)" style={{ pointerEvents: "none" }}>
+                <g transform={`translate(${c.x} ${c.y}) rotate(${l.rot})`}>
+                  {content(l, aw, ah, false)}
+                </g>
               </g>
             )}
-            {sel && tool !== "selecao" && (
-              <rect x={-aw / 2} y={-ah / 2} width={aw} height={ah} className="fill-none stroke-amber pointer-events-none" strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
-            )}
-            {sel && tool === "selecao" && !multi && (
-              <>
-                {selectionBox(aw, ah, "amber", (_, hx, hy) => setDrag({ k: "bscale", target: "layer", hx, hy, orig: l }))}
-                <line x1={0} y1={-ah / 2} x2={0} y2={-ah / 2 - unit * 3} className="stroke-amber pointer-events-none" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-                <circle
-                  cx={0}
-                  cy={-ah / 2 - unit * 3}
-                  r={unit * 0.8}
-                  className="fill-amber stroke-amber cursor-grab"
-                  onPointerDown={(e) => {
-                    e.stopPropagation();
-                    capture(e);
-                    setDrag({ k: "lrot", orig: l });
-                  }}
+            <g transform={`translate(${c.x} ${c.y}) rotate(${l.rot})`}>
+              <g
+                className={tool === "selecao" && pickable ? "cursor-move" : ""}
+                style={{ pointerEvents: pickable ? "all" : "none" }}
+                opacity={l.clipped && pcEdit ? 0.3 : undefined}
+                onPointerDown={down}
+              >
+                {content(l, aw, ah, true)}
+              </g>
+              {l.slot && l.kind !== "vetor" && (
+                <g className="pointer-events-none" data-screen-only>
+                  <rect
+                    x={-aw / 2}
+                    y={-ah / 2}
+                    width={aw}
+                    height={ah}
+                    className="fill-none stroke-cyan"
+                    strokeWidth={1}
+                    strokeDasharray="3 2"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <text
+                    x={-aw / 2}
+                    y={-ah / 2 - unit * 0.4}
+                    fontSize={unit * 1.1}
+                    className="fill-cyan font-mono"
+                  >
+                    {l.slot.kind === "nome" ? "ESPAÇO NOME" : "ESPAÇO Nº"}
+                  </text>
+                  {(() => {
+                    const ax =
+                      l.slot.h === "esquerda" ? -aw / 2 : l.slot.h === "direita" ? aw / 2 : 0;
+                    const ay = l.slot.v === "topo" ? -ah / 2 : l.slot.v === "base" ? ah / 2 : 0;
+                    const k = unit * 0.9;
+                    return (
+                      <>
+                        <line
+                          x1={ax}
+                          x2={ax}
+                          y1={ay - k}
+                          y2={ay + k}
+                          className="stroke-cyan"
+                          strokeWidth={2}
+                          vectorEffect="non-scaling-stroke"
+                        />
+                        <line
+                          x1={ax - k}
+                          x2={ax + k}
+                          y1={ay}
+                          y2={ay}
+                          className="stroke-cyan"
+                          strokeWidth={2}
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      </>
+                    );
+                  })()}
+                </g>
+              )}
+              {sel && tool !== "selecao" && (
+                <rect
+                  x={-aw / 2}
+                  y={-ah / 2}
+                  width={aw}
+                  height={ah}
+                  className="fill-none stroke-amber pointer-events-none"
+                  strokeWidth={1}
+                  strokeDasharray="4 3"
+                  vectorEffect="non-scaling-stroke"
                 />
-                <text x={0} y={ah / 2 + unit * 2.2} textAnchor="middle" fontSize={unit * 1.1} className="fill-amber font-mono pointer-events-none">
-                  {fmt(aw)} × {fmt(ah)} cm{l.rot ? ` · ${fmt(l.rot)}°` : ""}
-                </text>
-              </>
-            )}
-            {sel && layerNodeMode && l.paths && (
-              <g>
-                {l.paths.flatMap((pp, pi) =>
-                  pp.subs.flatMap((s, si) =>
-                    s.nodes.map((q, i) => {
-                      const P = (x: number, y: number) => ({ x: (x - 0.5) * aw, y: (y - 0.5) * ah });
-                      const pt = P(q.x, q.y);
-                      const hs = (["hIn", "hOut"] as const).filter((k) => q[k]);
-                      return (
-                        <g key={`${pi}-${si}-${i}`}>
-                          {hs.map((k) => {
-                            const h = P(q.x + q[k]!.x, q.y + q[k]!.y);
-                            return (
-                              <g key={k}>
-                                <line x1={pt.x} y1={pt.y} x2={h.x} y2={h.y} className="stroke-amber/70 pointer-events-none" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-                                <circle
-                                  cx={h.x}
-                                  cy={h.y}
-                                  r={unit * 0.5}
-                                  className="fill-amber cursor-move"
-                                  onPointerDown={(e) => {
-                                    e.stopPropagation();
-                                    capture(e);
-                                    setDrag({ k: "lnode", id: l.id, pi, si, i, which: k });
-                                  }}
-                                />
-                              </g>
-                            );
-                          })}
-                          {square(pt, "n", "fill-garment stroke-cyan cursor-move", (e) => {
-                            e.stopPropagation();
-                            capture(e);
-                            setDrag({ k: "lnode", id: l.id, pi, si, i, which: "n" });
-                          })}
-                        </g>
-                      );
-                    }),
-                  ),
-                )}
-              </g>
-            )}
-          </g>
+              )}
+              {sel && tool === "selecao" && !multi && (
+                <>
+                  {selectionBox(aw, ah, "amber", (_, hx, hy) =>
+                    setDrag({ k: "bscale", target: "layer", hx, hy, orig: l }),
+                  )}
+                  <line
+                    x1={0}
+                    y1={-ah / 2}
+                    x2={0}
+                    y2={-ah / 2 - unit * 3}
+                    className="stroke-amber pointer-events-none"
+                    strokeWidth={1}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <circle
+                    cx={0}
+                    cy={-ah / 2 - unit * 3}
+                    r={unit * 0.8}
+                    className="fill-amber stroke-amber cursor-grab"
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      capture(e);
+                      setDrag({ k: "lrot", orig: l });
+                    }}
+                  />
+                  <text
+                    x={0}
+                    y={ah / 2 + unit * 2.2}
+                    textAnchor="middle"
+                    fontSize={unit * 1.1}
+                    className="fill-amber font-mono pointer-events-none"
+                  >
+                    {fmt(aw)} × {fmt(ah)} cm{l.rot ? ` · ${fmt(l.rot)}°` : ""}
+                  </text>
+                </>
+              )}
+              {sel && layerNodeMode && l.paths && (
+                <g>
+                  {l.paths.flatMap((pp, pi) =>
+                    pp.subs.flatMap((s, si) =>
+                      s.nodes.map((q, i) => {
+                        const P = (x: number, y: number) => ({
+                          x: (x - 0.5) * aw,
+                          y: (y - 0.5) * ah,
+                        });
+                        const pt = P(q.x, q.y);
+                        const hs = (["hIn", "hOut"] as const).filter((k) => q[k]);
+                        return (
+                          <g key={`${pi}-${si}-${i}`}>
+                            {hs.map((k) => {
+                              const h = P(q.x + q[k]!.x, q.y + q[k]!.y);
+                              return (
+                                <g key={k}>
+                                  <line
+                                    x1={pt.x}
+                                    y1={pt.y}
+                                    x2={h.x}
+                                    y2={h.y}
+                                    className="stroke-amber/70 pointer-events-none"
+                                    strokeWidth={1}
+                                    vectorEffect="non-scaling-stroke"
+                                  />
+                                  <circle
+                                    cx={h.x}
+                                    cy={h.y}
+                                    r={unit * 0.5}
+                                    className="fill-amber cursor-move"
+                                    onPointerDown={(e) => {
+                                      e.stopPropagation();
+                                      capture(e);
+                                      setDrag({ k: "lnode", id: l.id, pi, si, i, which: k });
+                                    }}
+                                  />
+                                </g>
+                              );
+                            })}
+                            {square(pt, "n", "fill-garment stroke-cyan cursor-move", (e) => {
+                              e.stopPropagation();
+                              capture(e);
+                              setDrag({ k: "lnode", id: l.id, pi, si, i, which: "n" });
+                            })}
+                          </g>
+                        );
+                      }),
+                    ),
+                  )}
+                </g>
+              )}
+            </g>
           </g>
         );
       })}
-
 
       {/* Contorno sobre a estampa */}
       <path
@@ -5506,18 +7164,40 @@ function PatternCanvas({
         const { bleed, safety } = guidePaths(seam, W, H, guide);
         return (
           <g className="pointer-events-none">
-            {showBleed && bleed && <path d={bleed} className="fill-none stroke-sky-400" strokeWidth={1} vectorEffect="non-scaling-stroke" />}
+            {showBleed && bleed && (
+              <path
+                d={bleed}
+                className="fill-none stroke-sky-400"
+                strokeWidth={1}
+                vectorEffect="non-scaling-stroke"
+              />
+            )}
             {showSeam && (
-              <path d={seam} className="fill-none stroke-ink" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+              <path
+                d={seam}
+                className="fill-none stroke-ink"
+                strokeWidth={1}
+                vectorEffect="non-scaling-stroke"
+              />
             )}
             {showSafety && safety && (
-              <path d={safety} className="fill-none stroke-red-500" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+              <path
+                d={safety}
+                className="fill-none stroke-red-500"
+                strokeWidth={1}
+                vectorEffect="non-scaling-stroke"
+              />
             )}
           </g>
         );
       })()}
       {artwork && artwork.clipped !== false && !pcEdit && (
-        <text x={-W / 2} y={-unit * 1.5} fontSize={unit * 1.2} className="fill-cyan font-mono pointer-events-none">
+        <text
+          x={-W / 2}
+          y={-unit * 1.5}
+          fontSize={unit * 1.2}
+          className="fill-cyan font-mono pointer-events-none"
+        >
           POWERCLIP · {size === mother ? "MOLDE MÃE" : `AUTO DE ${mother}`}
         </text>
       )}
@@ -5583,39 +7263,76 @@ function PatternCanvas({
 
       {/* Cotas */}
       <g className="pointer-events-none">
-        <line x1={-W / 2} x2={W / 2} y1={H + unit * 3} y2={H + unit * 3} className="stroke-amber" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-        <text x={0} y={H + unit * 6} textAnchor="middle" fontSize={unit * 1.5} className="fill-amber font-mono">
+        <line
+          x1={-W / 2}
+          x2={W / 2}
+          y1={H + unit * 3}
+          y2={H + unit * 3}
+          className="stroke-amber"
+          strokeWidth={1}
+          vectorEffect="non-scaling-stroke"
+        />
+        <text
+          x={0}
+          y={H + unit * 6}
+          textAnchor="middle"
+          fontSize={unit * 1.5}
+          className="fill-amber font-mono"
+        >
           LARGURA {fmt(W)} cm
         </text>
-        <line x1={W / 2 + unit * 3} x2={W / 2 + unit * 3} y1={0} y2={H} className="stroke-amber" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-        <text x={W / 2 + unit * 5} y={H / 2} fontSize={unit * 1.5} className="fill-amber font-mono" transform={`rotate(90 ${W / 2 + unit * 5} ${H / 2})`} textAnchor="middle">
+        <line
+          x1={W / 2 + unit * 3}
+          x2={W / 2 + unit * 3}
+          y1={0}
+          y2={H}
+          className="stroke-amber"
+          strokeWidth={1}
+          vectorEffect="non-scaling-stroke"
+        />
+        <text
+          x={W / 2 + unit * 5}
+          y={H / 2}
+          fontSize={unit * 1.5}
+          className="fill-amber font-mono"
+          transform={`rotate(90 ${W / 2 + unit * 5} ${H / 2})`}
+          textAnchor="middle"
+        >
           ALTURA {fmt(H)} cm
         </text>
       </g>
 
       {/* Seleção: caixa + alça de escala */}
-      {tool === "selecao" && selPart === "peca" && (() => {
-        const a = toSvg({ x: box.x0, y: box.y0 });
-        const b = toSvg({ x: box.x1, y: box.y1 });
-        return (
-          <g transform={`translate(${(a.x + b.x) / 2} ${(a.y + b.y) / 2})`}>
-            {selectionBox(
-              b.x - a.x,
-              b.y - a.y,
-              "cyan",
-              (_, hx, hy) => setDrag({ k: "pscale", hx, hy, W, H }),
-              // A linha do ombro é a âncora da peça: a borda superior não muda a altura.
-              (hx, hy) => hx === 0 && hy === -1 && box.y0 < 1e-3,
-            )}
-          </g>
-        );
-      })()}
+      {tool === "selecao" &&
+        selPart === "peca" &&
+        (() => {
+          const a = toSvg({ x: box.x0, y: box.y0 });
+          const b = toSvg({ x: box.x1, y: box.y1 });
+          return (
+            <g transform={`translate(${(a.x + b.x) / 2} ${(a.y + b.y) / 2})`}>
+              {selectionBox(
+                b.x - a.x,
+                b.y - a.y,
+                "cyan",
+                (_, hx, hy) => setDrag({ k: "pscale", hx, hy, W, H }),
+                // A linha do ombro é a âncora da peça: a borda superior não muda a altura.
+                (hx, hy) => hx === 0 && hy === -1 && box.y0 < 1e-3,
+              )}
+            </g>
+          );
+        })()}
 
       {/* Nós e alças */}
       {showNodes &&
         nodes.map((n, i) => {
           const p = toSvg(n);
-          const handles = tool === "forma" ? ([["hIn", n.hIn], ["hOut", n.hOut]] as const) : [];
+          const handles =
+            tool === "forma"
+              ? ([
+                  ["hIn", n.hIn],
+                  ["hOut", n.hOut],
+                ] as const)
+              : [];
           return (
             <g key={i} style={{ opacity: draft ? 0.35 : 1 }}>
               {handles.map(([k, h]) => {
@@ -5623,7 +7340,15 @@ function PatternCanvas({
                 const hp = toSvg({ x: n.x + h.x, y: n.y + h.y });
                 return (
                   <g key={k}>
-                    <line x1={p.x} y1={p.y} x2={hp.x} y2={hp.y} className="stroke-amber/70 pointer-events-none" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                    <line
+                      x1={p.x}
+                      y1={p.y}
+                      x2={hp.x}
+                      y2={hp.y}
+                      className="stroke-amber/70 pointer-events-none"
+                      strokeWidth={1}
+                      vectorEffect="non-scaling-stroke"
+                    />
                     <circle
                       cx={hp.x}
                       cy={hp.y}
@@ -5641,7 +7366,13 @@ function PatternCanvas({
               {square(
                 p,
                 "n",
-                "stroke-cyan " + (nodesInteractive ? "cursor-move " : "") + (drag?.k === "node" && drag.i === i ? "fill-cyan" : n.smooth ? "fill-cyan/30" : "fill-garment"),
+                "stroke-cyan " +
+                  (nodesInteractive ? "cursor-move " : "") +
+                  (drag?.k === "node" && drag.i === i
+                    ? "fill-cyan"
+                    : n.smooth
+                      ? "fill-cyan/30"
+                      : "fill-garment"),
                 nodesInteractive ? (e) => onNodeDown(e, i) : undefined,
               )}
             </g>
@@ -5651,20 +7382,49 @@ function PatternCanvas({
       {/* Rascunho da caneta */}
       {draft && (
         <g className="pointer-events-none">
-          <path d={buildPath(draft, W, H, false)} className="fill-none stroke-amber" strokeWidth={1.75} vectorEffect="non-scaling-stroke" />
-          {hover && (() => {
-            const l = toSvg(draft[draft.length - 1]!);
-            return <line x1={l.x} y1={l.y} x2={hover.x} y2={hover.y} className="stroke-amber/40" strokeWidth={1} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />;
-          })()}
+          <path
+            d={buildPath(draft, W, H, false)}
+            className="fill-none stroke-amber"
+            strokeWidth={1.75}
+            vectorEffect="non-scaling-stroke"
+          />
+          {hover &&
+            (() => {
+              const l = toSvg(draft[draft.length - 1]!);
+              return (
+                <line
+                  x1={l.x}
+                  y1={l.y}
+                  x2={hover.x}
+                  y2={hover.y}
+                  className="stroke-amber/40"
+                  strokeWidth={1}
+                  strokeDasharray="3 3"
+                  vectorEffect="non-scaling-stroke"
+                />
+              );
+            })()}
           {draft.map((n, i) => {
             const p = toSvg(n);
             return (
               <g key={i}>
-                {n.hOut && n.hIn && (() => {
-                  const o = toSvg({ x: n.x + n.hOut.x, y: n.y + n.hOut.y });
-                  const m = toSvg({ x: n.x + n.hIn.x, y: n.y + n.hIn.y });
-                  return <line x1={m.x} y1={m.y} x2={o.x} y2={o.y} className="stroke-amber/60" strokeWidth={1} vectorEffect="non-scaling-stroke" />;
-                })()}
+                {n.hOut &&
+                  n.hIn &&
+                  (() => {
+                    const o = toSvg({ x: n.x + n.hOut.x, y: n.y + n.hOut.y });
+                    const m = toSvg({ x: n.x + n.hIn.x, y: n.y + n.hIn.y });
+                    return (
+                      <line
+                        x1={m.x}
+                        y1={m.y}
+                        x2={o.x}
+                        y2={o.y}
+                        className="stroke-amber/60"
+                        strokeWidth={1}
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    );
+                  })()}
                 {square(p, "d", i === 0 ? "fill-amber stroke-amber" : "fill-garment stroke-amber")}
               </g>
             );
@@ -5683,46 +7443,117 @@ function PatternCanvas({
       )}
 
       {/* Prévia da forma */}
-      {drag?.k === "shape" && (() => {
-        const sh = shapeNodes(drawOpts.shape, dragRect(drag.s, drag.p, drag.shift, drag.alt));
-        const pl = layerFromCm(sh.nodes, sh.closed, { stroke: drawOpts.shapeStroke, fill: drawOpts.shapeFill, widthCm: drawOpts.shapeWidth }, "", W, H);
-        if (!pl?.paths) return null;
-        const { c, aw, ah } = lg(pl);
-        const pp = pl.paths[0]!;
-        return (
-          <g className="pointer-events-none" transform={`translate(${c.x} ${c.y - ah / 2})`}>
-            <path d={layerPathD(pp, aw, ah)} fill={pp.fill ?? "none"} fillOpacity={0.6} stroke="var(--color-amber, #f59e0b)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
-          </g>
-        );
-      })()}
+      {drag?.k === "shape" &&
+        (() => {
+          const sh = shapeNodes(drawOpts.shape, dragRect(drag.s, drag.p, drag.shift, drag.alt));
+          const pl = layerFromCm(
+            sh.nodes,
+            sh.closed,
+            {
+              stroke: drawOpts.shapeStroke,
+              fill: drawOpts.shapeFill,
+              widthCm: drawOpts.shapeWidth,
+            },
+            "",
+            W,
+            H,
+          );
+          if (!pl?.paths) return null;
+          const { c, aw, ah } = lg(pl);
+          const pp = pl.paths[0]!;
+          return (
+            <g className="pointer-events-none" transform={`translate(${c.x} ${c.y - ah / 2})`}>
+              <path
+                d={layerPathD(pp, aw, ah)}
+                fill={pp.fill ?? "none"}
+                fillOpacity={0.6}
+                stroke="var(--color-amber, #f59e0b)"
+                strokeWidth={1.5}
+                vectorEffect="non-scaling-stroke"
+              />
+            </g>
+          );
+        })()}
 
-
-      <TextWorkspace tool={tool} view={view} svgPoint={svgPoint} bounds={{ x: vx, y: vy, width: vw, height: vh }} texts={texts} setTexts={onTextsChange} checkpoint={onCheckpoint} selectedId={selText} onSelect={onSelText} unit={unit} selectionBox={selectionBox} preview={teamPreview} multiActive={!!multi} multiPick={multiPick} />
+      <TextWorkspace
+        tool={tool}
+        view={view}
+        svgPoint={svgPoint}
+        bounds={{ x: vx, y: vy, width: vw, height: vh }}
+        texts={texts}
+        setTexts={onTextsChange}
+        checkpoint={onCheckpoint}
+        selectedId={selText}
+        onSelect={onSelText}
+        unit={unit}
+        selectionBox={selectionBox}
+        preview={teamPreview}
+        multiActive={!!multi}
+        multiPick={multiPick}
+      />
 
       {/* Seleção múltipla: caixa tracejada por objeto, contínua no principal, e caixa do conjunto. */}
-      {multi && tool === "selecao" && mBoxes.length > 0 && (() => {
-        const x0 = Math.min(...mBoxes.map((b) => b.x));
-        const y0 = Math.min(...mBoxes.map((b) => b.y));
-        const x1 = Math.max(...mBoxes.map((b) => b.x + b.w));
-        const y1 = Math.max(...mBoxes.map((b) => b.y + b.h));
-        const g = unit * 0.6;
-        return (
-          <g className="pointer-events-none" data-screen-only>
-            {mBoxes.map((b, i) => (
-              <rect key={i} x={b.x} y={b.y} width={b.w} height={b.h} className="fill-none stroke-amber" strokeWidth={b.main ? 1.5 : 1} strokeDasharray={b.main ? undefined : "4 3"} vectorEffect="non-scaling-stroke" />
-            ))}
-            <rect x={x0 - g} y={y0 - g} width={x1 - x0 + g * 2} height={y1 - y0 + g * 2} className="fill-none stroke-amber" strokeWidth={0.75} strokeDasharray="2 2" opacity={0.8} vectorEffect="non-scaling-stroke" />
-            <text x={(x0 + x1) / 2} y={y0 - g - unit * 0.8} textAnchor="middle" fontSize={unit * 1.2} className="fill-amber font-mono">
-              {multi.length} objetos · {fmt(x1 - x0)} × {fmt(y1 - y0)} cm
-            </text>
-          </g>
-        );
-      })()}
+      {multi &&
+        tool === "selecao" &&
+        mBoxes.length > 0 &&
+        (() => {
+          const x0 = Math.min(...mBoxes.map((b) => b.x));
+          const y0 = Math.min(...mBoxes.map((b) => b.y));
+          const x1 = Math.max(...mBoxes.map((b) => b.x + b.w));
+          const y1 = Math.max(...mBoxes.map((b) => b.y + b.h));
+          const g = unit * 0.6;
+          return (
+            <g className="pointer-events-none" data-screen-only>
+              {mBoxes.map((b, i) => (
+                <rect
+                  key={i}
+                  x={b.x}
+                  y={b.y}
+                  width={b.w}
+                  height={b.h}
+                  className="fill-none stroke-amber"
+                  strokeWidth={b.main ? 1.5 : 1}
+                  strokeDasharray={b.main ? undefined : "4 3"}
+                  vectorEffect="non-scaling-stroke"
+                />
+              ))}
+              <rect
+                x={x0 - g}
+                y={y0 - g}
+                width={x1 - x0 + g * 2}
+                height={y1 - y0 + g * 2}
+                className="fill-none stroke-amber"
+                strokeWidth={0.75}
+                strokeDasharray="2 2"
+                opacity={0.8}
+                vectorEffect="non-scaling-stroke"
+              />
+              <text
+                x={(x0 + x1) / 2}
+                y={y0 - g - unit * 0.8}
+                textAnchor="middle"
+                fontSize={unit * 1.2}
+                className="fill-amber font-mono"
+              >
+                {multi.length} objetos · {fmt(x1 - x0)} × {fmt(y1 - y0)} cm
+              </text>
+            </g>
+          );
+        })()}
 
       {/* Fita métrica */}
       {tape.a && tapeEnd && (
         <g className="pointer-events-none">
-          <line x1={tape.a.x} y1={tape.a.y} x2={tapeEnd.x} y2={tapeEnd.y} className="stroke-amber" strokeWidth={1.5} strokeDasharray={tape.b ? undefined : "4 3"} vectorEffect="non-scaling-stroke" />
+          <line
+            x1={tape.a.x}
+            y1={tape.a.y}
+            x2={tapeEnd.x}
+            y2={tapeEnd.y}
+            className="stroke-amber"
+            strokeWidth={1.5}
+            strokeDasharray={tape.b ? undefined : "4 3"}
+            vectorEffect="non-scaling-stroke"
+          />
           <circle cx={tape.a.x} cy={tape.a.y} r={unit * 0.5} className="fill-amber" />
           <circle cx={tapeEnd.x} cy={tapeEnd.y} r={unit * 0.5} className="fill-amber" />
           <rect
@@ -5735,7 +7566,13 @@ function PatternCanvas({
             strokeWidth={1}
             vectorEffect="non-scaling-stroke"
           />
-          <text x={(tape.a.x + tapeEnd.x) / 2} y={(tape.a.y + tapeEnd.y) / 2 - unit * 1.5} textAnchor="middle" fontSize={unit * 1.4} className="fill-amber font-mono">
+          <text
+            x={(tape.a.x + tapeEnd.x) / 2}
+            y={(tape.a.y + tapeEnd.y) / 2 - unit * 1.5}
+            textAnchor="middle"
+            fontSize={unit * 1.4}
+            className="fill-amber font-mono"
+          >
             {fmt(Math.hypot(tapeEnd.x - tape.a.x, tapeEnd.y - tape.a.y))} cm
           </text>
         </g>
@@ -5755,19 +7592,69 @@ const cmykToHex = (c: number, m: number, y: number, k: number) => {
 };
 
 const RGB_PALETTE = [
-  "#FFFFFF", "#E6E6E6", "#BFBFBF", "#808080", "#404040", "#000000",
-  "#FF0000", "#FF5A00", "#FF9900", "#FFCC00", "#FFFF00", "#99FF00",
-  "#00CC00", "#00FF99", "#00FFFF", "#0099FF", "#0033FF", "#6600FF",
-  "#9900CC", "#FF00FF", "#FF3399", "#990033", "#663300", "#996633",
-  "#003366", "#006666", "#336600", "#CC9966", "#FFCCCC", "#CCE5FF",
+  "#FFFFFF",
+  "#E6E6E6",
+  "#BFBFBF",
+  "#808080",
+  "#404040",
+  "#000000",
+  "#FF0000",
+  "#FF5A00",
+  "#FF9900",
+  "#FFCC00",
+  "#FFFF00",
+  "#99FF00",
+  "#00CC00",
+  "#00FF99",
+  "#00FFFF",
+  "#0099FF",
+  "#0033FF",
+  "#6600FF",
+  "#9900CC",
+  "#FF00FF",
+  "#FF3399",
+  "#990033",
+  "#663300",
+  "#996633",
+  "#003366",
+  "#006666",
+  "#336600",
+  "#CC9966",
+  "#FFCCCC",
+  "#CCE5FF",
 ];
 
 const CMYK_PALETTE: [number, number, number, number][] = [
-  [0, 0, 0, 0], [0, 0, 0, 20], [0, 0, 0, 40], [0, 0, 0, 60], [0, 0, 0, 80], [0, 0, 0, 100],
-  [0, 100, 100, 0], [0, 60, 100, 0], [0, 40, 100, 0], [0, 20, 100, 0], [0, 0, 100, 0], [40, 0, 100, 0],
-  [100, 0, 100, 0], [100, 0, 60, 0], [100, 0, 0, 0], [100, 40, 0, 0], [100, 80, 0, 0], [100, 100, 0, 0],
-  [60, 100, 0, 0], [0, 100, 0, 0], [0, 80, 20, 0], [0, 100, 60, 40], [0, 60, 100, 60], [100, 60, 0, 40],
-  [100, 0, 40, 40], [60, 0, 100, 40], [0, 20, 40, 20], [0, 30, 10, 0], [20, 0, 0, 0], [0, 0, 20, 0],
+  [0, 0, 0, 0],
+  [0, 0, 0, 20],
+  [0, 0, 0, 40],
+  [0, 0, 0, 60],
+  [0, 0, 0, 80],
+  [0, 0, 0, 100],
+  [0, 100, 100, 0],
+  [0, 60, 100, 0],
+  [0, 40, 100, 0],
+  [0, 20, 100, 0],
+  [0, 0, 100, 0],
+  [40, 0, 100, 0],
+  [100, 0, 100, 0],
+  [100, 0, 60, 0],
+  [100, 0, 0, 0],
+  [100, 40, 0, 0],
+  [100, 80, 0, 0],
+  [100, 100, 0, 0],
+  [60, 100, 0, 0],
+  [0, 100, 0, 0],
+  [0, 80, 20, 0],
+  [0, 100, 60, 40],
+  [0, 60, 100, 60],
+  [100, 60, 0, 40],
+  [100, 0, 40, 40],
+  [60, 0, 100, 40],
+  [0, 20, 40, 20],
+  [0, 30, 10, 0],
+  [20, 0, 0, 0],
+  [0, 0, 20, 0],
 ];
 
 type Swatch = { hex: string; label: string };
@@ -5783,7 +7670,12 @@ function PaletteDock({
   target: ColorTarget;
   onTarget: (t: ColorTarget) => void;
   onApply: (t: ColorTarget, hex: string | null) => void;
-  current: { stroke: string | null; fill: string | null; mixedFill?: boolean; mixedStroke?: boolean };
+  current: {
+    stroke: string | null;
+    fill: string | null;
+    mixedFill?: boolean;
+    mixedStroke?: boolean;
+  };
   targetLabel: string;
   targetKind: "vetor" | "texto" | "imagem" | "molde";
 }) {
@@ -5793,7 +7685,10 @@ function PaletteDock({
   const swatches: Swatch[] =
     mode === "rgb"
       ? RGB_PALETTE.map((hex) => ({ hex, label: hex }))
-      : CMYK_PALETTE.map(([c, m, y, k]) => ({ hex: cmykToHex(c, m, y, k), label: `C:${c} M:${m} Y:${y} K:${k}` }));
+      : CMYK_PALETTE.map(([c, m, y, k]) => ({
+          hex: cmykToHex(c, m, y, k),
+          label: `C:${c} M:${m} Y:${y} K:${k}`,
+        }));
 
   if (!open)
     return (
@@ -5803,7 +7698,9 @@ function PaletteDock({
         className="sticky top-0 z-30 flex h-screen w-10 shrink-0 flex-col items-center gap-2 border-l border-line bg-panel pt-3 text-muted-foreground shadow-lg transition-colors hover:text-cyan"
       >
         <Palette className="size-4" />
-        <span className="[writing-mode:vertical-rl] text-[10px] font-mono uppercase tracking-[0.2em]">Paleta</span>
+        <span className="[writing-mode:vertical-rl] text-[10px] font-mono uppercase tracking-[0.2em]">
+          Paleta
+        </span>
       </button>
     );
 
@@ -5813,7 +7710,11 @@ function PaletteDock({
         <span className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
           <Palette className="size-3.5 text-cyan" />
         </span>
-        <button onClick={() => setOpen(false)} aria-label="Recolher paleta" className="text-muted-foreground hover:text-cyan">
+        <button
+          onClick={() => setOpen(false)}
+          aria-label="Recolher paleta"
+          className="text-muted-foreground hover:text-cyan"
+        >
           <PanelRightClose className="size-3.5" />
         </button>
       </div>
@@ -5823,16 +7724,26 @@ function PaletteDock({
             <button
               key={m}
               onClick={() => setMode(m)}
-              className={"py-1 rounded " + (mode === m ? "bg-cyan text-primary-foreground font-semibold" : "text-muted-foreground")}
+              className={
+                "py-1 rounded " +
+                (mode === m
+                  ? "bg-cyan text-primary-foreground font-semibold"
+                  : "text-muted-foreground")
+              }
             >
               {m.toUpperCase()}
             </button>
           ))}
         </div>
 
-        <div className="rounded border border-line bg-panel2 px-1 py-1 text-[9px] leading-tight text-muted-foreground break-words" title={targetLabel}>
+        <div
+          className="rounded border border-line bg-panel2 px-1 py-1 text-[9px] leading-tight text-muted-foreground break-words"
+          title={targetLabel}
+        >
           Aplicando em: <span className="text-foreground font-semibold">{targetLabel}</span>
-          {targetKind === "imagem" && <div className="mt-0.5 text-faint">Esta imagem não tem cor de preenchimento</div>}
+          {targetKind === "imagem" && (
+            <div className="mt-0.5 text-faint">Esta imagem não tem cor de preenchimento</div>
+          )}
         </div>
         <div className="space-y-1">
           {(
@@ -5846,11 +7757,16 @@ function PaletteDock({
               onClick={() => onTarget(k)}
               className={
                 "w-full flex items-center gap-2 px-2 py-1.5 rounded border text-[11px] text-left " +
-                (target === k ? "border-cyan/50 bg-cyan/10 text-cyan" : "border-line text-muted-foreground hover:text-foreground")
+                (target === k
+                  ? "border-cyan/50 bg-cyan/10 text-cyan"
+                  : "border-line text-muted-foreground hover:text-foreground")
               }
             >
               <span
-                className={"size-4 shrink-0 rounded-sm border border-line " + (k === "contorno" ? "border-2" : "")}
+                className={
+                  "size-4 shrink-0 rounded-sm border border-line " +
+                  (k === "contorno" ? "border-2" : "")
+                }
                 style={
                   k === "contorno"
                     ? current.mixedStroke
@@ -5898,7 +7814,10 @@ function PaletteDock({
         <div className="rounded-md border border-line bg-panel2 p-2 min-h-[64px]">
           {info ? (
             <div className="flex items-start gap-2">
-              <span className="size-8 shrink-0 rounded border border-line" style={{ background: info.hex || "transparent" }} />
+              <span
+                className="size-8 shrink-0 rounded border border-line"
+                style={{ background: info.hex || "transparent" }}
+              />
               <div className="text-[10px] font-mono leading-snug min-w-0">
                 <div className="text-foreground break-words">{info.label}</div>
                 {mode === "cmyk" && info.hex && <div className="text-faint">{info.hex}</div>}
@@ -5906,12 +7825,15 @@ function PaletteDock({
             </div>
           ) : (
             <p className="text-[10px] font-mono text-faint leading-snug">
-              Clique: aplica em {target === "contorno" ? "Contorno" : "Preenchimento"} · botão direito: Contorno
+              Clique: aplica em {target === "contorno" ? "Contorno" : "Preenchimento"} · botão
+              direito: Contorno
             </p>
           )}
         </div>
         {mode === "cmyk" && (
-          <p className="text-[9px] font-mono text-faint leading-snug">Prévia de tela convertida de CMYK · confira a prova de impressão</p>
+          <p className="text-[9px] font-mono text-faint leading-snug">
+            Prévia de tela convertida de CMYK · confira a prova de impressão
+          </p>
         )}
       </div>
     </div>
@@ -5940,7 +7862,9 @@ function DimensionInput({
           onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
           className="w-full bg-panel2 border border-line rounded-md pl-3 pr-12 py-2.5 text-sm font-mono text-foreground focus:outline-none focus:border-cyan/60 focus:ring-1 focus:ring-cyan/30"
         />
-        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-mono text-faint">cm</span>
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-mono text-faint">
+          cm
+        </span>
       </div>
     </div>
   );

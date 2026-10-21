@@ -1,19 +1,57 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_TEAM_TEMPLATE, MAX_PIXELS, MAX_SIDE_PX, cmToPx, fitDpi, teamFileName, uniqueName } from "./team-export";
+import {
+  DEFAULT_TEAM_TEMPLATE,
+  MAX_PIXELS,
+  MAX_SIDE_PX,
+  cmToPx,
+  fitDpi,
+  teamFileName,
+  uniqueName,
+} from "./team-export";
 
 describe("team-export", () => {
   it("nome padrão sem acentos e em maiúsculas", () => {
-    expect(teamFileName(DEFAULT_TEAM_TEMPLATE, { numero: "10", nome: "João", tamanho: "G", vista: "costas" }, "png")).toBe("10_JOAO_G_costas.png");
+    expect(
+      teamFileName(
+        DEFAULT_TEAM_TEMPLATE,
+        { numero: "10", nome: "João", tamanho: "G", vista: "costas" },
+        "png",
+      ),
+    ).toBe("10_JOAO_G_costas.png");
   });
   it("extensão segue o formato", () => {
-    expect(teamFileName(DEFAULT_TEAM_TEMPLATE, { numero: "10", nome: "João", tamanho: "G", vista: "costas" }, "jpg")).toBe("10_JOAO_G_costas.jpg");
-    expect(teamFileName("{numero}_{vista}.svg", { numero: "10", nome: "", tamanho: "G", vista: "costas" }, "pdf")).toBe("10_costas.pdf");
+    expect(
+      teamFileName(
+        DEFAULT_TEAM_TEMPLATE,
+        { numero: "10", nome: "João", tamanho: "G", vista: "costas" },
+        "jpg",
+      ),
+    ).toBe("10_JOAO_G_costas.jpg");
+    expect(
+      teamFileName(
+        "{numero}_{vista}.svg",
+        { numero: "10", nome: "", tamanho: "G", vista: "costas" },
+        "pdf",
+      ),
+    ).toBe("10_costas.pdf");
   });
   it("espaços viram _ e inválidos somem", () => {
-    expect(teamFileName(DEFAULT_TEAM_TEMPLATE, { numero: "7", nome: "Ana Lú/*", tamanho: "BL M", vista: "frente" }, "png")).toBe("7_ANA_LU_BL_M_frente.png");
+    expect(
+      teamFileName(
+        DEFAULT_TEAM_TEMPLATE,
+        { numero: "7", nome: "Ana Lú/*", tamanho: "BL M", vista: "frente" },
+        "png",
+      ),
+    ).toBe("7_ANA_LU_BL_M_frente.png");
   });
   it("nome vazio é omitido", () => {
-    expect(teamFileName(DEFAULT_TEAM_TEMPLATE, { numero: "9", nome: "", tamanho: "M", vista: "costas" }, "png")).toBe("9_M_costas.png");
+    expect(
+      teamFileName(
+        DEFAULT_TEAM_TEMPLATE,
+        { numero: "9", nome: "", tamanho: "M", vista: "costas" },
+        "png",
+      ),
+    ).toBe("9_M_costas.png");
   });
   it("repetidos ganham sufixo", () => {
     const used = new Set<string>();

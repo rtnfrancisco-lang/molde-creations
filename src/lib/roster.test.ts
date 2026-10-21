@@ -1,8 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { parseRoster, rosterToCsv, rosterIssues, sizeSummary, sortByNumber, type RosterSizeOption } from "./roster";
+import {
+  parseRoster,
+  rosterToCsv,
+  rosterIssues,
+  sizeSummary,
+  sortByNumber,
+  type RosterSizeOption,
+} from "./roster";
 
-const ADULT: RosterSizeOption[] = ["PP", "P", "M", "G", "GG", "XG"].map((id) => ({ id: id as never, label: id }));
-const KIDS: RosterSizeOption[] = ["2ANOS", "4ANOS", "6ANOS", "8ANOS", "10ANOS", "12ANOS", "14ANOS"].map((label, i) => ({
+const ADULT: RosterSizeOption[] = ["PP", "P", "M", "G", "GG", "XG"].map((id) => ({
+  id: id as never,
+  label: id,
+}));
+const KIDS: RosterSizeOption[] = [
+  "2ANOS",
+  "4ANOS",
+  "6ANOS",
+  "8ANOS",
+  "10ANOS",
+  "12ANOS",
+  "14ANOS",
+].map((label, i) => ({
   id: (["PP", "P", "M", "G", "GG", "XG", "XG2"] as const)[i]!,
   label,
 }));
@@ -19,9 +37,12 @@ describe("roster", () => {
     expect(r[0]).toMatchObject({ ok: true, numero: "00", tamanho: "M" });
   });
   it("CSV exportado reimporta idêntico", () => {
-    const ps = [{ id: "a", numero: "9", nome: "José; \"Zé\"", tamanho: "GG" as const }];
-    const back = parseRoster(rosterToCsv(ps, (s) => s), ADULT);
-    expect(back[0]).toMatchObject({ ok: true, numero: "9", nome: "José; \"Zé\"", tamanho: "GG" });
+    const ps = [{ id: "a", numero: "9", nome: 'José; "Zé"', tamanho: "GG" as const }];
+    const back = parseRoster(
+      rosterToCsv(ps, (s) => s),
+      ADULT,
+    );
+    expect(back[0]).toMatchObject({ ok: true, numero: "9", nome: 'José; "Zé"', tamanho: "GG" });
   });
   it("avisa número repetido e tamanho inválido", () => {
     const ps = [
@@ -40,6 +61,9 @@ describe("roster", () => {
       { id: "c", numero: "3", nome: "", tamanho: "M" },
     ]);
     expect(ps.map((p) => p.numero)).toEqual(["2", "3", "10"]);
-    expect(sizeSummary(ps)).toEqual([{ size: "M", n: 2 }, { size: "G", n: 1 }]);
+    expect(sizeSummary(ps)).toEqual([
+      { size: "M", n: 2 },
+      { size: "G", n: 1 },
+    ]);
   });
 });

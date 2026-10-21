@@ -16,7 +16,11 @@ export const slugPart = (s: string) =>
     .replace(/\s+/g, "_")
     .replace(/[^A-Za-z0-9_\-.]/g, "");
 
-export function teamFileName(template: string, v: { numero: string; nome: string; tamanho: string; vista: string }, ext = "svg"): string {
+export function teamFileName(
+  template: string,
+  v: { numero: string; nome: string; tamanho: string; vista: string },
+  ext = "svg",
+): string {
   const map: Record<string, string> = {
     numero: slugPart(v.numero),
     nome: slugPart(v.nome).toUpperCase(),
@@ -24,9 +28,15 @@ export function teamFileName(template: string, v: { numero: string; nome: string
     vista: slugPart(v.vista),
     ext,
   };
-  let out = (template.trim() || DEFAULT_TEAM_TEMPLATE).replace(/\{(numero|nome|tamanho|vista|ext)\}/g, (_, k: string) => map[k] ?? "");
+  let out = (template.trim() || DEFAULT_TEAM_TEMPLATE).replace(
+    /\{(numero|nome|tamanho|vista|ext)\}/g,
+    (_, k: string) => map[k] ?? "",
+  );
   out = out.replace(/\.(svg|png|jpe?g|pdf)$/i, "");
-  out = slugPart(out).replace(/_{2,}/g, "_").replace(/^[_-]+/, "").replace(/[_\-.]+$/, "");
+  out = slugPart(out)
+    .replace(/_{2,}/g, "_")
+    .replace(/^[_-]+/, "")
+    .replace(/[_\-.]+$/, "");
   return (out || "arquivo") + "." + ext;
 }
 

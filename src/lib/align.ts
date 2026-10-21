@@ -31,23 +31,43 @@ export function objectsRef(boxes: Box[], kind: AlignRefKind): Box | null {
 }
 
 /** Deslocamento (dx, dy) de cada caixa para alinhá-la à referência. */
-export function alignDeltas(boxes: Box[], op: AlignOp, _mode: AlignMode, ref: Box): { dx: number; dy: number }[] {
+export function alignDeltas(
+  boxes: Box[],
+  op: AlignOp,
+  _mode: AlignMode,
+  ref: Box,
+): { dx: number; dy: number }[] {
   const rcx = (ref.x0 + ref.x1) / 2;
   const rcy = (ref.y0 + ref.y1) / 2;
   return boxes.map((b) => {
     const cx = (b.x0 + b.x1) / 2;
     const cy = (b.y0 + b.y1) / 2;
     switch (op) {
-      case "left": return { dx: ref.x0 - b.x0, dy: 0 };
-      case "right": return { dx: ref.x1 - b.x1, dy: 0 };
-      case "top": return { dx: 0, dy: ref.y0 - b.y0 };
-      case "bottom": return { dx: 0, dy: ref.y1 - b.y1 };
-      case "centerX": return { dx: rcx - cx, dy: 0 };
-      case "centerY": return { dx: 0, dy: rcy - cy };
-      case "center": return { dx: rcx - cx, dy: rcy - cy };
+      case "left":
+        return { dx: ref.x0 - b.x0, dy: 0 };
+      case "right":
+        return { dx: ref.x1 - b.x1, dy: 0 };
+      case "top":
+        return { dx: 0, dy: ref.y0 - b.y0 };
+      case "bottom":
+        return { dx: 0, dy: ref.y1 - b.y1 };
+      case "centerX":
+        return { dx: rcx - cx, dy: 0 };
+      case "centerY":
+        return { dx: 0, dy: rcy - cy };
+      case "center":
+        return { dx: rcx - cx, dy: rcy - cy };
     }
   });
 }
 
 /** Tecla → operação (L R T B E C P). */
-export const ALIGN_KEYS: Record<string, AlignOp> = { l: "left", r: "right", t: "top", b: "bottom", e: "centerX", c: "centerY", p: "center" };
+export const ALIGN_KEYS: Record<string, AlignOp> = {
+  l: "left",
+  r: "right",
+  t: "top",
+  b: "bottom",
+  e: "centerX",
+  c: "centerY",
+  p: "center",
+};

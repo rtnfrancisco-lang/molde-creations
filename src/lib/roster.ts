@@ -13,12 +13,16 @@ export type Player = {
   imgNumero?: string;
 };
 
-export const newPlayerId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+export const newPlayerId = () =>
+  Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
 const norm = (s: string) => s.normalize("NFC").trim().replace(/\s+/g, "").toUpperCase();
 
 /** Converte rótulo (M, BL M, 6ANOS) ou id (PP..XG2) em id. */
-export function matchSize(token: string, options: readonly RosterSizeOption[]): { id: RosterSize; inGarment: boolean } | null {
+export function matchSize(
+  token: string,
+  options: readonly RosterSizeOption[],
+): { id: RosterSize; inGarment: boolean } | null {
   const t = norm(token);
   if (!t) return null;
   const byLabel = options.find((o) => norm(o.label) === t);
@@ -30,7 +34,10 @@ export function matchSize(token: string, options: readonly RosterSizeOption[]): 
 }
 
 /** Tamanho disponível mais próximo na ordem da grade. */
-export function nearestSize(size: RosterSize, options: readonly RosterSizeOption[]): RosterSizeOption | null {
+export function nearestSize(
+  size: RosterSize,
+  options: readonly RosterSizeOption[],
+): RosterSizeOption | null {
   if (!options.length) return null;
   const i = ROSTER_SIZES.indexOf(size);
   let best = options[0]!;
@@ -78,7 +85,11 @@ export function splitLine(line: string, sep: string): string[] {
 }
 
 const isHeader = (cols: string[]) => {
-  const a = (cols[0] ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  const a = (cols[0] ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
   const c = (cols[2] ?? "").toLowerCase().trim();
   return /^(numero|n[ºo°.]?|#|num)$/.test(a) || c === "tamanho";
 };
@@ -87,7 +98,11 @@ export type PasteRow =
   | { ok: true; line: number; numero: string; nome: string; tamanho: RosterSize; warn?: string }
   | { ok: false; line: number; raw: string; reason: string };
 
-export function parseRoster(text: string, options: readonly RosterSizeOption[], garment = "peça atual"): PasteRow[] {
+export function parseRoster(
+  text: string,
+  options: readonly RosterSizeOption[],
+  garment = "peça atual",
+): PasteRow[] {
   const clean = text.replace(/^\uFEFF/, "");
   const sep = detectSeparator(clean);
   const lines = clean.split(/\r?\n/);
@@ -102,11 +117,27 @@ export function parseRoster(text: string, options: readonly RosterSizeOption[], 
     }
     const line = idx + 1;
     const [numero = "", nome = "", tam = ""] = cols;
-    if (!numero) { rows.push({ ok: false, line, raw, reason: "Sem número" }); return; }
-    if (!tam) { rows.push({ ok: false, line, raw, reason: "Sem tamanho" }); return; }
+    if (!numero) {
+      rows.push({ ok: false, line, raw, reason: "Sem número" });
+      return;
+    }
+    if (!tam) {
+      rows.push({ ok: false, line, raw, reason: "Sem tamanho" });
+      return;
+    }
     const m = matchSize(tam, options);
-    if (!m) { rows.push({ ok: false, line, raw, reason: `Tamanho "${tam}" desconhecido` }); return; }
-    rows.push({ ok: true, line, numero, nome, tamanho: m.id, ...(m.inGarment ? {} : { warn: `${m.id} não existe em ${garment}` }) });
+    if (!m) {
+      rows.push({ ok: false, line, raw, reason: `Tamanho "${tam}" desconhecido` });
+      return;
+    }
+    rows.push({
+      ok: true,
+      line,
+      numero,
+      nome,
+      tamanho: m.id,
+      ...(m.inGarment ? {} : { warn: `${m.id} não existe em ${garment}` }),
+    });
   });
   return rows;
 }
@@ -114,7 +145,10 @@ export function parseRoster(text: string, options: readonly RosterSizeOption[], 
 const csvCell = (s: string) => (/[;"\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
 
 export function rosterToCsv(players: Player[], label: (s: RosterSize) => string): string {
-  const lines = ["Numero;Nome;Tamanho", ...players.map((p) => [p.numero, p.nome, label(p.tamanho)].map(csvCell).join(";"))];
+  const lines = [
+    "Numero;Nome;Tamanho",
+    ...players.map((p) => [p.numero, p.nome, label(p.tamanho)].map(csvCell).join(";")),
+  ];
   return "\uFEFF" + lines.join("\r\n") + "\r\n";
 }
 
@@ -130,8 +164,16 @@ export function sortByNumber(players: Player[]): Player[] {
   });
 }
 
-export type RowIssue = { semNumero?: boolean; repetido?: boolean; tamanhoInvalido?: boolean; sugestao?: RosterSizeOption | null };
-export function rosterIssues(players: Player[], options: readonly RosterSizeOption[]): Record<string, RowIssue> {
+export type RowIssue = {
+  semNumero?: boolean;
+  repetido?: boolean;
+  tamanhoInvalido?: boolean;
+  sugestao?: RosterSizeOption | null;
+};
+export function rosterIssues(
+  players: Player[],
+  options: readonly RosterSizeOption[],
+): Record<string, RowIssue> {
   const count = new Map<string, number>();
   players.forEach((p) => {
     const k = p.numero.trim();
@@ -155,7 +197,10 @@ export function rosterIssues(players: Player[], options: readonly RosterSizeOpti
 
 /** Contagem por tamanho na ordem da grade (inclui tamanhos fora da peça no fim). */
 export function sizeSummary(players: Player[]): { size: RosterSize; n: number }[] {
-  return ROSTER_SIZES.map((size) => ({ size, n: players.filter((p) => p.tamanho === size).length })).filter((x) => x.n > 0);
+  return ROSTER_SIZES.map((size) => ({
+    size,
+    n: players.filter((p) => p.tamanho === size).length,
+  })).filter((x) => x.n > 0);
 }
 
 export function sanitizeRoster(v: unknown): Player[] {
@@ -168,7 +213,11 @@ export function sanitizeRoster(v: unknown): Player[] {
       numero: String(p["numero"] ?? ""),
       nome: String(p["nome"] ?? ""),
       tamanho: p["tamanho"] as RosterSize,
-      ...(typeof p["imgNome"] === "string" && p["imgNome"] ? { imgNome: p["imgNome"] as string } : {}),
-      ...(typeof p["imgNumero"] === "string" && p["imgNumero"] ? { imgNumero: p["imgNumero"] as string } : {}),
+      ...(typeof p["imgNome"] === "string" && p["imgNome"]
+        ? { imgNome: p["imgNome"] as string }
+        : {}),
+      ...(typeof p["imgNumero"] === "string" && p["imgNumero"]
+        ? { imgNumero: p["imgNumero"] as string }
+        : {}),
     }));
 }

@@ -264,8 +264,8 @@ const parseFigures = (d: string): Figure[] | null => {
   for (const { cmd, args } of toks) {
     const rel = cmd === cmd.toLowerCase();
     const C = cmd.toUpperCase();
-    const ax = (i: number): number => (rel ? pos.x + (args[i] ?? 0) : args[i] ?? 0);
-    const ay = (i: number): number => (rel ? pos.y + (args[i] ?? 0) : args[i] ?? 0);
+    const ax = (i: number): number => (rel ? pos.x + (args[i] ?? 0) : (args[i] ?? 0));
+    const ay = (i: number): number => (rel ? pos.y + (args[i] ?? 0) : (args[i] ?? 0));
 
     if (C === "Z") {
       if (fig) {
@@ -358,7 +358,15 @@ const parseFigures = (d: string): Figure[] | null => {
     if (C === "A") {
       for (let i = 0; i + 7 <= args.length; i += 7) {
         const p1 = { x: ax(i + 5), y: ay(i + 6) };
-        for (const s of arcToSegs(pos, args[i] ?? 0, args[i + 1] ?? 0, args[i + 2] ?? 0, (args[i + 3] ?? 0) !== 0, (args[i + 4] ?? 0) !== 0, p1)) {
+        for (const s of arcToSegs(
+          pos,
+          args[i] ?? 0,
+          args[i + 1] ?? 0,
+          args[i + 2] ?? 0,
+          (args[i + 3] ?? 0) !== 0,
+          (args[i + 4] ?? 0) !== 0,
+          p1,
+        )) {
           ensure().segs.push(s);
         }
         pos = p1;
@@ -516,9 +524,7 @@ const offsetPoint = (p: Vec, t: Vec, k: number): Vec => {
 };
 
 type Corner =
-  | { kind: "straight"; p: Vec }
-  | { kind: "miter"; p: Vec }
-  | { kind: "bevel"; pts: Vec[] };
+  { kind: "straight"; p: Vec } | { kind: "miter"; p: Vec } | { kind: "bevel"; pts: Vec[] };
 
 /** Arco de raio |k| em volta do nó, do lado que chega até o lado que sai. */
 const roundArc = (v: Vec, tIn: Vec, tOut: Vec, k: number): Vec[] => {
@@ -549,8 +555,8 @@ const roundArc = (v: Vec, tIn: Vec, tOut: Vec, k: number): Vec[] => {
  * perpendicular dos DOIS lados (reta ou Bézier, porque a tangente usada é a
  * derivada exata na ponta de cada um deles). Nenhum deslocamento lateral.
  *
-  * Só a volta degenerada de 180° usa chanfro/arco: suas normais opostas não
-  * definem uma bissetriz única. Nós normais nunca são truncados.
+ * Só a volta degenerada de 180° usa chanfro/arco: suas normais opostas não
+ * definem uma bissetriz única. Nós normais nunca são truncados.
  */
 const solveCorner = (
   v: Vec,
@@ -722,7 +728,8 @@ const pointInRing = (p: Vec, ring: Vec[]): boolean => {
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
     const a = ring[i]!;
     const b = ring[j]!;
-    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x)
+      inside = !inside;
   }
   return inside;
 };
@@ -833,20 +840,22 @@ const sizeOf = (figures: Figure[]): number => {
   return Math.max(1e-6, Math.hypot(maxX - minX, maxY - minY));
 };
 
+type IntPoint = { X: number; Y: number };
+type IntPath = IntPoint[];
 const CLIPPER_SCALE = 1000;
 const DENSE_STEP_CM = 0.15;
 
-const clipperPathArea = (path: any[]): number => {
+const clipperPathArea = (path: IntPath): number => {
   let area = 0;
   for (let i = 0; i < path.length; i++) {
-    const a = path[i];
-    const b = path[(i + 1) % path.length];
+    const a = path[i]!;
+    const b = path[(i + 1) % path.length]!;
     area += a.X * b.Y - b.X * a.Y;
   }
   return area / 2;
 };
 
-const largestClipperPath = (paths: any[]): any[] | null => {
+const largestClipperPath = (paths: IntPath[]): IntPath | null => {
   if (!paths.length) return null;
   return paths.reduce((largest, current) =>
     Math.abs(clipperPathArea(current)) > Math.abs(clipperPathArea(largest)) ? current : largest,
@@ -871,23 +880,19 @@ const densePoints = (samples: Sample[], closed: boolean): Vec[] => {
   return points;
 };
 
-const toClipperPath = (points: Vec[]): any[] =>
+const toClipperPath = (points: Vec[]): IntPath =>
   points.map((p) => ({ X: Math.round(p.x * CLIPPER_SCALE), Y: Math.round(p.y * CLIPPER_SCALE) }));
 
-const fromClipperPath = (path: any[]): Vec[] =>
+const fromClipperPath = (path: IntPath): Vec[] =>
   path.map((p) => ({ x: p.X / CLIPPER_SCALE, y: p.Y / CLIPPER_SCALE }));
 
-const clipperOffset = (paths: any[], deltaCm: number): any[] => {
+const clipperOffset = (paths: IntPath[], deltaCm: number): IntPath[] => {
   if (!paths.length) return [];
   const offset = new ClipperLib.ClipperOffset(2, 0.25 * CLIPPER_SCALE);
-  offset.AddPaths(
-    paths,
-    ClipperLib.JoinType.jtRound,
-    ClipperLib.EndType.etClosedPolygon,
-  );
+  offset.AddPaths(paths, ClipperLib.JoinType.jtRound, ClipperLib.EndType.etClosedPolygon);
   const solution = new ClipperLib.Paths();
   offset.Execute(solution, deltaCm * CLIPPER_SCALE);
-  return Array.from(solution);
+  return Array.from(solution as ArrayLike<IntPath>);
 };
 
 /**
@@ -901,7 +906,7 @@ export function offsetPathD(d: string, distance: number, options: OffsetOptions 
   const figures = parseFigures(d);
   if (!figures?.length) return d;
   const tol = options.tolerance ?? Math.max(sizeOf(figures) * 5e-5, 1e-9);
-  const candidates: any[] = [];
+  const candidates: IntPath[] = [];
 
   for (const figure of figures) {
     if (!figure.closed) continue;
@@ -914,7 +919,7 @@ export function offsetPathD(d: string, distance: number, options: OffsetOptions 
       source,
       ClipperLib.PolyFillType.pftNonZero,
     );
-    const simplifiedPaths = Array.from(simplified) as any[];
+    const simplifiedPaths = Array.from(simplified) as IntPath[];
     if (!simplifiedPaths.length) continue;
 
     const firstOffset = clipperOffset(simplifiedPaths, distance);
@@ -923,7 +928,7 @@ export function offsetPathD(d: string, distance: number, options: OffsetOptions 
 
   if (!candidates.length) return distance < 0 ? "" : d;
 
-  const smoothed: any[] = [];
+  const smoothed: IntPath[] = [];
   for (const candidate of candidates) {
     const opened = clipperOffset([candidate], -0.5);
     const closed = clipperOffset(opened.length ? opened : [candidate], 0.5);

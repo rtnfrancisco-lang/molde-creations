@@ -2,13 +2,20 @@
 import { cor, safeImageSrc } from "./sanitize";
 
 /** Número finito como texto (igual ao template padrão), senão "0". */
-export const n = (v: unknown): string => (typeof v === "number" && Number.isFinite(v) ? String(v) : "0");
+export const n = (v: unknown): string =>
+  typeof v === "number" && Number.isFinite(v) ? String(v) : "0";
 /** Número finito com casas fixas, senão 0 com as mesmas casas. */
-export const nf = (v: unknown, digits: number): string => (typeof v === "number" && Number.isFinite(v) ? v : 0).toFixed(digits);
+export const nf = (v: unknown, digits: number): string =>
+  (typeof v === "number" && Number.isFinite(v) ? v : 0).toFixed(digits);
 
 /** Escapa & < > " ' para uso em atributos ou texto. */
 export const attr = (s: unknown): string =>
-  String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 
 /** Só data URL de imagem; senão string vazia. */
 export const safeSrc = (src: unknown): string => safeImageSrc(src) ?? "";

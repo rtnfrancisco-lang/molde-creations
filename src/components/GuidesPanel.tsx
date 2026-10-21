@@ -1,9 +1,20 @@
 import { useEffect, useState } from "react";
-import { BLEED_MAX, DEFAULT_GUIDE, SAFETY_MAX, fmtCm, isDefaultGuide, parseCm, type Guide, type GuideView, type Guides } from "@/lib/guides";
+import {
+  BLEED_MAX,
+  DEFAULT_GUIDE,
+  SAFETY_MAX,
+  fmtCm,
+  isDefaultGuide,
+  parseCm,
+  type Guide,
+  type GuideView,
+  type Guides,
+} from "@/lib/guides";
 
 export type GuideGroup = { id: string; label: string; views: GuideView[] };
 
-const allOn = (groups: GuideGroup[], on: boolean) => Object.fromEntries(groups.map((g) => [g.id, on])) as Record<string, boolean>;
+const allOn = (groups: GuideGroup[], on: boolean) =>
+  Object.fromEntries(groups.map((g) => [g.id, on])) as Record<string, boolean>;
 
 export function GuidesPanel({
   guides,
@@ -44,10 +55,16 @@ export function GuidesPanel({
   const targets = groups.filter((g) => sel[g.id]).flatMap((g) => g.views);
   const canApply = b !== null && s !== null && targets.length > 0;
   const field = (bad: boolean) =>
-    "w-full bg-panel2 border rounded-md px-2 py-1.5 text-sm font-mono focus:outline-none " + (bad ? "border-destructive text-destructive" : "border-line focus:border-cyan/60");
+    "w-full bg-panel2 border rounded-md px-2 py-1.5 text-sm font-mono focus:outline-none " +
+    (bad ? "border-destructive text-destructive" : "border-line focus:border-cyan/60");
   const check = (key: string, label: string, on: boolean, toggle: () => void) => (
     <label key={key} className="flex items-center gap-2 text-[11px] cursor-pointer">
-      <input type="checkbox" checked={on} onChange={toggle} className="accent-[var(--color-cyan)]" />
+      <input
+        type="checkbox"
+        checked={on}
+        onChange={toggle}
+        className="accent-[var(--color-cyan)]"
+      />
       {label}
     </label>
   );
@@ -57,19 +74,35 @@ export function GuidesPanel({
       <div className="text-[11px] font-semibold text-foreground">Distâncias das linhas-guia</div>
       <label className="block text-[10px] text-muted-foreground">
         Sangria (para fora) · cm
-        <input inputMode="decimal" value={bleed} onChange={(e) => setBleed(e.target.value)} className={field(b === null)} aria-invalid={b === null} />
+        <input
+          inputMode="decimal"
+          value={bleed}
+          onChange={(e) => setBleed(e.target.value)}
+          className={field(b === null)}
+          aria-invalid={b === null}
+        />
       </label>
       <label className="block text-[10px] text-muted-foreground">
         Segurança (para dentro) · cm
-        <input inputMode="decimal" value={safety} onChange={(e) => setSafety(e.target.value)} className={field(s === null)} aria-invalid={s === null} />
+        <input
+          inputMode="decimal"
+          value={safety}
+          onChange={(e) => setSafety(e.target.value)}
+          className={field(s === null)}
+          aria-invalid={s === null}
+        />
       </label>
       {failures.length > 0 && (
-        <p className="text-[10px] text-destructive leading-snug">⚠ Linha de segurança não gerada (distância maior que a peça): {failures.join("; ")}</p>
+        <p className="text-[10px] text-destructive leading-snug">
+          ⚠ Linha de segurança não gerada (distância maior que a peça): {failures.join("; ")}
+        </p>
       )}
       <div className="space-y-1">
         <div className="text-[10px] text-muted-foreground">Aplicar em</div>
         {check("__all", "Tudo", all, () => setSel(allOn(groups, !all)))}
-        {groups.map((g) => check(g.id, g.label, !!sel[g.id], () => setSel((c) => ({ ...c, [g.id]: !c[g.id] }))))}
+        {groups.map((g) =>
+          check(g.id, g.label, !!sel[g.id], () => setSel((c) => ({ ...c, [g.id]: !c[g.id] }))),
+        )}
       </div>
       <div className="flex gap-2">
         <button
@@ -104,7 +137,10 @@ export function GuidesPanel({
                   setSafety(fmtCm(g.safety));
                   setSel(Object.fromEntries(groups.map((x) => [x.id, x.id === grp.id])));
                 }}
-                className={"w-full flex justify-between px-1.5 py-0.5 rounded text-[10px] font-mono hover:bg-panel2 " + (diff ? "text-cyan font-semibold" : "text-muted-foreground")}
+                className={
+                  "w-full flex justify-between px-1.5 py-0.5 rounded text-[10px] font-mono hover:bg-panel2 " +
+                  (diff ? "text-cyan font-semibold" : "text-muted-foreground")
+                }
               >
                 <span>{names[v]}</span>
                 <span>
