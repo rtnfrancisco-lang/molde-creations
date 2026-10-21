@@ -32,8 +32,8 @@ export type PcArt = {
 export function artTransform(a: { rot?: number; flipX?: boolean; flipY?: boolean }, cx: number, cy: number) {
   const fx = a.flipX ? -1 : 1;
   const fy = a.flipY ? -1 : 1;
-  const flip = fx === 1 && fy === 1 ? "" : ` translate(${cx} ${cy}) scale(${fx} ${fy}) translate(${-cx} ${-cy})`;
-  return `rotate(${a.rot ?? 0} ${cx} ${cy})${flip}`;
+  const flip = fx === 1 && fy === 1 ? "" : ` translate(${n(cx)} ${n(cy)}) scale(${fx} ${fy}) translate(${n(-cx)} ${n(-cy)})`;
+  return `rotate(${n(a.rot ?? 0)} ${n(cx)} ${n(cy)})${flip}`;
 }
 
 type Frame = { x: number; y: number; w: number; h: number };
@@ -144,7 +144,7 @@ export function PowerClipEditor({
       if (art.src.startsWith("data:image/svg")) return download(art.src, name);
       const img = new Image();
       img.onload = () => {
-        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${img.naturalWidth}" height="${img.naturalHeight}" viewBox="0 0 ${img.naturalWidth} ${img.naturalHeight}"><image href="${art.src}" width="${img.naturalWidth}" height="${img.naturalHeight}"/></svg>`;
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${img.naturalWidth}" height="${img.naturalHeight}" viewBox="0 0 ${img.naturalWidth} ${img.naturalHeight}"><image href="${attr(safeSrc(art.src))}" width="${img.naturalWidth}" height="${img.naturalHeight}"/></svg>`;
         const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
         download(url, name);
         setTimeout(() => URL.revokeObjectURL(url), 2000);
