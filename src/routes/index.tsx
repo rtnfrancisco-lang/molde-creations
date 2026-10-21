@@ -476,8 +476,6 @@ const defaultTablesForProfiles = (): ProfileTables => ({
   Short: cloneGrading(SHORT_TABLE),
 });
 
-  return Object.fromEntries(CLOTHING_TYPES.filter((t) => o[t] && typeof o[t] === "object").map((t) => [t, o[t]])) as Partial<ProfileTables>;
-};
 
 const readGradeProfiles = (): GradeProfile[] => {
   try {
