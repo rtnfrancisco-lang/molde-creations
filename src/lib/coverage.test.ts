@@ -27,7 +27,11 @@ describe("alinhamento com rotação", () => {
 
 describe("guias: sanitização e limites", () => {
   it("aceita exatamente os máximos e zero, rejeita acima", () => {
-    const g = sanitizeGuides({ frente: { bleed: BLEED_MAX, safety: SAFETY_MAX }, costas: { bleed: 0, safety: 0 }, mangaEsq: { bleed: BLEED_MAX + 0.01, safety: -1 } });
+    const g = sanitizeGuides({
+      frente: { bleed: BLEED_MAX, safety: SAFETY_MAX },
+      costas: { bleed: 0, safety: 0 },
+      mangaEsq: { bleed: BLEED_MAX + 0.01, safety: -1 },
+    });
     expect(g.frente).toEqual({ bleed: 10, safety: 20 });
     expect(g.costas).toEqual({ bleed: 0, safety: 0 });
     expect(g.mangaEsq).toEqual(DEFAULT_GUIDES.mangaEsq);
@@ -56,7 +60,12 @@ describe("nomes de arquivo de exportação", () => {
 });
 
 describe("escala de textos por tamanho", () => {
-  const m = (bw: number, bh: number, sw = 20, sh = 20) => ({ bodyWidth: bw, bodyHeight: bh, sleeveWidth: sw, sleeveHeight: sh });
+  const m = (bw: number, bh: number, sw = 20, sh = 20) => ({
+    bodyWidth: bw,
+    bodyHeight: bh,
+    sleeveWidth: sw,
+    sleeveHeight: sh,
+  });
   it("camiseta: frente e manga usam as próprias medidas", () => {
     const t = { M: m(50, 70, 20, 18), G: m(55, 77, 22, 18) };
     expect(teamScale(t, "M", "G", "frente")).toEqual({ sx: 1.1, sy: 1.1 });

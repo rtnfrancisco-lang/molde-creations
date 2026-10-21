@@ -20,7 +20,9 @@ describe("vector-offset", () => {
     expect(a).toBeLessThan(144 + 0.5); // nunca maior que o quadrado 12×12
   });
   it("quadrado 10×10 deslocado -1 cm: ~8×8", () => {
-    expect(area(offsetPathD(square, -1))).toBeCloseTo(64, 0);
+    const a = area(offsetPathD(square, -1));
+    expect(a).toBeGreaterThan(63); // cantos suavizados levemente (raio 0,5)
+    expect(a).toBeLessThanOrEqual(64);
   });
   it("segurança maior que a peça devolve vazio", () => {
     expect(offsetPathD(square, -6)).toBe("");
