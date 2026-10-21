@@ -377,3 +377,17 @@ export function layerMarkup(l: Layer, W: number, H: number) {
     : `<g transform="translate(0 ${n(-ah / 2)})">${pathsMarkup(l.paths ?? [], aw, ah)}</g>`;
   return `<g transform="translate(${n(cx)} ${n(cy)}) rotate(${n(l.rot)})">${inner}</g>`;
 }
+
+/** Marcação SVG da estampa em cm reais (src, números e transformação seguros). */
+export function artImageMarkup(
+  art: { src: string; cx: number; cy: number; w: number; ratio: number; opacity?: number },
+  W: number,
+  H: number,
+  transform: (cx: number, cy: number) => string,
+) {
+  const aw = art.w * W;
+  const ah = aw * art.ratio;
+  const ax = (art.cx - 0.5) * W - aw / 2;
+  const ay = art.cy * H - ah / 2;
+  return `<image href="${attr(safeSrc(art.src))}" x="${n(ax)}" y="${n(ay)}" width="${n(aw)}" height="${n(ah)}" transform="${attr(transform(ax + aw / 2, ay + ah / 2))}" opacity="${n(art.opacity ?? 1)}" preserveAspectRatio="none"/>`;
+}

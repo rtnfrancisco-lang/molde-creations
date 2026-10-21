@@ -2992,11 +2992,7 @@ function Index() {
 
     let img = "";
     if (art) {
-      const aw = art.w * W;
-      const ah = aw * art.ratio;
-      const ax = (art.cx - 0.5) * W - aw / 2;
-      const ay = art.cy * H - ah / 2;
-      const im = `<image href="${attr(safeSrc(art.src))}" x="${n(ax)}" y="${n(ay)}" width="${n(aw)}" height="${n(ah)}" transform="${attr(artTransform(art, ax + aw / 2, ay + ah / 2))}" opacity="${n(art.opacity ?? 1)}" preserveAspectRatio="none"/>`;
+      const im = artImageMarkup(art, W, H, (cx, cy) => artTransform(art, cx, cy));
       img = art.clipped === false ? im : `<g clip-path="url(#moldeClip)">${im}</g>`;
     }
 
