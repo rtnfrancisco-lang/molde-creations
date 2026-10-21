@@ -81,6 +81,7 @@ import {
   imageRatio,
   vectorDataUrl,
   layerMarkup,
+  artImageMarkup,
   layerPathD,
   type Layer,
   type LayerSlot,
