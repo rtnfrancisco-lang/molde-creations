@@ -486,15 +486,11 @@ const readGradeProfiles = (): GradeProfile[] => {
   try {
     const raw = localStorage.getItem(LS_PROFILES);
     if (!raw) return [{ name: DEFAULT_PROFILE_NAME, tables: defaultTablesForProfiles() }];
-    const parsed = JSON.parse(raw) as GradeProfile[];
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      return [{ name: DEFAULT_PROFILE_NAME, tables: defaultTablesForProfiles() }];
-    }
-    return parsed.map((profile) => ({
+    const { value } = sanitizeProfiles(JSON.parse(raw), defaultTablesForProfiles() as unknown as Record<string, SGrading>);
+    if (value.length === 0) return [{ name: DEFAULT_PROFILE_NAME, tables: defaultTablesForProfiles() }];
+    return value.map((profile) => ({
       name: profile.name,
-      tables: Object.fromEntries(
-        Object.entries({ ...defaultTablesForProfiles(), ...pickTables(profile.tables) }).map(([t, g]) => [t, migrateGradingSleeves(g as Grading, OLD_FOR_TYPE(t))]),
-      ) as ProfileTables,
+      tables: Object.fromEntries(Object.entries(profile.tables).map(([t, g]) => [t, migrateGradingSleeves(g as Grading, OLD_FOR_TYPE(t))])) as ProfileTables,
     }));
   } catch {
     return [{ name: DEFAULT_PROFILE_NAME, tables: defaultTablesForProfiles() }];
