@@ -2023,7 +2023,7 @@ function StorageBanner() {
   );
 }
 
-function Index() {
+export function Index() {
   const [clothingType, setClothingType] = useState<ClothingType>("Camiseta");
   const tamanhosExibidos =
     clothingType === "Camisa Infantil"

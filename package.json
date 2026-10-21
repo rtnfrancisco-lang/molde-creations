@@ -12,7 +12,9 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm run lint && npm run test"
+    "check": "npm run typecheck && npm run lint && npm run test",
+    "dev:desktop": "vite --config vite.desktop.config.ts",
+    "build:desktop": "vite build --config vite.desktop.config.ts"
   },
   "overrides": {
     "rolldown": "1.2.1"
