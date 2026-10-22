@@ -162,7 +162,6 @@ import {
 } from "@/lib/file-access";
 import { isDesktop, nativeError, savedToast } from "@/lib/platform";
 import { saveBlob } from "@/lib/save-file";
-import { printInIframe } from "@/lib/print-frame";
 import {
   buildPath,
   importSvg,
@@ -4110,7 +4109,7 @@ export function Index() {
     cmW: number,
     cmH: number,
     name: string,
-  ): boolean | Promise<boolean> => {
+  ): boolean => {
     const w = n(Math.min(10000, Math.max(0.1, cmW)));
     const h = n(Math.min(10000, Math.max(0.1, cmH)));
     const src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
@@ -4121,7 +4120,6 @@ export function Index() {
       `<title>${attr(name)}</title>` +
       `<style>@page{size:${w}cm ${h}cm;margin:0}html,body{margin:0;padding:0}img{display:block;width:${w}cm;height:${h}cm}</style>` +
       `</head><body><img alt="" src="${attr(src)}"></body></html>`;
-    if (isDesktop()) return printInIframe(html);
     const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
     const win = window.open(url, "_blank", "width=900,height=720");
     if (!win) {
@@ -4211,7 +4209,7 @@ export function Index() {
           crop: cropRect,
         });
         const base = exportName(clothingType, s, v);
-        if (exportFmt === "pdf") {
+        if (exportFmt === "pdf" && !isDesktop()) {
           if (await printVectorPdf(await embedFonts(svg), cmW, cmH, base))
             flashSaved("Arquivo 1:1 pronto — na janela de impressão escolha Salvar como PDF");
           else {
@@ -4496,7 +4494,7 @@ export function Index() {
                     <div className="grid grid-cols-3 gap-1.5">
                       {(
                         [
-                          ["pdf", "PDF", "Vetor 1:1"],
+                          ["pdf", "PDF", isDesktop() ? "Imagem 1:1 (alta resolução)" : "Vetor 1:1"],
                           ["png", "PNG", "Imagem"],
                           ["jpeg", "JPEG", "Imagem leve"],
                         ] as const
@@ -4518,7 +4516,7 @@ export function Index() {
                         </button>
                       ))}
                     </div>
-                    {exportFmt !== "pdf" && (
+                    {(exportFmt !== "pdf" || isDesktop()) && (
                       <div className="mt-2 space-y-2">
                         <div className="flex items-center gap-2 text-xs">
                           <span className="text-muted-foreground w-20">Resolução</span>
@@ -4540,7 +4538,7 @@ export function Index() {
                             <span className="self-center text-[10px] text-faint">DPI</span>
                           </div>
                         </div>
-                        {exportFmt === "jpeg" && (
+                        {(exportFmt === "jpeg" || exportFmt === "pdf") && (
                           <label className="flex items-center gap-2 text-xs">
                             <span className="text-muted-foreground w-20">Qualidade</span>
                             <input
@@ -4681,7 +4679,8 @@ export function Index() {
                   {(() => {
                     const t = exportTargets();
                     const multi = t.count > 1;
-                    const vector = exportFmt === "pdf" && !multi;
+                    const desk = isDesktop();
+                    const vector = exportFmt === "pdf" && !multi && !desk;
                     const mp = exportMaxPiece();
                     const d = fitDpi(mp.cmW, mp.cmH, expDpi);
                     return (
@@ -4692,10 +4691,12 @@ export function Index() {
                           {multi ? " em ZIP" : ""} ·{" "}
                           {vector
                             ? "vetor 1:1"
-                            : `maior peça ${fmt(mp.cmW)} × ${fmt(mp.cmH)} cm · ${cmToPx(mp.cmW, d)} × ${cmToPx(mp.cmH, d)} px`}
+                            : desk && exportFmt === "pdf"
+                              ? `imagem 1:1 · ${d} DPI`
+                              : `maior peça ${fmt(mp.cmW)} × ${fmt(mp.cmH)} cm · ${cmToPx(mp.cmW, d)} × ${cmToPx(mp.cmH, d)} px`}
                           {!vector && d < expDpi ? ` · DPI reduzido para ${d}` : ""}
                         </div>
-                        {exportFmt === "pdf" && multi && (
+                        {exportFmt === "pdf" && multi && !desk && (
                           <div className="text-faint">
                             PDF em lote usa imagem de alta resolução; para PDF vetorial exporte um
                             arquivo por vez
