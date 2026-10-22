@@ -164,8 +164,6 @@ import { isDesktop, nativeError, savedToast } from "@/lib/platform";
 import { saveBlob } from "@/lib/save-file";
 import { printInIframe } from "@/lib/print-frame";
 import {
-} from "@/lib/file-access";
-import {
   buildPath,
   importSvg,
   pdfToImage,

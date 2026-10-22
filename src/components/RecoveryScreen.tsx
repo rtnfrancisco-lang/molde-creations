@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AlertTriangle, Download, RotateCcw, ShieldCheck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { saveBlob } from "@/lib/save-file";
 import { dumpAll, setSafeMode, wipeAll } from "@/lib/storage-guard";
 
 /** Tela mostrada quando a página principal quebra: oferece saídas que não dependem dos dados salvos. */
@@ -10,14 +11,10 @@ export function RecoveryScreen({ error }: { error: unknown }) {
     setBusy(true);
     try {
       const data = await dumpAll();
-      const url = URL.createObjectURL(
+      await saveBlob(
         new Blob([JSON.stringify(data)], { type: "application/json" }),
+        `moldecore-dados-${new Date().toISOString().slice(0, 10)}.json`,
       );
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `moldecore-dados-${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
     } finally {
       setBusy(false);
     }

@@ -1,5 +1,6 @@
 /* Acesso a arquivos locais: File System Access API (Chrome/Edge) com alternativa por download/input;
    no desktop (Tauri) usa diálogos nativos e guarda o caminho no lugar do handle. */
+import { saveBlob } from "./save-file";
 import { defaultPathFor, isDesktop, rememberDir } from "./platform";
 
 type Handle = {
@@ -60,14 +61,7 @@ export async function pickSaveHandle(suggestedName: string): Promise<FileHandle 
 }
 
 export function downloadText(text: string, filename: string) {
-  const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  void saveBlob(new Blob([text], { type: "application/json" }), filename);
 }
 
 /** Abre um projeto. Devolve null se o usuário cancelar. */

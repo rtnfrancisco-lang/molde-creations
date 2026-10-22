@@ -1,3 +1,4 @@
+import { saveBlob } from "@/lib/save-file";
 import { useMemo, useRef, useState } from "react";
 import {
   ArrowDownWideNarrow,
@@ -280,16 +281,10 @@ export function TeamPanel({
     setPasteOpen(false);
   };
   const exportCsv = () => {
-    const url = URL.createObjectURL(
+    void saveBlob(
       new Blob([rosterToCsv(roster, labelOf)], { type: "text/csv;charset=utf-8" }),
+      "lista-do-time.csv",
     );
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "lista-do-time.csv";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 30_000);
   };
   const importCsv = async (f: File) => {
     setPasteText(await f.text());

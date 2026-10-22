@@ -1,3 +1,4 @@
+import { saveBlob } from "@/lib/save-file";
 import { useRef, useState } from "react";
 import { attr, n, safeSrc } from "@/lib/svg-safe";
 import {
@@ -150,10 +151,10 @@ export function PowerClipEditor({
   };
 
   const download = (href: string, name: string) => {
-    const a = document.createElement("a");
-    a.href = href;
-    a.download = name;
-    a.click();
+    void fetch(href)
+      .then((r) => r.blob())
+      .then((b) => saveBlob(b, name))
+      .catch(() => undefined);
   };
   const extract = (fmt: "png" | "jpg" | "svg") => {
     setAskFormat(false);
@@ -166,7 +167,7 @@ export function PowerClipEditor({
         const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${img.naturalWidth}" height="${img.naturalHeight}" viewBox="0 0 ${img.naturalWidth} ${img.naturalHeight}"><image href="${attr(safeSrc(art.src))}" width="${img.naturalWidth}" height="${img.naturalHeight}"/></svg>`;
         const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
         download(url, name);
-        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
       };
       img.src = art.src;
       return;
