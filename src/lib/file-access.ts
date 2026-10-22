@@ -1,11 +1,17 @@
-/* Acesso a arquivos locais: File System Access API (Chrome/Edge) com alternativa por download/input. */
+/* Acesso a arquivos locais: File System Access API (Chrome/Edge) com alternativa por download/input;
+   no desktop (Tauri) usa diálogos nativos e guarda o caminho no lugar do handle. */
+import { defaultPathFor, isDesktop, rememberDir } from "./platform";
 
 type Handle = {
   name: string;
   getFile(): Promise<File>;
   createWritable(): Promise<{ write(d: Blob | string): Promise<void>; close(): Promise<void> }>;
 };
-export type FileHandle = Handle;
+/** Desktop: arquivo identificado pelo caminho completo. */
+export type DesktopHandle = { name: string; path: string };
+export type FileHandle = Handle | DesktopHandle;
+export const isDesktopHandle = (h: FileHandle): h is DesktopHandle => "path" in h;
+const baseName = (p: string) => p.split(/[\\/]/).pop() || p;
 
 type Picker = { description: string; accept: Record<string, string[]> };
 type W = Window & {
@@ -18,18 +24,33 @@ const TYPES: Picker[] = [
 ];
 
 export const hasFsAccess = () =>
-  typeof window !== "undefined" && typeof (window as W).showSaveFilePicker === "function";
+  isDesktop() ||
+  (typeof window !== "undefined" && typeof (window as W).showSaveFilePicker === "function");
 
 export const isAbort = (e: unknown) => (e as DOMException)?.name === "AbortError";
 
-export async function writeHandle(h: Handle, text: string) {
+export async function writeHandle(h: FileHandle, text: string) {
+  if (isDesktopHandle(h)) {
+    const { writeTextFile } = await import("@tauri-apps/plugin-fs");
+    await writeTextFile(h.path, text);
+    await rememberDir(h.path);
+    return;
+  }
   const w = await h.createWritable();
   await w.write(new Blob([text], { type: "application/json" }));
   await w.close();
 }
 
 /** Abre a janela "Salvar como". Devolve null se a API não existir. Lança AbortError se cancelado. */
-export async function pickSaveHandle(suggestedName: string): Promise<Handle | null> {
+export async function pickSaveHandle(suggestedName: string): Promise<FileHandle | null> {
+  if (isDesktop()) {
+    const { save } = await import("@tauri-apps/plugin-dialog");
+    const path = await save({
+      defaultPath: await defaultPathFor(suggestedName),
+      filters: [{ name: "Projeto MoldeCore", extensions: ["moldecore"] }],
+    });
+    return path ? { name: baseName(path), path } : null;
+  }
   const w = window as W;
   if (!w.showSaveFilePicker) return null;
   return w.showSaveFilePicker({
@@ -53,8 +74,23 @@ export function downloadText(text: string, filename: string) {
 export async function openProjectFile(): Promise<{
   text: string;
   name: string;
-  handle: Handle | null;
+  handle: FileHandle | null;
 } | null> {
+  if (isDesktop()) {
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const { readTextFile } = await import("@tauri-apps/plugin-fs");
+    const picked = await open({
+      multiple: false,
+      directory: false,
+      defaultPath: await defaultPathFor(""),
+      filters: [{ name: "Projeto MoldeCore", extensions: ["moldecore", "json"] }],
+    });
+    const path = typeof picked === "string" ? picked : null;
+    if (!path) return null;
+    const text = await readTextFile(path);
+    await rememberDir(path);
+    return { text, name: baseName(path), handle: { name: baseName(path), path } };
+  }
   const w = window as W;
   if (w.showOpenFilePicker) {
     try {

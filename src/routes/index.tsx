@@ -158,6 +158,12 @@ import {
   openProjectFile,
   isAbort,
   type FileHandle,
+  isDesktopHandle,
+} from "@/lib/file-access";
+import { isDesktop, nativeError, savedToast } from "@/lib/platform";
+import { saveBlob } from "@/lib/save-file";
+import { printInIframe } from "@/lib/print-frame";
+import {
 } from "@/lib/file-access";
 import {
   buildPath,
@@ -2468,8 +2474,32 @@ export function Index() {
     roster,
     teamImages,
   ]);
+  const closeRef = useRef<() => Promise<boolean>>(async () => true);
   useEffect(() => {
-    if (!dirty) return;
+    if (!isDesktop()) return;
+    let un: (() => void) | undefined;
+    let alive = true;
+    void (async () => {
+      try {
+        const { getCurrentWindow } = await import("@tauri-apps/api/window");
+        const w = getCurrentWindow();
+        const off = await w.onCloseRequested(async (ev) => {
+          ev.preventDefault();
+          if (await closeRef.current()) await w.destroy();
+        });
+        if (alive) un = off;
+        else off();
+      } catch (e) {
+        nativeError("Não foi possível vigiar o fechamento da janela", e);
+      }
+    })();
+    return () => {
+      alive = false;
+      un?.();
+    };
+  }, []);
+  useEffect(() => {
+    if (!dirty || isDesktop()) return;
     const h = (e: BeforeUnloadEvent) => {
       e.preventDefault();
       e.returnValue = "";
@@ -2511,7 +2541,8 @@ export function Index() {
       } else downloadText(text, name + PROJECT_EXT);
       setProjectName(name);
       setSavedRev(rev);
-      toast.success("Projeto salvo");
+      if (h && isDesktopHandle(h)) savedToast(h.path, "Projeto salvo", 4000);
+      else toast.success("Projeto salvo");
       return true;
     } catch (e) {
       if (isAbort(e)) return false;
@@ -2528,6 +2559,7 @@ export function Index() {
     if (c === "save") return saveProject(false);
     return true;
   };
+  closeRef.current = confirmUnsaved;
 
   const resetHistory = () => {
     setPast([]);
@@ -4066,23 +4098,21 @@ export function Index() {
     if (signal.cancelled) return null;
     const zip = await zipFiles(files, opt.format);
     if (signal.cancelled) return null;
-    downloadBlob(
+    await downloadBlob(
       new Blob([zip as BlobPart], { type: "application/zip" }),
       `Time_${todayStamp()}.zip`,
     );
     return { players: opt.players.length, files: n, warnings: [...new Set(warnings)] };
   };
 
-  const downloadBlob = (blob: Blob, filename: string) => {
-    const url = URL.createObjectURL(blob);
-    const el = document.createElement("a");
-    el.href = url;
-    el.download = filename;
-    el.click();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-  };
+  const downloadBlob = (blob: Blob, filename: string) => saveBlob(blob, filename);
 
-  const printVectorPdf = (svg: string, cmW: number, cmH: number, name: string) => {
+  const printVectorPdf = (
+    svg: string,
+    cmW: number,
+    cmH: number,
+    name: string,
+  ): boolean | Promise<boolean> => {
     const w = n(Math.min(10000, Math.max(0.1, cmW)));
     const h = n(Math.min(10000, Math.max(0.1, cmH)));
     const src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
@@ -4093,6 +4123,7 @@ export function Index() {
       `<title>${attr(name)}</title>` +
       `<style>@page{size:${w}cm ${h}cm;margin:0}html,body{margin:0;padding:0}img{display:block;width:${w}cm;height:${h}cm}</style>` +
       `</head><body><img alt="" src="${attr(src)}"></body></html>`;
+    if (isDesktop()) return printInIframe(html);
     const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
     const win = window.open(url, "_blank", "width=900,height=720");
     if (!win) {
@@ -4183,16 +4214,16 @@ export function Index() {
         });
         const base = exportName(clothingType, s, v);
         if (exportFmt === "pdf") {
-          if (printVectorPdf(await embedFonts(svg), cmW, cmH, base))
+          if (await printVectorPdf(await embedFonts(svg), cmW, cmH, base))
             flashSaved("Arquivo 1:1 pronto — na janela de impressão escolha Salvar como PDF");
           else {
             const r = await renderPiece(svg, cmW, cmH, "pdf", expDpi, expQuality, base);
-            downloadBlob(new Blob([r.bytes as BlobPart], { type: MIME.pdf }), `${base}.pdf`);
+            await downloadBlob(new Blob([r.bytes as BlobPart], { type: MIME.pdf }), `${base}.pdf`);
             flashSaved("Janela de impressão bloqueada — PDF gerado em alta resolução");
           }
         } else {
           const r = await renderPiece(svg, cmW, cmH, exportFmt, expDpi, expQuality, base);
-          downloadBlob(
+          await downloadBlob(
             new Blob([r.bytes as BlobPart], { type: MIME[exportFmt] }),
             `${base}.${ext}`,
           );
@@ -4236,7 +4267,7 @@ export function Index() {
       if (sig.cancelled) return flashSaved("Exportação cancelada", 3000);
       const zip = await zipFiles(files, exportFmt);
       if (sig.cancelled) return flashSaved("Exportação cancelada", 3000);
-      downloadBlob(
+      await downloadBlob(
         new Blob([zip as BlobPart], { type: "application/zip" }),
         `MoldeCore_${clothingType.replace(/\s+/g, "_")}_${todayStamp()}.zip`,
       );
