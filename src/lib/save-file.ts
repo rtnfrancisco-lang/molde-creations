@@ -24,7 +24,7 @@ export async function saveBlob(blob: Blob, nomeSugerido: string): Promise<string
     const ext = dot > 0 ? nomeSugerido.slice(dot + 1).toLowerCase() : "";
     const path = await save({
       defaultPath: await defaultPathFor(nomeSugerido),
-      filters: ext ? [{ name: ext.toUpperCase(), extensions: [ext] }] : undefined,
+      ...(ext ? { filters: [{ name: ext.toUpperCase(), extensions: [ext] }] } : {}),
     });
     if (!path) return null;
     const { writeFile } = await import("@tauri-apps/plugin-fs");
